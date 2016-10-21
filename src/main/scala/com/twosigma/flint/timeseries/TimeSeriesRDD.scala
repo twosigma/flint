@@ -289,9 +289,24 @@ object TimeSeriesRDD {
       timeColumn = timeColumn
     )
   }
+
+  // A function taking any row as input and just return `Seq[Any]()`.
+  private[flint] val emptyKeyFn: GenericInternalRow => Seq[Any] = {
+    _: GenericInternalRow => Seq[Any]()
+  }
+
+  private[flint] def getAsAny(schema: StructType, cols: Seq[String])(row: GenericInternalRow): Seq[Any] =
+    GenericInternalRowUtils.selectIndices(cols.map(schema.fieldIndex))(row)
+
+  private[flint] def safeGetAsAny(schema: StructType, cols: Seq[String]): GenericInternalRow => Seq[Any] =
+    if (cols.isEmpty) {
+      emptyKeyFn
+    } else {
+      getAsAny(schema, cols)
+    }
 }
 
-sealed trait TimeSeriesRDD extends Serializable {
+trait TimeSeriesRDD extends Serializable {
 
   /**
    * The schema of this [[TimeSeriesRDD]].
@@ -304,6 +319,12 @@ sealed trait TimeSeriesRDD extends Serializable {
    * An [[org.apache.spark.rdd.RDD RDD]] representation of this [[TimeSeriesRDD]].
    */
   val rdd: RDD[Row]
+
+  /**
+   * An [[com.twosigma.flint.rdd.OrderedRDD]] representation of this [[TimeSeriesRDD]]. Used to efficiently
+   * perform join-like operations.
+   */
+  private[flint] val orderedRdd: OrderedRDD[Long, GenericInternalRow]
 
   /**
    * Convert the this [[TimeSeriesRDD]] to a [[org.apache.spark.sql.DataFrame]].
@@ -953,24 +974,12 @@ sealed trait TimeSeriesRDD extends Serializable {
 }
 
 class TimeSeriesRDDImpl(
-  val orderedRdd: OrderedRDD[Long, GenericInternalRow],
+  override val orderedRdd: OrderedRDD[Long, GenericInternalRow],
   override val schema: StructType
 ) extends TimeSeriesRDD {
 
-  // A function taking any row as input and just return `Seq[Any]()`.
-  private val emptyKeyFn: GenericInternalRow => Seq[Any] = {
-    case _: GenericInternalRow => Seq[Any]()
-  }
-
-  private[flint] def getAsAny(cols: Seq[String])(row: GenericInternalRow): Seq[Any] =
-    GenericInternalRowUtils.selectIndices(cols.map(schema.fieldIndex))(row)
-
   private[flint] def safeGetAsAny(cols: Seq[String]): GenericInternalRow => Seq[Any] =
-    if (cols.isEmpty) {
-      emptyKeyFn
-    } else {
-      getAsAny(cols)
-    }
+    TimeSeriesRDD.safeGetAsAny(schema, cols)
 
   private def prependTimeAndKey(t: Long, rows: Array[GenericInternalRow],
     outputRow: GenericInternalRow, key: Seq[String]): GenericInternalRow =
@@ -1106,7 +1115,7 @@ class TimeSeriesRDDImpl(
       schema == other.schema,
       s"Cannot merge this TimeSeriesRDD of schema $schema with other TimeSeriesRDD with schema ${other.schema} "
     )
-    val otherOrderedRdd = other.asInstanceOf[TimeSeriesRDDImpl].orderedRdd
+    val otherOrderedRdd = other.orderedRdd
     new TimeSeriesRDDImpl(orderedRdd.merge(otherOrderedRdd), schema)
   }
 
@@ -1118,10 +1127,9 @@ class TimeSeriesRDDImpl(
     rightAlias: String = null
   ): TimeSeriesRDD = {
     val toleranceNum = Duration(tolerance).toNanos
-    val rightImpl = right.asInstanceOf[TimeSeriesRDDImpl]
     val toleranceFn = (t: Long) => t - toleranceNum
     val joinedRdd = orderedRdd.leftJoin(
-      rightImpl.orderedRdd, toleranceFn, safeGetAsAny(key), rightImpl.safeGetAsAny(key)
+      right.orderedRdd, toleranceFn, safeGetAsAny(key), TimeSeriesRDD.safeGetAsAny(right.schema, key)
     )
 
     val (concat, newSchema) = GenericInternalRowUtils.concat(
@@ -1148,10 +1156,10 @@ class TimeSeriesRDDImpl(
     strictLookahead: Boolean = false
   ): TimeSeriesRDD = {
     val toleranceNum = Duration(tolerance).toNanos
-    val rightImpl = right.asInstanceOf[TimeSeriesRDDImpl]
     val toleranceFn = (t: Long) => t + toleranceNum
     val joinedRdd = orderedRdd.futureLeftJoin(
-      rightImpl.orderedRdd, toleranceFn, safeGetAsAny(key), rightImpl.safeGetAsAny(key), strictForward = strictLookahead
+      right.orderedRdd, toleranceFn, safeGetAsAny(key),
+      TimeSeriesRDD.safeGetAsAny(right.schema, key), strictForward = strictLookahead
     )
 
     val (concat, newSchema) = GenericInternalRowUtils.concat(
@@ -1192,8 +1200,7 @@ class TimeSeriesRDDImpl(
     beginInclusive: Boolean = true
   ): TimeSeriesRDD = {
     val sum = summarizer(schema)
-    val clockTSRdd = clock.asInstanceOf[TimeSeriesRDDImpl]
-    val intervalized = orderedRdd.intervalize(clockTSRdd.orderedRdd, beginInclusive).mapValues {
+    val intervalized = orderedRdd.intervalize(clock.orderedRdd, beginInclusive).mapValues {
       case (_, v) => v._2
     }
     val grouped = intervalized.groupByKey(safeGetAsAny(key))
@@ -1218,11 +1225,8 @@ class TimeSeriesRDDImpl(
     summarizer: SummarizerFactory,
     key: Seq[String] = Seq.empty
   ): TimeSeriesRDD = {
-    val (sum, keyFn) = if (key.isEmpty) {
-      (summarizer(schema), emptyKeyFn)
-    } else {
-      (summarizer(schema), getAsAny(key) _)
-    }
+    val sum = summarizer(schema)
+    val keyFn = safeGetAsAny(key)
 
     val (concat, newSchema) = GenericInternalRowUtils.concat2(schema, sum.outputSchema)
 
