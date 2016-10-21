@@ -240,7 +240,7 @@ val priceTSRdd = ...
 // 2500L 4.0
 
 val result = priceTSRdd.addWindows(Window.pastAbsoluteTime("1000ns"))
-// time  price window
+// time  price window_past_1000ns
 // ------------------------------------------------------
 // 1000L 1.0   [[1000L, 1.0]]
 // 1500L 2.0   [[1000L, 1.0], [1500L, 2.0]]
