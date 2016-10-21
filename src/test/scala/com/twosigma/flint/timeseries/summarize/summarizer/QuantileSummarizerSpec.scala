@@ -32,12 +32,12 @@ class QuantileSummarizerSpec extends FlatSpec with SharedSparkContext {
       sc,
       frequency = "1d", offset = "0d", beginDateTime = "1970-01-01", endDateTime = "1980-01-01"
     )
-    val p = (1 to 100).map(_ * 0.01)
+    val p = (1 to 100).map(_ / 100.0)
     val results = clockTSRdd.summarize(Summary.quantile("time", p)).first()
 
     val percentileEstimator = new Percentile()
     percentileEstimator.setData(clockTSRdd.collect().map(_.getAs[Long]("time").toDouble))
     val expectedResults = p.map { i => percentileEstimator.evaluate(i * 100.0) }
-    (1 to 100).map { i => assert(results.getAs[Double](s"time_${i * 0.01}quantile") === expectedResults(i - 1)) }
+    (1 to 100).foreach { i => assert(results.getAs[Double](s"time_${i / 100.0}quantile") === expectedResults(i - 1)) }
   }
 }
