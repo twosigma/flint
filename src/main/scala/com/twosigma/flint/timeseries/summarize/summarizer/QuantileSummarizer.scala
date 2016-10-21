@@ -45,7 +45,7 @@ case class QuantileSummarizer(
   override val summarizer = QSummarizer(p)
   override val schema = Schema.of(p.map { q => s"${column}_${q}quantile" -> DoubleType }: _*)
 
-  override def toT(r: GenericInternalRow): T = toDouble(r.get(columnIndex, schema(columnIndex).dataType))
+  override def toT(r: GenericInternalRow): T = toDouble(r.get(columnIndex, inputSchema(columnIndex).dataType))
 
   override def fromV(v: V): GenericInternalRow = new GenericInternalRow(Array[Any]() ++ v)
 }
