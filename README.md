@@ -295,7 +295,7 @@ Similarly, we could summarize over intervals, windows, or the whole time series 
 - `summarizeWindows`
 - `addSummaryColumns`
 
-One could check `timeseries.summarize.summarizer` for different kinds of summarizer(s), like `ZScoreSummarize`, `CorrelationSummarizer`, `NthCentralMomentSummarizer` etc.
+One could check `timeseries.summarize.summarizer` for different kinds of summarizer(s), like `ZScoreSummarizer`, `CorrelationSummarizer`, `NthCentralMomentSummarizer` etc.
 
 ## stat.regression
 
