@@ -11,7 +11,7 @@ sbt assembly
 ## Getting Started
 
 ### Starting Point: `TimeSeriesRDD`
-The entry point into all functionalities for time series analysis in Flint is the `TimeSeriesRDD` class or object. In high level, a `TimeSeriesRDD` contains an `OrderedRDD` which could be used to represent a sequence of ordering key-value pairs. A `TimeSeriesRDD` uses `Long` to represent timestamps in NANOSECONDS as keys and `InternalRow`s as values for `OrderedRDD` to represent a time series data set.
+The entry point into all functionalities for time series analysis in Flint is the `TimeSeriesRDD` class or object. In high level, a `TimeSeriesRDD` contains an `OrderedRDD` which could be used to represent a sequence of ordering key-value pairs. A `TimeSeriesRDD` uses `Long` to represent timestamps in nanoseconds since epoch as keys and `InternalRow`s as values for `OrderedRDD` to represent a time series data set.
 
 ### Create `TimeSeriesRDD`
 
@@ -37,7 +37,7 @@ To create a `TimeSeriesRDD` from a `DataFrame`, you have to make sure the `DataF
 import com.twosigma.flint.timeseries.TimeSeriesRDD
 import scala.concurrent.duration._
 val df = ... // A DataFrame whose rows have been sorted by their timestamps under "time" column
-val tsRdd = TimeSeriesRDD.fromDF(dataFrame = df, isSorted = true, timeUnit = MILLISECONDS)
+val tsRdd = TimeSeriesRDD.fromDF(dataFrame = df)(isSorted = true, timeUnit = MILLISECONDS)
 ```
 
 One could also create a `TimeSeriesRDD` from a `RDD[Row]` or an `OrderedRDD[Long, Row]` by providing a schema, e.g.
@@ -48,8 +48,8 @@ import scala.concurrent.duration._
 val rdd = ... // An RDD whose rows have sorted by their timestamps
 val tsRdd = TimeSeriesRDD.fromRDD(
   rdd,
-  schema = Schema("time" -> LongType, "price" -> DoubleType),
-  isSorted = true,
+  schema = Schema("time" -> LongType, "price" -> DoubleType)
+)(isSorted = true,
   timeUnit = MILLISECONDS
 )
 ```
@@ -61,8 +61,8 @@ import com.twosigma.flint.timeseries._
 import scala.concurrent.duration._
 val tsRdd = TimeSeriesRDD.fromParquet(
   sqlContext,
-  path = "hdfs://foo/bar/",
-  isSorted = true,
+  path = "hdfs://foo/bar/"
+)(isSorted = true,
   timeUnit = MILLISECONDS,
   columns = Seq("time", "id", "price"),  // By default, null for all columns
   begin = "20100101",                    // By default, null for no boundary at begin
