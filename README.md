@@ -145,35 +145,18 @@ val priceTSRdd = ...
 
 val results = priceTSRdd.addColumnsForCycle(
   "adjustedSellingPrice" -> DoubleType -> { rows: Seq[Row] =>
-    rows.map { row => (row, row.getDouble(2) * rows.size) }.toMap
-  },
-  key = "id"
+    rows.map { row => (row, row.getAs[Double]("sellingPrice") * rows.size) }.toMap
+  }
 )
 // time  id  sellingPrice adjustedSellingPrice
 // -------------------------------------------
 // 1000L 0   1.0          3.0
 // 1000L 1   2.0          6.0
-// 1000L 1   2.0          6.0
-// 2000L 0   3.0         12.0
-// 2000L 0   3.0         12.0
-// 2000L 1   4.0         16.0
-// 2000L 2   5.0         20.0
-
-val results = priceTSRdd.addColumnsForCycle(
-  Seq("adjustedSellingPrice" -> DoubleType -> { rows: Seq[Row] =>
-    rows.map { row => (row, row.getDouble(2) * rows.size) }.toMap
-  }),
-  key = "id"
-)
-// time  id  sellingPrice adjustedSellingPrice
-// ---------------------------------------------
-// 1000L 0   1.0          1.0
-// 1000L 1   2.0          4.0
-// 1000L 1   2.0          4.0
-// 2000L 0   3.0          6.0
-// 2000L 0   3.0          6.0
-// 2000L 1   4.0          4.0
-// 2000L 2   5.0          6.0
+// 1000L 1   3.0          9.0
+// 2000L 0   3.0          12.0
+// 2000L 0   4.0          16.0
+// 2000L 1   5.0          20.0
+// 2000L 2   6.0          24.0
 ```
 
 ### Group functions
