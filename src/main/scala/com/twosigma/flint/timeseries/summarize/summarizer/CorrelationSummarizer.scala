@@ -23,36 +23,41 @@ import org.apache.spark.sql.types._
 
 case class CorrelationSummarizerFactory(columnX: String, columnY: String) extends SummarizerFactory {
   override def apply(inputSchema: StructType): CorrelationSummarizer =
-    CorrelationSummarizer(inputSchema, alias, columnX, columnY)
+    new CorrelationSummarizer(inputSchema, alias, columnX, columnY)
 }
 
-case class CorrelationSummarizer(
+abstract class AbstractCorrelationSummarizer(
   override val inputSchema: StructType,
   override val alias: Option[String],
   columnX: String,
   columnY: String
 ) extends Summarizer {
-  private val columnXIndex = inputSchema.fieldIndex(columnX)
-  private val columnYIndex = inputSchema.fieldIndex(columnY)
-  private val xToDouble = anyToDouble(inputSchema(columnXIndex).dataType)
-  private val yToDouble = anyToDouble(inputSchema(columnYIndex).dataType)
-  private val columnPrefix = s"${columnX}_${columnY}"
-  override type T = (Double, Double)
-  override type U = CorrelationState
-  override type V = CorrelationOutput
-
-  override val summarizer = CorrelationSum()
-
-  override val schema = Schema.of(
-    s"${columnPrefix}_correlation" -> DoubleType,
-    s"${columnPrefix}_correlationTStat" -> DoubleType
-  )
-
-  override def toT(r: GenericInternalRow): (Double, Double) =
+  private final val columnXIndex = inputSchema.fieldIndex(columnX)
+  private final val columnYIndex = inputSchema.fieldIndex(columnY)
+  private final val xToDouble = anyToDouble(inputSchema(columnXIndex).dataType)
+  private final val yToDouble = anyToDouble(inputSchema(columnYIndex).dataType)
+  protected val columnPrefix = s"${columnX}_${columnY}"
+  override final type T = (Double, Double)
+  override final type U = CorrelationState
+  override final type V = CorrelationOutput
+  override final val summarizer = CorrelationSum()
+  override final def toT(r: GenericInternalRow): (Double, Double) =
     (
       xToDouble(r.get(columnXIndex, inputSchema(columnXIndex).dataType)),
       yToDouble(r.get(columnYIndex, inputSchema(columnYIndex).dataType))
     )
+}
+
+class CorrelationSummarizer(
+  override val inputSchema: StructType,
+  override val alias: Option[String],
+  columnX: String,
+  columnY: String
+) extends AbstractCorrelationSummarizer(inputSchema, alias, columnX, columnY) {
+  override val schema = Schema.of(
+    s"${columnPrefix}_correlation" -> DoubleType,
+    s"${columnPrefix}_correlationTStat" -> DoubleType
+  )
 
   override def fromV(v: V): GenericInternalRow = new GenericInternalRow(Array[Any](v.correlation, v.tStat))
 }

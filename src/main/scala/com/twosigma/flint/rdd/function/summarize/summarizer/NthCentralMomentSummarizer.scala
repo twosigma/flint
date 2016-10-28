@@ -26,7 +26,8 @@ case class NthCentralMomentState(
   val moments: Array[Kahan]
 )
 
-case class NthCentralMomentOutput(val moments: Array[Double]) {
+case class NthCentralMomentOutput(val count: Long, val moments: Array[Double]) {
+
   def nthCentralMoment(moment: Int): Double = moment match {
     case 1 => 0
     case _ => moments(moment - 2)
@@ -140,6 +141,6 @@ case class NthCentralMomentSummarizer(val moment: Int)
 
   override def render(u: NthCentralMomentState): NthCentralMomentOutput = {
     val moments = u.moments.map(_.getValue() / u.count)
-    NthCentralMomentOutput(moments)
+    NthCentralMomentOutput(u.count, moments)
   }
 }

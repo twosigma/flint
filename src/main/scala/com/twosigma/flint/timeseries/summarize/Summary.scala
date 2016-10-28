@@ -66,7 +66,7 @@ object Summary {
     WeightedMeanTestSummarizerFactory(valueColumn, weightColumn)
 
   /**
-   * Calculates the arithmetic mean for a single column.
+   * Calculates the arithmetic mean for a column.
    *
    * The output schema is:
    *   - "<column>_mean": [[DoubleType]], the arithmetic mean of the `valueColumn`.
@@ -75,6 +75,38 @@ object Summary {
    * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate the arithmetic mean.
    */
   def mean(column: String): SummarizerFactory = MeanSummarizerFactory(column)
+
+  /**
+   * Calculates the standard deviation for a column. This applies Bessel's correction.
+   *
+   * The output schema is:
+   *  - "<column>_stddev": [[DoubleType]], the standard deviation of the `column`.
+   *
+   * @param column The column expected to calculate the standard deviation
+   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate the standard deviation.
+   */
+  def stddev(column: String): SummarizerFactory = StandardDeviationSummarizerFactory(column)
+
+  /**
+   * Calculates the variance for a column. This applies Bessel's correction.
+   *
+   * The output schema is:
+   *  - "<column>_variance": [[DoubleType]], the variance of the `column`.
+   *
+   * @param column The column expected to calculate the variance
+   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate the variance.
+   */
+  def variance(column: String): SummarizerFactory = VarianceSummarizerFactory(column)
+
+  /**
+   * Calculates the covariance between two columns
+   *
+   * The output schema is:
+   *  - "<columnX>_<columnY>_covariance": [[DoubleType]], the covariance of `columnX` and `columnY`
+   *
+   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate the covariance.
+   */
+  def covariance(columnX: String, columnY: String): SummarizerFactory = CovarianceSummarizerFactory(columnX, columnY)
 
   /**
    * Computes the z-score with the option for out-of-sample calculation.
@@ -195,4 +227,20 @@ object Summary {
    * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to compute the quantiles.
    */
   def quantile(column: String, p: Seq[Double]): SummarizerFactory = QuantileSummarizerFactory(column, p.toArray)
+
+  // TODO: These might be useful to implement
+
+  // def geometricMean
+
+  // def min
+
+  // def max
+
+  // def describe
+
+  // def product
+
+  // def skewness
+
+  // def kurtosis
 }
