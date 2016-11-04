@@ -19,6 +19,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 import com.twosigma.flint.timeseries.summarize.Summary
 import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
 import com.twosigma.flint.timeseries.{ CSV, TimeSeriesRDD }
+import org.apache.spark.sql.types.DoubleType
 import org.scalactic.TolerantNumerics
 import org.scalatest.FlatSpec
 
@@ -86,6 +87,14 @@ class OLSRegressionSummarizerSpec extends FlatSpec with SharedSparkContext {
     assertEquals(
       result.getAs[mutable.WrappedArray[Double]](OLSRegressionSummarizer.tStatOfBetaColumn).toArray,
       Array(-0.28050929225597476, 1.9217351934528257)
+    )
+  }
+
+  it should "return NaN beta for singular matrix" in {
+    val tsRdd = from("data.csv").addColumns("x3" -> DoubleType -> { _ => 0.0 })
+    val result = tsRdd.summarize(Summary.OLSRegression("y", Seq("x3"), "w", false)).first()
+    assert(
+      result.getAs[mutable.WrappedArray[Double]](OLSRegressionSummarizer.betaColumn)(0).isNaN
     )
   }
 }
