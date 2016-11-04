@@ -14,20 +14,19 @@
  *  limitations under the License.
  */
 
-package org.apache.spark.sql
+package com.twosigma.flint.row
 
 import com.twosigma.flint.timeseries.Schema
-
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ ByteType, DataType, DoubleType, FloatType, IntegerType, LongType, NumericType, ShortType, StructField, StructType }
 
 /**
- * A set of functions to manipulate Catalyst GenericInternalRow objects.
+ * A set of functions to manipulate Catalyst InternalRow objects.
  */
-object GenericInternalRowUtils {
-  private def concatArray(xs: Array[Any]*): GenericInternalRow = concatSeq(xs.map(_.toSeq): _*)
+object InternalRowUtils {
+  private def concatArray(xs: Array[Any]*): InternalRow = concatSeq(xs.map(_.toSeq): _*)
 
-  private def concatSeq(xs: Seq[Any]*): GenericInternalRow = {
+  private def concatSeq(xs: Seq[Any]*): InternalRow = {
     var size = 0
     var i = 0
     while (i < xs.size) {
@@ -49,11 +48,11 @@ object GenericInternalRowUtils {
       i += 1
     }
 
-    new GenericInternalRow(ret)
+    InternalRow.fromSeq(ret)
   }
 
   // updates existing elements, or appends a new element to the end if index isn't provided
-  private def updateOrAppend(original: Array[Any], newValues: (Option[Int], Any)*): GenericInternalRow = {
+  private def updateOrAppend(original: Array[Any], newValues: (Option[Int], Any)*): InternalRow = {
     var i = 0
     var j = 0
     while (i < newValues.size) {
@@ -81,56 +80,78 @@ object GenericInternalRowUtils {
       i += 1
     }
 
-    new GenericInternalRow(ret)
+    InternalRow.fromSeq(ret)
   }
 
-  def selectIndices(indices: Seq[Int])(row: GenericInternalRow): Seq[Any] = indices.map(row.values(_))
+  def selectIndices(columns: Seq[(Int, DataType)])(row: InternalRow): Seq[Any] = columns.map {
+    case (index, dataType) => row.get(index, dataType)
+  }
 
-  private def selectFn(indices: Seq[Int]): GenericInternalRow => GenericInternalRow = {
-    (row: GenericInternalRow) =>
-      val size = indices.size
+  private def selectFn(schema: StructType, columns: Seq[Int]): InternalRow => Array[Any] = {
+    val columnsWithTypes = columns.map {
+      index =>
+        (index, schema(index).dataType)
+    }
+
+    selectFn(columnsWithTypes)
+  }
+
+  private def selectFn(columns: Seq[(Int, DataType)]): InternalRow => Array[Any] = {
+    (row: InternalRow) =>
+      val size = columns.size
       val newValues: Array[Any] = Array.fill(size)(null)
       var i = 0
 
       while (i < size) {
-        newValues(i) = row.values(indices(i))
+        newValues(i) = row.get(columns(i)._1, columns(i)._2)
         i += 1
       }
 
-      new GenericInternalRow(newValues)
+      newValues
   }
 
-  def prepend(row: GenericInternalRow, values: Any*): GenericInternalRow = concatSeq(values, row.values)
+  private def selectFnRow(columns: Seq[(Int, DataType)]): InternalRow => InternalRow = {
+    (row: InternalRow) =>
+      InternalRow.fromSeq(selectFn(columns)(row))
+  }
 
-  def delete(schema: StructType, toDelete: Seq[String]): (GenericInternalRow => GenericInternalRow, StructType) = {
-    val (fields, indices) = schema.zipWithIndex.filterNot {
+  def prepend(row: InternalRow, schema: StructType, values: Any*): InternalRow = concatSeq(values, row.toSeq(schema))
+
+  def delete(schema: StructType, toDelete: Seq[String]): (InternalRow => InternalRow, StructType) = {
+    val fields = schema.zipWithIndex.filterNot {
       case (field: StructField, i) => toDelete.contains(field.name)
-    }.unzip
+    }
+    val columns = fields.map {
+      case (field, i) => (i, field.dataType)
+    }
 
-    (selectFn(indices), StructType(fields))
+    (selectFnRow(columns), StructType(fields.unzip._1))
   }
 
-  def select(schema: StructType, toSelect: Seq[String]): (GenericInternalRow => GenericInternalRow, StructType) = {
-    val (fields, indices) = schema.zipWithIndex.filter {
+  def select(schema: StructType, toSelect: Seq[String]): (InternalRow => InternalRow, StructType) = {
+    val fields = schema.zipWithIndex.filter {
       case (field: StructField, i) => toSelect.contains(field.name)
-    }.unzip
+    }
+    val columns = fields.map {
+      case (field, i) => (i, field.dataType)
+    }
 
-    (selectFn(indices), StructType(fields))
+    (selectFnRow(columns), StructType(fields.unzip._1))
   }
 
-  def add(schema: StructType, toAdd: Seq[(String, DataType)]): ((GenericInternalRow, Seq[Any]) => GenericInternalRow, StructType) =
-    ({ (row, values) => concatSeq(row.values, values) }, Schema.add(schema, toAdd))
+  def add(schema: StructType, toAdd: Seq[(String, DataType)]): ((InternalRow, Seq[Any]) => InternalRow, StructType) =
+    ({ (row, values) => concatSeq(row.toSeq(schema), values) }, Schema.add(schema, toAdd))
 
   def addOrUpdate(
     schema: StructType,
     toAdd: Seq[(String, DataType)]
-  ): ((GenericInternalRow, Seq[Any]) => GenericInternalRow, StructType) = {
+  ): ((InternalRow, Seq[Any]) => InternalRow, StructType) = {
     val namesToIndex = schema.fieldNames.zipWithIndex.toMap
     val indices = toAdd.map{ case (name, _) => namesToIndex.get(name) }
 
     val newSchema = Schema.addOrUpdate(schema, toAdd.zip(indices))
     val fn = {
-      (row: GenericInternalRow, values: Seq[Any]) => updateOrAppend(row.values, indices.zip(values): _*)
+      (row: InternalRow, values: Seq[Any]) => updateOrAppend(row.toSeq(schema).toArray, indices.zip(values): _*)
     }
     (fn, newSchema)
   }
@@ -138,25 +159,17 @@ object GenericInternalRowUtils {
   def concat2(
     schema1: StructType,
     schema2: StructType
-  ): ((GenericInternalRow, GenericInternalRow) => GenericInternalRow, StructType) = {
+  ): ((InternalRow, InternalRow) => InternalRow, StructType) = {
     val newSchema = StructType(schema1.fields ++ schema2.fields)
     Schema.requireUniqueColumnNames(newSchema)
-    ((row1: GenericInternalRow, row2: GenericInternalRow) => concatArray(row1.values, row2.values), newSchema)
+    ((row1: InternalRow, row2: InternalRow) => concatSeq(row1.toSeq(schema1), row2.toSeq(schema2)), newSchema)
   }
 
   def concat(
-    schemas: StructType*
-  ): (Seq[GenericInternalRow] => GenericInternalRow, StructType) = {
-    val newSchema = StructType(schemas.map(_.fields).reduce(_ ++ _))
-    Schema.requireUniqueColumnNames(newSchema)
-    ({ rows: Seq[GenericInternalRow] => concatArray(rows.map(_.values): _*) }, newSchema)
-  }
-
-  def concat(
-    schemas: Seq[StructType],
+    schemas: IndexedSeq[StructType],
     aliases: Seq[String],
     duplicates: Set[String]
-  ): (Seq[GenericInternalRow] => GenericInternalRow, StructType) = {
+  ): (Seq[InternalRow] => InternalRow, StructType) = {
     require(schemas.length == aliases.length)
 
     val (firstFields, firstIndex) = (schemas, aliases).zipped.head match {
@@ -182,19 +195,20 @@ object GenericInternalRowUtils {
 
     val schema = StructType(firstFields ++ remainingFields.flatten)
     val indices = Seq(firstIndex.toSeq) ++ remainingIndex.toSeq
-    val selectFns = indices.map {
-      indices => selectFn(indices)
+    val selectFns = indices.zipWithIndex.map {
+      case (rowIndices, index) =>
+        selectFn(schemas(index), rowIndices)
     }
 
     Schema.requireUniqueColumnNames(schema)
     val size = schemas.size
 
     val fn = {
-      rows: Seq[GenericInternalRow] =>
+      rows: Seq[InternalRow] =>
         val values: Array[Array[Any]] = Array.fill(size)(null)
         var i = 0
         while (i < size) {
-          values(i) = selectFns(i)(rows(i)).values
+          values(i) = selectFns(i)(rows(i))
           i += 1
         }
         concatArray(values: _*)
@@ -210,19 +224,23 @@ object GenericInternalRowUtils {
    * @param updates A sequence of tuples specifying a column name and a data type to cast the column to.
    * @return a function that should be applied to every row, and new schema.
    */
-  def cast(schema: StructType, updates: (String, NumericType)*): (GenericInternalRow => GenericInternalRow, StructType) = {
+  def cast(schema: StructType, updates: (String, NumericType)*): (InternalRow => InternalRow, StructType) = {
     val newSchema = Schema.cast(schema, updates: _*)
     val nameToIndex = schema.fieldNames.zipWithIndex.toMap
     val indexedUpdates = updates.map {
-      case (name, dataType) => (nameToIndex.get(name).get, dataType)
-    }.toMap
+      case (name, dataType) => (nameToIndex(name), dataType)
+    }
 
     val fn = {
-      (row: GenericInternalRow) =>
-        val newValues = Array.tabulate(schema.size) {
-          i => indexedUpdates.get(i).fold(row.values(i))(castNumericValue(row.values(i).asInstanceOf[Number], _))
+      (row: InternalRow) =>
+        val rowUpdates = indexedUpdates.map {
+          case (index, newDataType) =>
+            val value = getNumericValue(row, index, schema.fields(index).dataType.asInstanceOf[NumericType])
+            val newValue = castNumericValue(value, newDataType)
+            (index, newValue)
         }
-        new GenericInternalRow(newValues)
+
+        update(row, schema, rowUpdates: _*)
     }
 
     (fn, newSchema)
@@ -238,14 +256,25 @@ object GenericInternalRowUtils {
     case ShortType => value.shortValue()
   }
 
+  @inline
+  private final def getNumericValue(row: InternalRow, ordinal: Int, dataType: NumericType): Number = dataType match {
+    case ByteType => row.getByte(ordinal)
+    case DoubleType => row.getDouble(ordinal)
+    case FloatType => row.getFloat(ordinal)
+    case IntegerType => row.getInt(ordinal)
+    case LongType => row.getLong(ordinal)
+    case ShortType => row.getShort(ordinal)
+  }
+
   // Update values with given indices, and returns a new object
-  def update(iRow: GenericInternalRow, updates: (Int, Any)*): GenericInternalRow = {
-    val values = iRow.values.clone()
+  def update(iRow: InternalRow, schema: StructType, updates: (Int, Any)*): InternalRow = {
+    // TODO: if a row is mutable - we should use the "setX" API
+    val values = iRow.toSeq(schema).toArray
     var i = 0
     while (i < updates.size) {
       values(updates(i)._1) = updates(i)._2
       i += 1
     }
-    new GenericInternalRow(values)
+    InternalRow.fromSeq(values)
   }
 }

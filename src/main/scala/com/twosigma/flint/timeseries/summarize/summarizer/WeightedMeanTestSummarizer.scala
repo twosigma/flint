@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ WeightedMeanTestOutput, WeightedMeanTestState, WeightedMeanTestSummarizer => WMSummarizer }
 import com.twosigma.flint.timeseries.Schema
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 case class WeightedMeanTestSummarizerFactory(valueColumn: String, weightColumn: String) extends SummarizerFactory {
@@ -50,11 +50,11 @@ case class WeightedMeanTestSummarizer(
     s"${columnPrefix}_observationCount" -> LongType
   )
 
-  override def toT(r: GenericInternalRow): T =
+  override def toT(r: InternalRow): T =
     (
       valueToDouble(r.get(valueColumnIndex, inputSchema(valueColumnIndex).dataType)),
       weightToDouble(r.get(weightColumnIndex, inputSchema(weightColumnIndex).dataType))
     )
 
-  override def fromV(v: V): GenericInternalRow = new GenericInternalRow(v.productIterator.toArray)
+  override def fromV(v: V): InternalRow = InternalRow.fromSeq(v.productIterator.toSeq)
 }

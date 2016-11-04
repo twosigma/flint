@@ -18,8 +18,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 import com.twosigma.flint.timeseries.Schema
-
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 case class CountSummarizerFactory() extends SummarizerFactory {
@@ -36,7 +35,7 @@ case class CountSummarizer(
   override val summarizer = subtractable.CountSummarizer()
   override val schema = Schema.of("count" -> LongType)
 
-  override def toT(r: GenericInternalRow): T = r
+  override def toT(r: InternalRow): T = r
 
-  override def fromV(v: V): GenericInternalRow = new GenericInternalRow(Array[Any](v))
+  override def fromV(v: V): InternalRow = InternalRow(v)
 }

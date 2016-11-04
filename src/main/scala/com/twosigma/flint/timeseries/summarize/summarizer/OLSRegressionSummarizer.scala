@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ OLSRegressionOutput, OLSRegressionState, RegressionRow, OLSRegressionSummarizer => RegressionSummarizer }
 import com.twosigma.flint.timeseries.Schema
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.GenericArrayData
 import org.apache.spark.sql.types._
 
@@ -92,7 +92,7 @@ case class OLSRegressionSummarizer(
 
   override val summarizer = new RegressionSummarizer(dimensionOfX, shouldIntercept, isWeighted)
 
-  override def toT(r: GenericInternalRow): RegressionRow = RegressionRow(
+  override def toT(r: InternalRow): RegressionRow = RegressionRow(
     time = 0L,
     y = yToDouble(r.get(yColumnId, inputSchema(yColumnId).dataType)),
     x = xColumnIds.map { xi => xToDouble(xi)(r.get(xi, inputSchema(xi).dataType)) },
@@ -101,8 +101,8 @@ case class OLSRegressionSummarizer(
 
   override val schema = OLSRegressionSummarizer.outputSchema
 
-  override def fromV(o: OLSRegressionOutput): GenericInternalRow = {
-    new GenericInternalRow(Array[Any](
+  override def fromV(o: OLSRegressionOutput): InternalRow = {
+    InternalRow.fromSeq(Array[Any](
       o.count,
       new GenericArrayData(o.beta),
       o.intercept,

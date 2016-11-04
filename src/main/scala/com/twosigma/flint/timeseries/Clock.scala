@@ -18,10 +18,9 @@ package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.rdd.{ CloseOpen, OrderedRDD }
 import com.twosigma.flint.timeseries.time.TimeFormat
-
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.Experimental
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.InternalRow
 import org.joda.time.DateTimeZone
 
 import scala.concurrent.duration._
@@ -58,7 +57,7 @@ object Clock {
     val offsetNanos = Duration(offset).toNanos
     val schema = Schema()
     val rdd = apply(sc, beginNanos, endNanos, frequencyNanos, offsetNanos, sc.defaultParallelism).mapValues {
-      case (t, _) => new GenericInternalRow(Array[Any](t))
+      case (t, _) => InternalRow(t)
     }
     new TimeSeriesRDDImpl(rdd, schema)
   }

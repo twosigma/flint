@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ ZScoreState, ZScoreSummarizer => ZSSummarizer }
 import com.twosigma.flint.timeseries.Schema
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 case class ZScoreSummarizerFactory(column: String, excludeCurrentObservation: Boolean) extends SummarizerFactory {
@@ -40,7 +40,7 @@ case class ZScoreSummarizer(
   override val summarizer = ZSSummarizer(excludeCurrentObservation)
   override val schema = Schema.of(s"${column}_zScore" -> DoubleType)
 
-  override def toT(r: GenericInternalRow): T = r.getDouble(columnIndex)
+  override def toT(r: InternalRow): T = r.getDouble(columnIndex)
 
-  override def fromV(v: V): GenericInternalRow = new GenericInternalRow(Array[Any](v))
+  override def fromV(v: V): InternalRow = InternalRow(v)
 }
