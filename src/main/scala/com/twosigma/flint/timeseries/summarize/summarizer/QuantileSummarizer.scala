@@ -18,8 +18,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ QuantileSummarizer => QSummarizer }
 import com.twosigma.flint.timeseries.Schema
-
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 import scala.collection.mutable.ArrayBuffer
@@ -45,7 +44,7 @@ case class QuantileSummarizer(
   override val summarizer = QSummarizer(p)
   override val schema = Schema.of(p.map { q => s"${column}_${q}quantile" -> DoubleType }: _*)
 
-  override def toT(r: GenericInternalRow): T = toDouble(r.get(columnIndex, inputSchema(columnIndex).dataType))
+  override def toT(r: InternalRow): T = toDouble(r.get(columnIndex, inputSchema(columnIndex).dataType))
 
-  override def fromV(v: V): GenericInternalRow = new GenericInternalRow(Array[Any]() ++ v)
+  override def fromV(v: V): InternalRow = InternalRow.fromSeq(Array[Any]() ++ v)
 }

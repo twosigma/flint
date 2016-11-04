@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ NthCentralMomentOutput, NthCentralMomentState, NthCentralMomentSummarizer => NthCentralMomentSum }
 import com.twosigma.flint.timeseries.Schema
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 case class NthCentralMomentSummarizerFactory(column: String, moment: Int) extends SummarizerFactory {
@@ -41,7 +41,7 @@ case class NthCentralMomentSummarizer(
   override val summarizer = NthCentralMomentSum(moment)
   override val schema = Schema.of(s"${column}_${moment}thCentralMoment" -> DoubleType)
 
-  override def toT(r: GenericInternalRow): T = r.getDouble(columnIndex)
+  override def toT(r: InternalRow): T = r.getDouble(columnIndex)
 
-  override def fromV(v: V): GenericInternalRow = new GenericInternalRow(Array[Any](v.nthCentralMoment(moment)))
+  override def fromV(v: V): InternalRow = InternalRow(v.nthCentralMoment(moment))
 }

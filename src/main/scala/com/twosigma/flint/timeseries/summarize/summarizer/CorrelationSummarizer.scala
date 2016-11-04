@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ CorrelationOutput, CorrelationState, MultiCorrelationOutput, MultiCorrelationState, CorrelationSummarizer => CorrelationSum, MultiCorrelationSummarizer => MultiCorrelationSum }
 import com.twosigma.flint.timeseries.Schema
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 case class CorrelationSummarizerFactory(columnX: String, columnY: String) extends SummarizerFactory {
@@ -41,7 +41,7 @@ abstract class AbstractCorrelationSummarizer(
   override final type U = CorrelationState
   override final type V = CorrelationOutput
   override final val summarizer = CorrelationSum()
-  override final def toT(r: GenericInternalRow): (Double, Double) =
+  override final def toT(r: InternalRow): (Double, Double) =
     (
       xToDouble(r.get(columnXIndex, inputSchema(columnXIndex).dataType)),
       yToDouble(r.get(columnYIndex, inputSchema(columnYIndex).dataType))
@@ -59,7 +59,7 @@ class CorrelationSummarizer(
     s"${columnPrefix}_correlationTStat" -> DoubleType
   )
 
-  override def fromV(v: V): GenericInternalRow = new GenericInternalRow(Array[Any](v.correlation, v.tStat))
+  override def fromV(v: V): InternalRow = InternalRow(v.correlation, v.tStat)
 }
 
 /**
@@ -117,11 +117,11 @@ case class MultiCorrelationSummarizer(
       )
   }: _*)
 
-  override def toT(r: GenericInternalRow): Array[Double] = columnIndexes.map {
+  override def toT(r: InternalRow): Array[Double] = columnIndexes.map {
     case id => toDoubleFns(id)(r.get(id, inputSchema(id).dataType))
   }
 
-  override def fromV(v: V): GenericInternalRow = new GenericInternalRow(
+  override def fromV(v: V): InternalRow = InternalRow.fromSeq(
     v.outputs.flatMap { case (i, j, o) => Seq(o.correlation, o.tStat) }.toArray[Any]
   )
 }

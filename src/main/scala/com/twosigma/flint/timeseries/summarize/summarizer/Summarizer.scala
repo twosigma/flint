@@ -20,7 +20,7 @@ import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ LeftS
 import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.{ OverlappableSummarizer => OOverlappableSummarizer }
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ Summarizer => OSummarizer }
 import com.twosigma.flint.timeseries.{ Schema, TimeWindow }
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
 
 trait InputOutputSchema {
@@ -79,7 +79,7 @@ trait SummarizerFactory {
   def apply(inputSchema: StructType): Summarizer
 }
 
-trait Summarizer extends OSummarizer[GenericInternalRow, Any, GenericInternalRow] with InputOutputSchema {
+trait Summarizer extends OSummarizer[InternalRow, Any, InternalRow] with InputOutputSchema {
   // The type of each row expected to
   type T
 
@@ -92,38 +92,38 @@ trait Summarizer extends OSummarizer[GenericInternalRow, Any, GenericInternalRow
   val summarizer: OSummarizer[T, U, V]
 
   // Convert the InternalRow to the type of row expected by the `summarizer`.
-  def toT(r: GenericInternalRow): T
+  def toT(r: InternalRow): T
 
   // Convert the output of `summarizer` to the InternalRow.
-  def fromV(v: V): GenericInternalRow
+  def fromV(v: V): InternalRow
 
   final protected def toU(any: Any): U = any.asInstanceOf[U]
 
   final override def zero(): Any = summarizer.zero()
 
-  final override def add(u: Any, r: GenericInternalRow): Any = summarizer.add(toU(u), toT(r))
+  final override def add(u: Any, r: InternalRow): Any = summarizer.add(toU(u), toT(r))
 
   final override def merge(u1: Any, u2: Any): Any = summarizer.merge(toU(u1), toU(u2))
 
-  final override def render(u: Any): GenericInternalRow = fromV(summarizer.render(toU(u)))
+  final override def render(u: Any): InternalRow = fromV(summarizer.render(toU(u)))
 }
 
-trait LeftSubtractableSummarizer extends Summarizer with OLeftSubtractableSummarizer[GenericInternalRow, Any, GenericInternalRow] {
+trait LeftSubtractableSummarizer extends Summarizer with OLeftSubtractableSummarizer[InternalRow, Any, InternalRow] {
 
   override val summarizer: OLeftSubtractableSummarizer[T, U, V]
 
-  final override def subtract(u: Any, r: GenericInternalRow): Any = summarizer.subtract(toU(u), toT(r))
+  final override def subtract(u: Any, r: InternalRow): Any = summarizer.subtract(toU(u), toT(r))
 }
 
 trait OverlappableSummarizerFactory extends SummarizerFactory {
   val window: TimeWindow
 }
 
-trait OverlappableSummarizer extends Summarizer with OOverlappableSummarizer[GenericInternalRow, Any, GenericInternalRow] with InputOutputSchema {
+trait OverlappableSummarizer extends Summarizer with OOverlappableSummarizer[InternalRow, Any, InternalRow] with InputOutputSchema {
   type T
   type U
   type V
   val summarizer: OOverlappableSummarizer[T, U, V]
 
-  final override def add(u: Any, r: (GenericInternalRow, Boolean)): Any = summarizer.add(toU(u), (toT(r._1), r._2))
+  final override def add(u: Any, r: (InternalRow, Boolean)): Any = summarizer.add(toU(u), (toT(r._1), r._2))
 }

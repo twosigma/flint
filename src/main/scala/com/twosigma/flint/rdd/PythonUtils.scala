@@ -19,7 +19,7 @@ package com.twosigma.flint.rdd
 import com.twosigma.flint.timeseries.{ TimeSeriesRDD, TimeSeriesRDDImpl }
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, Row }
 
@@ -78,7 +78,7 @@ object PythonUtils {
     schema: StructType,
     keyColumn: String,
     ranges: Seq[CloseOpen[Long]]
-  ): OrderedRDD[Long, GenericInternalRow] = {
+  ): OrderedRDD[Long, InternalRow] = {
     val keyIdx = schema.fieldIndex(keyColumn)
     val converter = CatalystTypeConvertersWrapper.toCatalystRowConverter(schema)
     OrderedRDD.fromRDD(rdd.map(row => (row.getAs[Long](keyIdx), converter(row))), ranges)

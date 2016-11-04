@@ -16,19 +16,19 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.CatalystTypeConverters
-import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, GenericRowWithSchema }
+import org.apache.spark.sql.catalyst.{ CatalystTypeConverters, InternalRow }
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.types.DataType
 
 /**
  * Functions to convert Scala types to Catalyst types and back.
  */
 object CatalystTypeConvertersWrapper {
-  def toCatalystRowConverter(dataType: DataType): Row => GenericInternalRow = {
-    CatalystTypeConverters.createToCatalystConverter(dataType)(_).asInstanceOf[GenericInternalRow]
+  def toCatalystRowConverter(dataType: DataType): Row => InternalRow = {
+    CatalystTypeConverters.createToCatalystConverter(dataType)(_).asInstanceOf[InternalRow]
   }
 
-  def toScalaRowConverter(dataType: DataType): GenericInternalRow => GenericRowWithSchema = {
+  def toScalaRowConverter(dataType: DataType): InternalRow => GenericRowWithSchema = {
     CatalystTypeConverters.createToScalaConverter(dataType)(_).asInstanceOf[GenericRowWithSchema]
   }
 

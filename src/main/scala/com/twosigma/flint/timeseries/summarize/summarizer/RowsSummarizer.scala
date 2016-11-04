@@ -18,8 +18,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 import com.twosigma.flint.timeseries.Schema
-
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.GenericArrayData
 import org.apache.spark.sql.types._
 
@@ -32,16 +31,16 @@ case class RowsSummarizer(
   override val alias: Option[String],
   column: String
 ) extends LeftSubtractableSummarizer {
-  override type T = GenericInternalRow
-  override type U = Vector[GenericInternalRow]
-  override type V = Vector[GenericInternalRow]
-  override val summarizer = subtractable.RowsSummarizer[GenericInternalRow]()
+  override type T = InternalRow
+  override type U = Vector[InternalRow]
+  override type V = Vector[InternalRow]
+  override val summarizer = subtractable.RowsSummarizer[InternalRow]()
   override val schema = Schema.of(column -> ArrayType(inputSchema))
 
-  override def toT(r: GenericInternalRow): T = r
+  override def toT(r: InternalRow): T = r
 
-  override def fromV(v: V): GenericInternalRow = {
+  override def fromV(v: V): InternalRow = {
     val values = new GenericArrayData(v.toArray)
-    new GenericInternalRow(Array[Any](values))
+    InternalRow(values)
   }
 }
