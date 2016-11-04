@@ -16,7 +16,9 @@
 
 package com.twosigma.flint.rdd.function.summarize.summarizer
 
-import breeze.linalg.{ diag, inv, DenseVector, DenseMatrix }
+import breeze.linalg.{ diag, inv, DenseVector, DenseMatrix, MatrixSingularException }
+import scala.util.{ Success, Failure }
+import scala.util.control.Exception._
 
 case class OLSRegressionState(
   var count: Long,
@@ -83,39 +85,56 @@ class OLSRegressionSummarizer(
     mergedU
   }
 
-  override def render(u: OLSRegressionState): OLSRegressionOutput = {
-    val matrixOfBetaVariance = inv(u.matrixOfXX)
-    val vectorOfBeta = matrixOfBetaVariance * u.vectorOfXY
-    val beta = vectorOfBeta.toArray
-    val residualSumOfSquares = computeResidualSumOfSquares(vectorOfBeta, u.sumOfYSquared, u.vectorOfXY, u.matrixOfXX)
-    val errorVariance = residualSumOfSquares / (u.count - k)
-    val vectorOfStdErrs = diag(matrixOfBetaVariance).map { betaVar => Math.sqrt(errorVariance * betaVar) }
-    val stdErrs = vectorOfStdErrs.toArray
-    val vectorOfTStat = vectorOfBeta :/ vectorOfStdErrs
-    val tStat = vectorOfTStat.toArray
+  override def render(u: OLSRegressionState): OLSRegressionOutput =
+    catching(classOf[MatrixSingularException]).withTry {
+      inv(u.matrixOfXX)
+    } match {
+      case Success(matrixOfBetaVariance) =>
+        val vectorOfBeta = matrixOfBetaVariance * u.vectorOfXY
+        val beta = vectorOfBeta.toArray
+        val residualSumOfSquares = computeResidualSumOfSquares(vectorOfBeta, u.sumOfYSquared, u.vectorOfXY, u.matrixOfXX)
+        val errorVariance = residualSumOfSquares / (u.count - k)
+        val vectorOfStdErrs = diag(matrixOfBetaVariance).map { betaVar => Math.sqrt(errorVariance * betaVar) }
+        val stdErrs = vectorOfStdErrs.toArray
+        val vectorOfTStat = vectorOfBeta :/ vectorOfStdErrs
+        val tStat = vectorOfTStat.toArray
 
-    val (intercept, primeBeta, stdErrOfIntercept, stdErrOfPrimeBeta, tStatOfIntercept, tStatOfPrimeBeta) =
-      if (shouldIntercept) {
-        (beta(0), beta.tail, stdErrs(0), stdErrs.tail, tStat(0), tStat.tail)
-      } else {
-        (0.0, beta, Double.NaN, stdErrs, Double.NaN, tStat)
-      }
+        val (intercept, primeBeta, stdErrOfIntercept, stdErrOfPrimeBeta, tStatOfIntercept, tStatOfPrimeBeta) =
+          if (shouldIntercept) {
+            (beta(0), beta.tail, stdErrs(0), stdErrs.tail, tStat(0), tStat.tail)
+          } else {
+            (0.0, beta, Double.NaN, stdErrs, Double.NaN, tStat)
+          }
 
-    val rSquared = computeRSquared(u.sumOfYSquared, u.sumOfWeights, u.sumOfY, residualSumOfSquares, shouldIntercept)
+        val rSquared = computeRSquared(u.sumOfYSquared, u.sumOfWeights, u.sumOfY, residualSumOfSquares, shouldIntercept)
 
-    OLSRegressionOutput(
-      count = u.count,
-      beta = primeBeta,
-      intercept = intercept,
-      hasIntercept = shouldIntercept,
-      stdErrOfBeta = stdErrOfPrimeBeta,
-      stdErrOfIntercept = stdErrOfIntercept,
-      rSquared = rSquared,
-      r = Math.sqrt(rSquared),
-      tStatOfBeta = tStatOfPrimeBeta,
-      tStatOfIntercept = tStatOfIntercept
-    )
-  }
+        OLSRegressionOutput(
+          count = u.count,
+          beta = primeBeta,
+          intercept = intercept,
+          hasIntercept = shouldIntercept,
+          stdErrOfBeta = stdErrOfPrimeBeta,
+          stdErrOfIntercept = stdErrOfIntercept,
+          rSquared = rSquared,
+          r = Math.sqrt(rSquared),
+          tStatOfBeta = tStatOfPrimeBeta,
+          tStatOfIntercept = tStatOfIntercept
+        )
+
+      case Failure(_) =>
+        OLSRegressionOutput(
+          count = u.count,
+          beta = Array.fill(dimensionOfX)(Double.NaN),
+          intercept = Double.NaN,
+          hasIntercept = shouldIntercept,
+          stdErrOfBeta = Array.fill(dimensionOfX)(Double.NaN),
+          stdErrOfIntercept = Double.NaN,
+          rSquared = Double.NaN,
+          r = Double.NaN,
+          tStatOfIntercept = Double.NaN,
+          tStatOfBeta = Array.fill(dimensionOfX)(Double.NaN)
+        )
+    }
 
   override def add(u: OLSRegressionState, t: RegressionRow): OLSRegressionState = {
     val (xt, yt, yw) = RegressionSummarizer.transform(t, shouldIntercept, isWeighted)
