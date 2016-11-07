@@ -284,4 +284,19 @@ class LinearRegressionModelSpec extends FlatSpec with SharedSparkContext {
       Array(0.800464, 0.816942)
     )
   }
+
+  it should "calculate the log-likelihood correctly" in {
+    assert(modelWithIntercept.estimateLogLikelihood() === -312.1129202263564)
+    assert(modelWithoutIntercept.estimateLogLikelihood() === -327.111139403987)
+  }
+
+  it should "calculate the BIC correctly" in {
+    assert(modelWithIntercept.estimateBayesianInformationCriterion() === 638.04135101067732)
+    assert(modelWithoutIntercept.estimateBayesianInformationCriterion() === 663.4326191799502)
+  }
+
+  it should "calculate the AIC correctly" in {
+    assert(modelWithIntercept.estimateAkaikeInformationCriterion() === 630.22584045271299)
+    assert(modelWithoutIntercept.estimateAkaikeInformationCriterion() === 658.222278807974)
+  }
 }

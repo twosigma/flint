@@ -37,7 +37,7 @@ object OLSMultipleLinearRegression {
       input.first.features.length
     }
 
-    val (xx, xy, swx, srwsl, ssrw, wsl, sw, n) = input.treeAggregate((
+    val (xx, xy, swx, srwsl, ssrw, wsl, sw, n, lw) = input.treeAggregate((
       new DenseMatrix[Double](nCols, nCols), // 1. Calculate a k-by-k matrix X^TX.
       new DenseVector[Double](nCols), // 2. Calculate a k-dimension vector X^Ty.
       new DenseVector[Double](nCols), // 3. Calculate a k-dimension vector of weighted sum of X.
@@ -45,8 +45,9 @@ object OLSMultipleLinearRegression {
       0.0, // 5. Calculate the sum of square root of weights.
       0.0, // 6. Calculate the weighted sum of labels.
       0.0, // 7. Calculate the sum of weights.
-      0: Long
-    ))( // Calculate the length of input.
+      0: Long, // 8. Calculate the length of input.
+      0.0 // 9. Calculate sum of log weights
+    ))(
       // U is a pair of matrix and vector and v is a WeightedLabeledPoint.
       seqOp = (U, v) => {
       // Append 1.0 at the head for calculating intercept.
@@ -65,7 +66,8 @@ object OLSMultipleLinearRegression {
         U._5 + sqrtW,
         U._6 + v.label * v.weight,
         U._7 + v.weight,
-        U._8 + 1)
+        U._8 + 1,
+        U._9 + math.log(v.weight))
     }, combOp = (U1, U2) => (
       U1._1 += U2._1,
       U1._2 += U2._2,
@@ -74,9 +76,10 @@ object OLSMultipleLinearRegression {
       U1._5 + U2._5,
       U1._6 + U2._6,
       U1._7 + U2._7,
-      U1._8 + U2._8
+      U1._8 + U2._8,
+      U1._9 + U2._9
     )
     )
-    LinearRegressionModel(input, intercept, n, (xx + xx.t) :/ 2.0, xy, swx, srwsl, ssrw, wsl, sw)
+    LinearRegressionModel(input, intercept, n, (xx + xx.t) :/ 2.0, xy, swx, srwsl, ssrw, wsl, sw, lw)
   }
 }

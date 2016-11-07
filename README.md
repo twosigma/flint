@@ -320,6 +320,9 @@ The followiing table list different implementations cross different packages or 
 | calculateStandardErrorsOfHC0 | n/a | HC0_se |
 | calculateStandardErrorsOfHC1 | n/a | HC1_se |
 | calculateUncenteredTSS | n/a  | uncentered_tss |
+| estimateBayesianInformationCriterion | n/a | bic |
+| estimateAkaikeInformationCriterion | n/a | aic |
+| estimateLogLikelihood | n/a | loglike |
 | estimateErrorVariance | estimateErrorVariance | mse_resid |
 | estimateRegressionParameters | estimateRegressionParameters | params |
 | estimateRegressionParametersVariance | estimateRegressionParametersVariance | normalized_cov_params |
