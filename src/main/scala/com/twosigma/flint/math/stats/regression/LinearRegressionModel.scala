@@ -115,6 +115,32 @@ trait LinearRegression {
   def estimateRegressionParametersStandardErrors(): DenseVector[Double]
 
   /**
+    * Estimates the log-likelihood of the regression parameters given the data u sing the MLE estimate of the variance
+    * of the error given the data and assuming no prior on the regression parameters
+    *
+    * @return the log-likelihood of the regression parameters
+    */
+  def estimateLogLikelihood(): Double
+
+  /**
+    * Estimates the Bayesian information criterion of the regression parameters, i.e.
+    * <pre><code> BIC(M;Y,X) = -2 ln L(M;Y,X) + k ln n </code>
+    * </pre>
+    *
+    * @return the Bayesian information criterion of the regression parameters
+    */
+  def estimateBayesianInformationCriterion(): Double
+
+  /**
+    * Estimates the Akaike information criterion of the regression parameters, i.e.
+    * <pre><code> AIC(M;Y,X) = -2 ln L(M;Y,X) + 2 k </code>
+    * </pre>
+    *
+    * @return the Akaike information criterion of the regression parameters
+    */
+  def estimateAkaikeInformationCriterion(): Double
+
+  /**
    * Calculates the Gramian matrix of X, i.e.
    * <p><code>Gramian(X) = X<sup>T</sup>X</code>
    * </p>
@@ -184,10 +210,11 @@ trait LinearRegression {
  * @param ssrw The sum of square root of weights.
  * @param wsl The weighted sum of labels.
  * @param sw The sum of weights of WeightedLabeledPoint(s).
+ * @param lw The sum of log weights of WeightedLabeledPoint(s).
  */
 case class LinearRegressionModel(input: RDD[WeightedLabeledPoint], intercept: Boolean, n: Long,
   xx: DenseMatrix[Double], xy: DenseVector[Double], swx: DenseVector[Double], srwsl: Double,
-  ssrw: Double, wsl: Double, sw: Double) extends LinearRegression {
+  ssrw: Double, wsl: Double, sw: Double, lw: Double) extends LinearRegression {
 
   // Lazy variables will be calculated once only.
   protected lazy val beta: DenseVector[Double] = calculateBeta()
@@ -199,6 +226,9 @@ case class LinearRegressionModel(input: RDD[WeightedLabeledPoint], intercept: Bo
   protected lazy val (centeredTSS, uncenteredTSS) = calculateTSS(input)
   protected lazy val eigenvalues = eigSym.justEigenvalues(xx)
   protected lazy val hc0 = calculateHCRobustEstimator(input, xx, beta)
+  protected lazy val logLikelihood: Double = calculateLogLikelihood()
+  protected lazy val akaikeIC: Double = calculateAkaikeInformationCriterion()
+  protected lazy val bayesIC: Double = calculateBayesianInformationCriterion()
 
   def getN: Long = n
   def getK: Int = beta.length
@@ -215,6 +245,9 @@ case class LinearRegressionModel(input: RDD[WeightedLabeledPoint], intercept: Bo
   def estimateRegressandVariance(): Double = varianceOfY
   def estimateErrorVariance(): Double = varianceOfError
   def estimateRegressionParametersStandardErrors(): DenseVector[Double] = standardErrorOfBeta
+  def estimateLogLikelihood(): Double = logLikelihood
+  def estimateAkaikeInformationCriterion(): Double = akaikeIC
+  def estimateBayesianInformationCriterion(): Double = bayesIC
 
   /**
    * Calculate the White's (1980) heteroskedasticity robust estimator which is defined as
@@ -330,7 +363,7 @@ case class LinearRegressionModel(input: RDD[WeightedLabeledPoint], intercept: Bo
     // Materialize the lazy variable before RDD.map()
     val meanOfY = calculateMeanOfY()
     // 1. The sum of squared residues
-    // 2. The sum of squared derivation
+    // 2. The sum of squared deviation
     input.treeAggregate((0.0, 0.0))(
       seqOp = (U, v) => {
       val w = Math sqrt v.weight
@@ -425,6 +458,61 @@ case class LinearRegressionModel(input: RDD[WeightedLabeledPoint], intercept: Bo
     val sigma = calculateErrorVariance()
     diag(betaVariance).map { betaVar => Math.sqrt(sigma * betaVar) }
   }
+
+  /**
+   * Calculates the log-likelihood of the model given the input data and assuming the data are drawn as
+   * <pre><code> Y = M(X) + &epsilon; </code>
+   * </pre>
+   * and
+   * <pre><code> &epsilon; ~ N(0, &sigma;<sup>2</sup>)</code>
+   * </pre>
+   * where <code>&sigma;<sup>2</sup></code> is the maximum likelihood estimate of the error variance
+   *
+   * @return log-likelihood
+   */
+  protected def calculateLogLikelihood(): Double = {
+    -0.5 * getN * (math.log(sumOfSquaredResidue) + 1 + math.log(2.0 * math.Pi / getN)) + 0.5 * lw
+  }
+
+  /**
+   * Calculates the Bayesian information criterion of the linear model given the input data and assuming
+   * no prior is applied to the parameters
+   *
+   * Bayesian information criterion is defined as
+   * <pre><code> BIC(M;Y,X) = -2 ln L(M;Y,X) + k ln n </code>
+   * </pre>
+   * where we assume the data are drawn as
+   * <pre><code> Y = M(X) + &epsilon; </code>
+   * </pre>
+   * and
+   * <pre><code> &epsilon; ~ N(0, &sigma;<sup>2</sup>)</code>
+   * </pre>
+   * where <code>&sigma;<sup>2</sup></code> is the maximum likelihood estimate of the error variance,
+   * <code> SSE(M) / n </code>
+   *
+   * @return Bayes information criterion
+   */
+  def calculateBayesianInformationCriterion(): Double = -2.0 * logLikelihood + getK * math.log(getN.toDouble)
+
+  /**
+   * Calculates the Akaike information criterion of the linear model given the input data and assuming no prior is
+   * applied to the parameters
+   *
+   * Akaike information criterion is defined as
+   * <pre><code> AIC(M;Y,X) = -2 ln L(M;Y,X) + 2 k </code>
+   * </pre>
+   * where we assume the data are drawn as
+   * <pre><code> Y = M(X) + &epsilon; </code>
+   * </pre>
+   * and
+   * <pre><code> &epsilon; ~ N(0, &sigma;<sup>2</sup>)</code>
+   * </pre>
+   * where <code>&sigma;<sup>2</sup></code> is the maximum likelihood estimate of the error variance,
+   * <code> SSE(M) / n </code>
+   *
+   * @return Akaike information criterion
+   */
+  def calculateAkaikeInformationCriterion(): Double = -2.0 * logLikelihood + 2.0 * getK
 }
 
 object LinearRegressionModel {
