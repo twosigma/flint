@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import com.twosigma.flint.rdd.Conversion
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DataFrame, Row, SQLContext }
+import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DFConverter, DataFrame, Row, SQLContext }
 import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ERow }
 import org.apache.spark.sql.types._
 import org.apache.spark.storage.StorageLevel
@@ -66,19 +66,55 @@ object TimeSeriesRDD {
    * @param timeUnit The unit of time (as Long type) under the time column in the rows as input of the returning
    *                 function.
    * @return a function to extract the timestamps from [[org.apache.spark.sql.Row]].
+   * @note  if timeUnit is different from [[NANOSECONDS]] then the function needs to make an extra copy
+   *        of the row value.
    */
-  private[timeseries] def getRowConverter(schema: StructType, timeUnit: TimeUnit): Row => (Long, InternalRow) = {
+  private[timeseries] def getExternalRowConverter(
+    schema: StructType,
+    timeUnit: TimeUnit
+  ): Row => (Long, InternalRow) = {
     val timeColumnIndex = schema.fieldIndex(timeColumnName)
     val toInternalRow = CatalystTypeConvertersWrapper.toCatalystRowConverter(schema)
 
-    // TODO: skip time conversion if the input time is in nanoseconds
-    (row: Row) =>
-      val values = row.toSeq.toArray
-      val t = TimeUnit.NANOSECONDS.convert(row.getLong(timeColumnIndex), timeUnit)
-      values.update(timeColumnIndex, t)
-      val updatedRow = new GenericRow(values)
+    if (timeUnit == NANOSECONDS) {
+      (row: Row) =>
+        (row.getLong(timeColumnIndex), toInternalRow(row))
+    } else {
+      (row: Row) =>
+        val values = row.toSeq.toArray
+        val t = TimeUnit.NANOSECONDS.convert(row.getLong(timeColumnIndex), timeUnit)
+        values.update(timeColumnIndex, t)
+        val updatedRow = new GenericRow(values)
 
-      (t, toInternalRow(updatedRow))
+        (t, toInternalRow(updatedRow))
+    }
+  }
+
+  /**
+   * Similar to getRowConverter(), but used to convert a [[DataFrame]] into a [[TimeSeriesRDD]]
+   *
+   * @param schema    The schema of the input rows.
+   * @param timeUnit  The unit of time (as Long type) under the time column in the rows as input of the returning
+   *                  function.
+   * @return          a function to convert [[InternalRow]] into a tuple.
+   * @note            if timeUnit is different from [[NANOSECONDS]] then the function needs to make an extra copy
+   *                  of the row value. Otherwise it makes no copies of the row.
+   */
+  private[timeseries] def getInternalRowConverter(
+    schema: StructType,
+    timeUnit: TimeUnit
+  ): InternalRow => (Long, InternalRow) = {
+    val timeColumnIndex = schema.fieldIndex(timeColumnName)
+
+    if (timeUnit == NANOSECONDS) {
+      (internalRow: InternalRow) =>
+        (internalRow.getLong(timeColumnIndex), internalRow)
+    } else {
+      (internalRow: InternalRow) =>
+        val t = TimeUnit.NANOSECONDS.convert(internalRow.getLong(timeColumnIndex), timeUnit)
+
+        (t, InternalRowUtils.update(internalRow, schema, timeColumnIndex -> t))
+    }
   }
 
   private[timeseries] def fromSeq(
@@ -182,7 +218,7 @@ object TimeSeriesRDD {
   ): TimeSeriesRDD = {
     val newSchema = Schema.rename(schema, Seq(timeColumn -> timeColumnName))
     requireSchema(newSchema)
-    val converter = getRowConverter(newSchema, timeUnit)
+    val converter = getExternalRowConverter(newSchema, timeUnit)
     val pairRdd = rdd.map(converter)
     new TimeSeriesRDDImpl(OrderedRDD.fromRDD(pairRdd, isSorted, isNormalized), newSchema)
   }
@@ -216,11 +252,13 @@ object TimeSeriesRDD {
     timeUnit: TimeUnit,
     timeColumn: String = timeColumnName
   ): TimeSeriesRDD = {
+    // TODO: convert timestamps on the dataframe if we need to
     val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
     requireSchema(df.schema)
 
-    val converter = getRowConverter(df.schema, timeUnit)
-    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(df.rdd.map(converter), isSorted), df.schema)
+    val internalRows = df.queryExecution.toRdd
+    val converter = getInternalRowConverter(df.schema, timeUnit)
+    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(internalRows.map(converter), isSorted), df.schema)
   }
 
   /**
@@ -238,8 +276,9 @@ object TimeSeriesRDD {
     val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
     requireSchema(df.schema)
 
-    val converter = getRowConverter(df.schema, timeUnit)
-    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(df.rdd.map(converter), ranges), df.schema)
+    val internalRows = df.queryExecution.toRdd
+    val converter = getInternalRowConverter(df.schema, timeUnit)
+    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(internalRows.map(converter), ranges), df.schema)
   }
 
   /**
@@ -1009,7 +1048,7 @@ class TimeSeriesRDDImpl(
   override val toDF: DataFrame = {
     val sc = rdd.sparkContext
     val sqlContext = SQLContext.getOrCreate(sc)
-    sqlContext.createDataFrame(rdd, schema)
+    DFConverter.toDataFrame(sqlContext, schema, orderedRdd)
   }
 
   def count(): Long = orderedRdd.count()
