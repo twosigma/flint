@@ -115,29 +115,29 @@ trait LinearRegression {
   def estimateRegressionParametersStandardErrors(): DenseVector[Double]
 
   /**
-    * Estimates the log-likelihood of the regression parameters given the data u sing the MLE estimate of the variance
-    * of the error given the data and assuming no prior on the regression parameters
-    *
-    * @return the log-likelihood of the regression parameters
-    */
+   * Estimates the log-likelihood of the regression parameters given the data u sing the MLE estimate of the variance
+   * of the error given the data and assuming no prior on the regression parameters
+   *
+   * @return the log-likelihood of the regression parameters
+   */
   def estimateLogLikelihood(): Double
 
   /**
-    * Estimates the Bayesian information criterion of the regression parameters, i.e.
-    * <pre><code> BIC(M;Y,X) = -2 ln L(M;Y,X) + k ln n </code>
-    * </pre>
-    *
-    * @return the Bayesian information criterion of the regression parameters
-    */
+   * Estimates the Bayesian information criterion of the regression parameters, i.e.
+   * <pre><code> BIC(M;Y,X) = -2 ln L(M;Y,X) + k ln n </code>
+   * </pre>
+   *
+   * @return the Bayesian information criterion of the regression parameters
+   */
   def estimateBayesianInformationCriterion(): Double
 
   /**
-    * Estimates the Akaike information criterion of the regression parameters, i.e.
-    * <pre><code> AIC(M;Y,X) = -2 ln L(M;Y,X) + 2 k </code>
-    * </pre>
-    *
-    * @return the Akaike information criterion of the regression parameters
-    */
+   * Estimates the Akaike information criterion of the regression parameters, i.e.
+   * <pre><code> AIC(M;Y,X) = -2 ln L(M;Y,X) + 2 k </code>
+   * </pre>
+   *
+   * @return the Akaike information criterion of the regression parameters
+   */
   def estimateAkaikeInformationCriterion(): Double
 
   /**
