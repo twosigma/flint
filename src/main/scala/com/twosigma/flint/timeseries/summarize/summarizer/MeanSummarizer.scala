@@ -22,13 +22,13 @@ import org.apache.spark.sql.types._
 
 case class MeanSummarizerFactory(column: String) extends SummarizerFactory {
   override def apply(inputSchema: StructType): MeanSummarizer =
-    new MeanSummarizer(inputSchema, alias, column)
+    new MeanSummarizer(inputSchema, prefixOpt, column)
 }
 
 class MeanSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   override val column: String
-) extends NthMomentSummarizer(inputSchema, alias, column, 1) {
+) extends NthMomentSummarizer(inputSchema, prefixOpt, column, 1) {
   override val schema = Schema.of(s"${column}_mean" -> DoubleType)
 }

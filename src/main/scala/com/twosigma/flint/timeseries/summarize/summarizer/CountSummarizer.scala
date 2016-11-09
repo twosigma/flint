@@ -23,12 +23,12 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 case class CountSummarizerFactory() extends SummarizerFactory {
-  override def apply(inputSchema: StructType): CountSummarizer = CountSummarizer(inputSchema, alias)
+  override def apply(inputSchema: StructType): CountSummarizer = CountSummarizer(inputSchema, prefixOpt)
 }
 
 case class CountSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String]
+  override val prefixOpt: Option[String]
 ) extends LeftSubtractableSummarizer {
   override type T = Any
   override type U = Long

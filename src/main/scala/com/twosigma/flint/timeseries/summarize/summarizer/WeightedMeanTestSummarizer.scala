@@ -24,12 +24,12 @@ import org.apache.spark.sql.types._
 
 case class WeightedMeanTestSummarizerFactory(valueColumn: String, weightColumn: String) extends SummarizerFactory {
   override def apply(inputSchema: StructType): WeightedMeanTestSummarizer =
-    WeightedMeanTestSummarizer(inputSchema, alias, valueColumn, weightColumn)
+    WeightedMeanTestSummarizer(inputSchema, prefixOpt, valueColumn, weightColumn)
 }
 
 case class WeightedMeanTestSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   valueColumn: String,
   weightColumn: String
 ) extends Summarizer {

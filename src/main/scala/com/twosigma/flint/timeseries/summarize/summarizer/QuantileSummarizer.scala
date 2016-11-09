@@ -26,12 +26,12 @@ import scala.collection.mutable.ArrayBuffer
 
 case class QuantileSummarizerFactory(column: String, p: Array[Double]) extends SummarizerFactory {
   override def apply(inputSchema: StructType): QuantileSummarizer =
-    QuantileSummarizer(inputSchema, alias, column, p)
+    QuantileSummarizer(inputSchema, prefixOpt, column, p)
 }
 
 case class QuantileSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   column: String,
   p: Array[Double]
 ) extends Summarizer {

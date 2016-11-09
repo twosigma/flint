@@ -24,12 +24,12 @@ import org.apache.spark.sql.catalyst.util.GenericArrayData
 import org.apache.spark.sql.types._
 
 case class RowsSummarizerFactory(column: String) extends SummarizerFactory {
-  override def apply(inputSchema: StructType): RowsSummarizer = RowsSummarizer(inputSchema, alias, column)
+  override def apply(inputSchema: StructType): RowsSummarizer = RowsSummarizer(inputSchema, prefixOpt, column)
 }
 
 case class RowsSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   column: String
 ) extends LeftSubtractableSummarizer {
   override type T = InternalRow

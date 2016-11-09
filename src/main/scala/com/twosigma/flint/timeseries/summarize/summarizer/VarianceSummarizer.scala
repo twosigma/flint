@@ -23,15 +23,15 @@ import org.apache.spark.sql.types.{ DoubleType, StructType }
 
 case class VarianceSummarizerFactory(column: String, applyBesselCorrection: Boolean = true) extends SummarizerFactory {
   override def apply(inputSchema: StructType): VarianceSummarizer =
-    new VarianceSummarizer(inputSchema, alias, column, applyBesselCorrection)
+    new VarianceSummarizer(inputSchema, prefixOpt, column, applyBesselCorrection)
 }
 
 class VarianceSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   override val column: String,
   val applyBesselCorrection: Boolean
-) extends NthCentralMomentSummarizer(inputSchema, alias, column, 2) {
+) extends NthCentralMomentSummarizer(inputSchema, prefixOpt, column, 2) {
   override val schema = Schema.of(s"${column}_variance" -> DoubleType)
   override def fromV(v: V): GenericInternalRow = {
     var variance = v.nthCentralMoment(2)
