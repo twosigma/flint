@@ -18,9 +18,10 @@ package com.twosigma.flint.timeseries
 
 import java.util.concurrent.TimeUnit
 
+import com.twosigma.flint.annotation.PythonApi
 import com.twosigma.flint.rdd.Conversion
 import org.apache.spark.rdd.RDD
-import org.apache.spark.SparkContext
+import org.apache.spark.{ Dependency, SparkContext }
 import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DFConverter, DataFrame, Row, SQLContext }
 import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ERow }
 import org.apache.spark.sql.types._
@@ -28,7 +29,7 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.annotation.Experimental
 import com.twosigma.flint.timeseries.summarize.Summary
 import com.twosigma.flint.timeseries.summarize.summarizer.{ OverlappableSummarizer, OverlappableSummarizerFactory }
-import com.twosigma.flint.rdd.{ CloseOpen, OrderedRDD }
+import com.twosigma.flint.rdd.{ RangeSplit, CloseOpen, OrderedRDD }
 import com.twosigma.flint.row.InternalRowUtils
 import com.twosigma.flint.timeseries.summarize.summarizer.SummarizerFactory
 import com.twosigma.flint.timeseries.time.TimeFormat
@@ -160,7 +161,7 @@ object TimeSeriesRDD {
    * @param timeColumn Optional. The name of column in `df` that specifies the column name for time. Default: "time"
    * @return a [[org.apache.spark.sql.DataFrame]].
    */
-  // Python binding
+  @PythonApi
   private[flint] def DFBetween(
     dataFrame: DataFrame,
     begin: String,
@@ -266,6 +267,7 @@ object TimeSeriesRDD {
    *
    * This method takes time ranges of the dataframe and avoid data scanning to find out the ranges.
    */
+  @PythonApi
   private[flint] def fromDFUnSafe(
     dataFrame: DataFrame
   )(
@@ -279,6 +281,23 @@ object TimeSeriesRDD {
     val internalRows = df.queryExecution.toRdd
     val converter = getInternalRowConverter(df.schema, timeUnit)
     new TimeSeriesRDDImpl(OrderedRDD.fromRDD(internalRows.map(converter), ranges), df.schema)
+  }
+
+  @PythonApi
+  private[flint] def fromDFUnSafe(
+    dataFrame: DataFrame
+  )(
+    timeUnit: TimeUnit,
+    timeColumn: String,
+    deps: Seq[Dependency[_]],
+    rangeSplits: Array[RangeSplit[Long]]
+  ): TimeSeriesRDD = {
+    val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
+    requireSchema(df.schema)
+
+    val internalRows = df.queryExecution.toRdd
+    val converter = getInternalRowConverter(df.schema, timeUnit)
+    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(internalRows.map(converter), deps, rangeSplits), df.schema)
   }
 
   /**

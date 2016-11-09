@@ -16,7 +16,10 @@
 
 package com.twosigma.flint.rdd
 
+import java.util.Random
+
 import com.twosigma.flint.SharedSparkContext
+import org.apache.spark.NarrowDependency
 import org.apache.spark.rdd.RDD
 import org.scalatest.FlatSpec
 
@@ -43,6 +46,14 @@ class ConversionSpec extends FlatSpec with SharedSparkContext {
     (1002L, (9, 8.91))
   )
 
+  def genRandomSortedRdd(numRows: Int, max: Int, numPartitions: Int): RDD[(Long, Long)] = {
+    val rand = new Random()
+
+    val times = (0 until numRows).map{ _ => rand.nextInt(max).toLong }.sorted
+    val rdd = sc.parallelize(times, numPartitions).map{ t => (t, t) }
+    rdd
+  }
+
   override def beforeAll() {
     super.beforeAll()
     // RDD with 2 empty partitions
@@ -60,6 +71,40 @@ class ConversionSpec extends FlatSpec with SharedSparkContext {
   it should "fail in `fromNormalizedSortedRDD` if the given RDD is non normalized" in {
     intercept[IllegalArgumentException] {
       Conversion.fromNormalizedSortedRDD(sortedNonNormalizedRDD)
+    }
+  }
+
+  it should "convert RDD with deps and ranges to OrderedRDD" in {
+    val rddA = genRandomSortedRdd(1234567, 100, 123)
+    val orddA = OrderedRDD.fromSortedRDD(rddA)
+
+    val depsA = orddA.deps
+    val rangeSplitsA = orddA.rangeSplits
+
+    val rddC = rddA.filter(_._1 % 2 == 0)
+
+    val orddC1 = Conversion.fromRDD(rddC, depsA, rangeSplitsA)
+    val orddC2 = OrderedRDD.fromSortedRDD(rddC)
+    assert(orddC1.collect().deep == orddC2.collect().deep)
+    assert(orddC1.rangeSplits.size == orddA.rangeSplits.size)
+
+    val depA = orddA.deps.head.asInstanceOf[NarrowDependency[_]]
+    val depC = orddC1.deps.head.asInstanceOf[NarrowDependency[_]]
+
+    (orddC1.rangeSplits zip orddA.rangeSplits).foreach {
+      case (splitC, splitA) =>
+        assert(
+          splitC.range.equals(splitA.range),
+          s"Ranges are not the same. Range1: ${splitC.range} Range2: ${splitA.range}"
+        )
+        assert(
+          splitC.partition.index == splitA.partition.index,
+          s"Partition indices is not the same. index1: ${splitC.partition.index} index2: ${splitA.partition.index}"
+        )
+        val parentsC = depC.getParents(splitC.partition.index)
+
+        val parentsA = depA.getParents(splitA.partition.index)
+        assert(parentsC == parentsA, s"Dependencies are not the same. Parents1: $parentsC, Parent2: $parentsA")
     }
   }
 }

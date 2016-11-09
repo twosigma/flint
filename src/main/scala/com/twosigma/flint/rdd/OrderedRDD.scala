@@ -21,6 +21,7 @@ import com.twosigma.flint.rdd.function.join._
 import com.twosigma.flint.rdd.function.summarize._
 import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
 import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.OverlappableSummarizer
+import com.twosigma.flint.annotation.PythonApi
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.{ RDD, ShuffledRDD }
 import org.apache.spark._
@@ -61,16 +62,18 @@ object OrderedRDD {
    * @note Unless you know what you are doing, do not use this function.
    */
   @DeveloperApi
+  @PythonApi
   def fromRDD[K: Ordering: ClassTag, V: ClassTag](
     rdd: RDD[(K, V)],
     ranges: Seq[CloseOpen[K]]
-  ): OrderedRDD[K, V] = {
-    require(rdd.partitions.length == ranges.length)
-    require(ranges.forall(_.isInstanceOf[CloseOpen[K]]))
+  ): OrderedRDD[K, V] = Conversion.fromRDD(rdd, ranges)
 
-    val splits = (rdd.partitions zip ranges).map { case (part, range) => RangeSplit(part, range) }
-    new OrderedRDD[K, V](rdd.sparkContext, splits, Seq(new OneToOneDependency(rdd)))(rdd.iterator)
-  }
+  @PythonApi
+  def fromRDD[K: Ordering: ClassTag, V: ClassTag](
+    rdd: RDD[(K, V)],
+    deps: Seq[Dependency[_]],
+    rangeSplits: Seq[RangeSplit[K]]
+  ): OrderedRDD[K, V] = Conversion.fromRDD(rdd, deps, rangeSplits)
 
   /**
    * Convert a sorted [[org.apache.spark.rdd.RDD RDD]] to an [[OrderedRDD]].
@@ -146,8 +149,8 @@ object OrderedRDD {
  */
 class OrderedRDD[K: ClassTag, V: ClassTag](
   @transient val sc: SparkContext,
-  private val splits: Seq[RangeSplit[K]],
-  private val deps: Seq[Dependency[_]] = Nil
+  private[flint] val splits: Seq[RangeSplit[K]],
+  private[flint] val deps: Seq[Dependency[_]] = Nil
 )(create: (Partition, TaskContext) => Iterator[(K, V)])(implicit ord: Ordering[K])
   extends RDD[(K, V)](sc, deps) {
 
@@ -235,7 +238,7 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
   /**
    * Return the partition ranges for this [[OrderedRDD]] as a sequence.
    */
-  val getPartitionRanges: Seq[Range[K]] = rangeSplits.map(_.range)
+  val getPartitionRanges: Seq[CloseOpen[K]] = rangeSplits.map(_.range)
 
   /**
    * Return a new [[OrderedRDD]] that has exactly `numPartitions` partitions.

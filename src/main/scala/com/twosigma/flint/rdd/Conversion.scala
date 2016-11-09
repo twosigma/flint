@@ -18,8 +18,9 @@ package com.twosigma.flint.rdd
 
 import com.twosigma.flint.hadoop._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{ NarrowDependency, OneToOneDependency, Partition, SparkContext, TaskContext }
+import org.apache.spark._
 
+import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
 
 object Conversion {
@@ -190,4 +191,85 @@ object Conversion {
         fileSplits.keys.map { idx => FilePartition(idx) }.toArray
     }
   }
+
+  private[flint] def fromRDD[K: Ordering: ClassTag, V: ClassTag](
+    rdd: RDD[(K, V)],
+    ranges: Seq[CloseOpen[K]]
+  ): OrderedRDD[K, V] = {
+    require(rdd.partitions.length == ranges.length)
+    val splits = (rdd.partitions zip ranges).map {
+      case (part, range) => RangeSplit(OrderedRDDPartition(part.index), range)
+    }
+    // Cannot call rdd.partitions on executors because getPartitions might access transient fields
+    val parentParts = rdd.partitions
+    new OrderedRDD[K, V](rdd.sparkContext, splits, Seq(new OneToOneDependency(rdd)))({
+      case (part, context) => rdd.iterator(parentParts(part.index), context)
+    })
+  }
+
+  /**
+   * Constructing an [[OrderedRDD]] from a [[RDD]] with partition range information.
+   * *
+   * Let us assume that an [[OrderedRDD]] orderedRdd1 is constructed from an [[RDD]] rdd1 and an [[RDD]]
+   * rdd2 is obtained by applying some  partition preserving operation on rdd1, i.e. rdd2 has the same partition
+   * ranges as rdd1. To create an  [[OrderedRDD]] orderedRdd2 from rdd2,  one could simply reuse the partition
+   * range information obtained from the construction of orderedRdd1 from rdd1 without recomputing it.
+   *
+   * @param rdd The [[RDD]] to create a new [[OrderedRDD]] from
+   * @param deps dependencies of the [[OrderedRDD]] that is used to construct dependencies of the new [[OrderedRDD]].
+   *             Should have only one dependency.
+   * @param rangeSplits rangeSplits of the [[OrderedRDD]] that is used to construct rangeSplits of the new
+   *                   [[OrderedRDD]].
+   */
+  private[flint] def fromRDD[K: Ordering: ClassTag, V: ClassTag](
+    rdd: RDD[(K, V)],
+    deps: Seq[Dependency[_]],
+    rangeSplits: Seq[RangeSplit[K]]
+  ): OrderedRDD[K, V] = {
+    require(deps.length == 1, "An OrderedRDD created from a RDD or a Dataframe should have only one dependency")
+    val dep = deps.head
+
+    require(
+      dep.isInstanceOf[NarrowDependency[_]],
+      s"Dependency must be narrow dependency. Dep: ${dep}"
+    )
+
+    val narrowDep = dep.asInstanceOf[NarrowDependency[_]]
+
+    val indexToParentPartIndices = TreeMap(rangeSplits.map {
+      case RangeSplit(part, _) => (part.index, narrowDep.getParents(part.index))
+    }: _*)
+
+    // map(identify) because of https://issues.scala-lang.org/browse/SI-7005
+    val indexToParentParts = indexToParentPartIndices.mapValues {
+      case indices: Seq[Int] => indices.map(rdd.partitions(_))
+    }.map(identity)
+
+    // It is cleaner to create the dependency map instead of put the old dependencies object inside the new one.
+    val newDep = narrowDep match {
+      case d: OneToOneDependency[_] => new OneToOneDependency(rdd)
+      case d: NarrowDependency[_] =>
+        new NarrowDependency(rdd) {
+          override def getParents(partitionId: Int): Seq[Int] =
+            indexToParentPartIndices(partitionId)
+        }
+      case _ => sys.error(s"Unsupported dependency ${narrowDep}")
+    }
+
+    // This copy might not be necessary because OrderedRDDPartition is immutable. However, the code is cleaner this way
+    // because we always create new partitions for a new rdd, instead of passing the partitions of an existing rdd to a
+    // new rdd.
+    val newRangeSplits = rangeSplits.map(_.copy[K]())
+
+    new OrderedRDD[K, V](rdd.sparkContext, newRangeSplits, Seq(newDep))({
+      case (part, context) =>
+        val index = part.index
+        val range = rangeSplits(index).range
+        val parentParts = indexToParentParts(index)
+        OrderedIterator(
+          PartitionsIterator(rdd, parentParts, context)
+        ).filterByRange(range)
+    })
+  }
+
 }
