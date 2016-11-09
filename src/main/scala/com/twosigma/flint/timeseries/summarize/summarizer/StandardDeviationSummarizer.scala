@@ -25,15 +25,15 @@ import scala.math.sqrt
 case class StandardDeviationSummarizerFactory(column: String, applyBesselCorrection: Boolean = true)
   extends SummarizerFactory {
   override def apply(inputSchema: StructType): StandardDeviationSummarizer =
-    new StandardDeviationSummarizer(inputSchema, alias, column, applyBesselCorrection)
+    new StandardDeviationSummarizer(inputSchema, prefixOpt, column, applyBesselCorrection)
 }
 
 class StandardDeviationSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   override val column: String,
   val applyBesselCorrection: Boolean
-) extends NthCentralMomentSummarizer(inputSchema, alias, column, 2) {
+) extends NthCentralMomentSummarizer(inputSchema, prefixOpt, column, 2) {
   override val schema = Schema.of(s"${column}_stddev" -> DoubleType)
   override def fromV(v: V): GenericInternalRow = {
     var variance = v.nthCentralMoment(2)

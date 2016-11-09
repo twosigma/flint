@@ -18,18 +18,18 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ NthCentralMomentOutput, NthCentralMomentState, NthCentralMomentSummarizer => NthCentralMomentSum }
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ SummarizerFactory, Summarizer }
+import com.twosigma.flint.timeseries.summarize.{ SummarizerFactory, Summarizer, anyToDouble }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 case class NthCentralMomentSummarizerFactory(column: String, moment: Int) extends SummarizerFactory {
   override def apply(inputSchema: StructType): NthCentralMomentSummarizer =
-    NthCentralMomentSummarizer(inputSchema, alias, column, moment)
+    NthCentralMomentSummarizer(inputSchema, prefixOpt, column, moment)
 }
 
 case class NthCentralMomentSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   column: String,
   moment: Int
 ) extends Summarizer {
@@ -39,10 +39,12 @@ case class NthCentralMomentSummarizer(
   override type U = NthCentralMomentState
   override type V = NthCentralMomentOutput
 
+  private final val toDouble = anyToDouble(inputSchema(columnIndex).dataType)
+
   override val summarizer = NthCentralMomentSum(moment)
   override val schema = Schema.of(s"${column}_${moment}thCentralMoment" -> DoubleType)
 
-  override def toT(r: InternalRow): T = r.getDouble(columnIndex)
+  override def toT(r: InternalRow): T = toDouble(r.get(columnIndex, inputSchema(columnIndex).dataType))
 
   override def fromV(v: V): InternalRow = InternalRow(v.nthCentralMoment(moment))
 }

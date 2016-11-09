@@ -24,12 +24,12 @@ import org.apache.spark.sql.types._
 
 case class CorrelationSummarizerFactory(columnX: String, columnY: String) extends SummarizerFactory {
   override def apply(inputSchema: StructType): CorrelationSummarizer =
-    new CorrelationSummarizer(inputSchema, alias, columnX, columnY)
+    new CorrelationSummarizer(inputSchema, prefixOpt, columnX, columnY)
 }
 
 abstract class AbstractCorrelationSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   columnX: String,
   columnY: String
 ) extends Summarizer {
@@ -51,10 +51,10 @@ abstract class AbstractCorrelationSummarizer(
 
 class CorrelationSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   columnX: String,
   columnY: String
-) extends AbstractCorrelationSummarizer(inputSchema, alias, columnX, columnY) {
+) extends AbstractCorrelationSummarizer(inputSchema, prefixOpt, columnX, columnY) {
   override val schema = Schema.of(
     s"${columnPrefix}_correlation" -> DoubleType,
     s"${columnPrefix}_correlationTStat" -> DoubleType
@@ -81,7 +81,7 @@ case class MultiCorrelationSummarizerFactory(
     val cols = columns.length
     require(columns.nonEmpty, "columns must be non-empty.")
     val pairIndexes = for (i <- 0 until cols; j <- (i + 1) until cols) yield (i, j)
-    MultiCorrelationSummarizer(inputSchema, alias, columns, pairIndexes)
+    MultiCorrelationSummarizer(inputSchema, prefixOpt, columns, pairIndexes)
   } {
     case otherColumns =>
       val duplicatedColumns = columns.toSet intersect otherColumns.toSet
@@ -89,7 +89,7 @@ case class MultiCorrelationSummarizerFactory(
       require(duplicatedColumns.isEmpty, s"otherColumns has some duplicated columns ${duplicatedColumns.mkString(",")}")
       val cols = columns.length + otherColumns.length
       val pairIndexes = for (i <- columns.indices; j <- columns.length until cols) yield (i, j)
-      MultiCorrelationSummarizer(inputSchema, alias, columns ++ otherColumns, pairIndexes)
+      MultiCorrelationSummarizer(inputSchema, prefixOpt, columns ++ otherColumns, pairIndexes)
   }
 }
 
@@ -98,7 +98,7 @@ case class MultiCorrelationSummarizerFactory(
  */
 case class MultiCorrelationSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   columns: Array[String],
   pairIndexes: IndexedSeq[(Int, Int)]
 ) extends Summarizer {

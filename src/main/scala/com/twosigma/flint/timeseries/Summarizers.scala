@@ -227,6 +227,27 @@ object Summarizers {
    */
   def quantile(column: String, p: Seq[Double]): SummarizerFactory = QuantileSummarizerFactory(column, p.toArray)
 
+  /**
+   * Return a summarizer that is composed of multiple summarizers.
+   *
+   * The output rows of the composite summarizer is a concatenation of the output rows of input summarizers
+   * (time column and key columns will appear only once in the output rows).
+   *
+   * Column names conflict:
+   * Sometimes, the output column names of multiple summarizers can be the same, for instance, "count", "beta", and etc.
+   * To deal with this, user need to use [[SummarizerFactory.prefix()]] to rename conflicting output columns.
+   *
+   * For instance:
+   * {{{
+   * compose(Summarizers.mean("column"), Summarizers.mean("column").prefix("prefix"))
+   * }}}
+   *
+   * @param summarizers Summarizers to be composed
+   * @return a [[SummarizerFactory]] which is a composition of multiple [[SummarizerFactory]](s)
+   *
+   */
+  def compose(summarizers: SummarizerFactory*): SummarizerFactory = summarizers.reduce(CompositeSummarizerFactory(_, _))
+
   // TODO: These might be useful to implement
 
   // def geometricMean

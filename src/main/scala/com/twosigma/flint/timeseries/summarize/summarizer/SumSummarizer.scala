@@ -23,12 +23,12 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 case class SumSummarizerFactory(sumColumn: String) extends SummarizerFactory {
-  override def apply(inputSchema: StructType): SumSummarizer = SumSummarizer(inputSchema, alias, sumColumn)
+  override def apply(inputSchema: StructType): SumSummarizer = SumSummarizer(inputSchema, prefixOpt, sumColumn)
 }
 
 case class SumSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   sumColumn: String
 ) extends LeftSubtractableSummarizer {
   private val sumColumnIndex = inputSchema.fieldIndex(sumColumn)

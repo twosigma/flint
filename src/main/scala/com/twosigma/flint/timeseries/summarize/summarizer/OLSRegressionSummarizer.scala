@@ -60,7 +60,7 @@ case class OLSRegressionSummarizerFactory(
   override def apply(inputSchema: StructType): OLSRegressionSummarizer =
     OLSRegressionSummarizer(
       inputSchema,
-      alias,
+      prefixOpt,
       yColumn,
       xColumns,
       Option(weightColumn),
@@ -70,7 +70,7 @@ case class OLSRegressionSummarizerFactory(
 
 case class OLSRegressionSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   yColumn: String,
   xColumns: Array[String],
   weightColumn: Option[String],

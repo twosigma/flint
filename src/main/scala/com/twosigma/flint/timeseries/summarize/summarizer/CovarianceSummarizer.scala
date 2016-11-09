@@ -23,15 +23,15 @@ import org.apache.spark.sql.types.{ DoubleType, StructType }
 
 case class CovarianceSummarizerFactory(columnX: String, columnY: String) extends SummarizerFactory {
   override def apply(inputSchema: StructType): CovarianceSummarizer =
-    new CovarianceSummarizer(inputSchema, alias, columnX, columnY)
+    new CovarianceSummarizer(inputSchema, prefixOpt, columnX, columnY)
 }
 
 class CovarianceSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   columnX: String,
   columnY: String
-) extends AbstractCorrelationSummarizer(inputSchema, alias, columnX, columnY) {
+) extends AbstractCorrelationSummarizer(inputSchema, prefixOpt, columnX, columnY) {
   override val schema = Schema.of(
     s"${columnPrefix}_covariance" -> DoubleType
   )

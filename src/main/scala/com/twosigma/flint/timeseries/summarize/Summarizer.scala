@@ -37,14 +37,14 @@ trait InputOutputSchema {
   val schema: StructType
 
   /**
-   * The alias as prefixes of column names in the output schema.
+   * The prefixes of column names in the output schema.
    */
-  val alias: Option[String]
+  val prefixOpt: Option[String]
 
   /**
    * The schema of output rows.
    */
-  final def outputSchema: StructType = alias.fold(schema) {
+  final def outputSchema: StructType = prefixOpt.fold(schema) {
     prefix =>
       Schema.of(schema.map {
         field => s"${prefix}_${field.name}" -> field.dataType
@@ -57,25 +57,25 @@ trait InputOutputSchema {
 // [[TimeSeriesRDD]] which holds the schema.
 trait SummarizerFactory {
 
-  protected var alias: Option[String] = None
+  protected var prefixOpt: Option[String] = None
 
   /**
-   * Prepend additional alias to the column names of output schema. All columns names will be prepended as format
+   * Add prefix to the column names of output schema. All columns names will be prepended as format
    * "<prefix>_<column>".
    *
-   * @param prefix The string that serves as alias for the columns names of output schema.
-   * @return a [[SummarizerFactory]] with the given prefix as alias.
+   * @param prefix The string that serves as prefix for the columns names of output schema.
+   * @return a [[SummarizerFactory]] with the given prefix.
    */
-  def alias(prefix: String): SummarizerFactory = {
-    alias = Option(prefix)
+  def prefix(prefix: String): SummarizerFactory = {
+    prefixOpt = Option(prefix)
     this
   }
 
   /**
-   * Return a summarizer with the given input schema and alias.
+   * Return a summarizer with the given input schema.
    *
    * @param inputSchema The input schema to the summarizer
-   * @return a summarizer with the given input schema and alias.
+   * @return a summarizer with the given input schema.
    */
   def apply(inputSchema: StructType): Summarizer
 }

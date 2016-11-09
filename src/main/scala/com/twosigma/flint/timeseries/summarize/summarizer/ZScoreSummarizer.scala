@@ -24,12 +24,12 @@ import org.apache.spark.sql.types._
 
 case class ZScoreSummarizerFactory(column: String, excludeCurrentObservation: Boolean) extends SummarizerFactory {
   override def apply(inputSchema: StructType): ZScoreSummarizer =
-    ZScoreSummarizer(inputSchema, alias, column, excludeCurrentObservation)
+    ZScoreSummarizer(inputSchema, prefixOpt, column, excludeCurrentObservation)
 }
 
 case class ZScoreSummarizer(
   override val inputSchema: StructType,
-  override val alias: Option[String],
+  override val prefixOpt: Option[String],
   column: String,
   excludeCurrentObservation: Boolean
 ) extends Summarizer {

@@ -31,11 +31,18 @@ private[timeseries] object Schema {
    * @param schema The schema expected to check the uniqueness.
    */
   def requireUniqueColumnNames(schema: StructType): Unit = {
-    val seen = mutable.Set[String]()
-    schema.fields.map(_.name).foreach {
-      name =>
-        require(!seen.contains(name), s"Found duplicate column '$name' in schema $schema")
-        seen.add(name)
+    val duplicates = schema
+      .fieldNames
+      .groupBy{ name => name }
+      .filter{ case (name, group) => group.size > 1 }
+      .map(_._1)
+      .toSeq
+
+    if (!duplicates.isEmpty) {
+      throw new DuplicateColumnsException(
+        s"Found duplicate columns ${duplicates} in schema $schema",
+        duplicates
+      )
     }
   }
 
