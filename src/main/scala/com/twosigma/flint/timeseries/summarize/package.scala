@@ -14,11 +14,11 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.timeseries.summarize
+package com.twosigma.flint.timeseries
 
 import org.apache.spark.sql.types._
 
-package object summarizer {
+package object summarize {
   def anyToDouble(dataType: DataType): Any => Double = dataType match {
     case IntegerType => { any: Any => any.asInstanceOf[Int].toDouble }
     case LongType => { any: Any => any.asInstanceOf[Long].toDouble }

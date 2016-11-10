@@ -18,10 +18,11 @@ package com.twosigma.flint.timeseries
 
 import java.util.concurrent.TimeUnit
 
+import com.twosigma.flint.timeseries.row.Schema
+import com.twosigma.flint.timeseries.window.Window
 import org.scalatest.FlatSpec
 import com.twosigma.flint.SharedSparkContext
 import com.twosigma.flint.rdd.OrderedRDD
-import com.twosigma.flint.timeseries.summarize.Summary
 import org.apache.spark.sql.functions.{ col, udf }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
@@ -334,10 +335,10 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
       (1250L, new ExternalRow(Array(1250L, 7, 1200, 4100.0), expectedSchema))
     )
 
-    val result1 = volTSRdd.addSummaryColumns(Summary.sum("volume"))
+    val result1 = volTSRdd.addSummaryColumns(Summarizers.sum("volume"))
     assert(result1.collect().deep == expectedData.map(_._2).deep)
 
-    val result2 = volTSRdd.addSummaryColumns(Summary.sum("volume"), Seq("id"))
+    val result2 = volTSRdd.addSummaryColumns(Summarizers.sum("volume"), Seq("id"))
     assert(result2.collect().deep == expectedData2.map(_._2).deep)
   }
 
@@ -365,7 +366,7 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
       (1250L, new ExternalRow(Array(1250L, 3, 1100, Array(rows(8), rows(9), rows(10), rows(11))), expectedSchema)),
       (1250L, new ExternalRow(Array(1250L, 7, 1200, Array(rows(8), rows(9), rows(10), rows(11))), expectedSchema))
     )
-    val result1 = volTSRdd.addWindows(Window.pastAbsoluteTime(windowLength)).collect()
+    val result1 = volTSRdd.addWindows(Windows.pastAbsoluteTime(windowLength)).collect()
     val expectedResult = expectedData.map(_._2)
 
     rows.indices.foreach {
@@ -382,7 +383,7 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
     val windowColumnName = s"window_past_${windowLength}"
 
     val resultWindows = forecastTSRdd.addWindows(
-      Window.pastAbsoluteTime(windowLength), key = Seq("id")
+      Windows.pastAbsoluteTime(windowLength), key = Seq("id")
     ).collect().map(_.getAs[mutable.WrappedArray[Row]](windowColumnName))
 
     val expectedWindows = forecastData.map(_._2).map {
@@ -540,4 +541,5 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
 
     assert(tsFiltered.count() == 12)
   }
+
 }

@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.timeseries.summarize.Summary
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
 import org.apache.spark.sql.types.{ DoubleType, LongType, IntegerType, StructType }
 import org.scalatest.FlatSpec
@@ -42,7 +42,7 @@ class SummarizeIntervalsSpec extends FlatSpec with SharedSparkContext {
     val volumeTSRdd = from("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
     val clockTSRdd = from("Clock.csv", Schema())
     val resultTSRdd = from("SummarizeSingleColumn.results", Schema("volume_sum" -> DoubleType))
-    val summarizedVolumeTSRdd = volumeTSRdd.summarizeIntervals(clockTSRdd, Summary.sum("volume"))
+    val summarizedVolumeTSRdd = volumeTSRdd.summarizeIntervals(clockTSRdd, Summarizers.sum("volume"))
 
     assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
   }
@@ -51,7 +51,7 @@ class SummarizeIntervalsSpec extends FlatSpec with SharedSparkContext {
     val volumeTSRdd = from("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
     val clockTSRdd = from("Clock.csv", Schema())
     val resultTSRdd = from("SummarizeSingleColumnPerKey.results", Schema("id" -> IntegerType, "volume_sum" -> DoubleType))
-    val summarizedVolumeTSRdd = volumeTSRdd.summarizeIntervals(clockTSRdd, Summary.sum("volume"), Seq("id"))
+    val summarizedVolumeTSRdd = volumeTSRdd.summarizeIntervals(clockTSRdd, Summarizers.sum("volume"), Seq("id"))
 
     // TODO: we should do this instead of the following 3 asserts
     // assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
@@ -73,7 +73,7 @@ class SummarizeIntervalsSpec extends FlatSpec with SharedSparkContext {
       "SummarizeSingleColumnPerSeqOfKeys.results",
       Schema("id" -> IntegerType, "group" -> IntegerType, "volume_sum" -> DoubleType)
     )
-    val summarizedVolumeTSRdd = volumeTSRdd.summarizeIntervals(clockTSRdd, Summary.sum("volume"), Seq("id", "group"))
+    val summarizedVolumeTSRdd = volumeTSRdd.summarizeIntervals(clockTSRdd, Summarizers.sum("volume"), Seq("id", "group"))
 
     // TODO: we should do this instead of the following 3 asserts
     // assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)

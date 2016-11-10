@@ -16,9 +16,9 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.summarize.Summary
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import com.twosigma.flint.timeseries.{ Schema, CSV, TimeSeriesRDD }
+import com.twosigma.flint.timeseries.{ Summarizers, CSV, TimeSeriesRDD }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ DoubleType, IntegerType, StructType }
 import org.scalactic.TolerantNumerics
@@ -51,7 +51,7 @@ class StandardDeviationSummarizerSpec extends FlatSpec with SharedSparkContext {
       "price5" -> DoubleType -> { r: Row => 0d }
     )
 
-    val result = priceTSRdd.summarize(Summary.stddev("price")).first()
+    val result = priceTSRdd.summarize(Summarizers.stddev("price")).first()
     assert(result.getAs[Double]("price_stddev") === 1.802775638)
   }
 }

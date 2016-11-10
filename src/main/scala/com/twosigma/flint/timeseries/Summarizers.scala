@@ -14,14 +14,13 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.timeseries.summarize
+package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.timeseries.TimeSeriesRDD
+import com.twosigma.flint.timeseries.summarize.SummarizerFactory
 import com.twosigma.flint.timeseries.summarize.summarizer._
 import org.apache.spark.sql.types._
 
-// TODO: this object should be moved to the top level of com.twosigma.flint.timeseries._
-object Summary {
+object Summarizers {
   private[timeseries] def rows(column: String): SummarizerFactory = RowsSummarizerFactory(column)
 
   /**
@@ -30,7 +29,7 @@ object Summary {
    * The output schema is:
    *   - "count": [[LongType]], the number of rows.
    *
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to count how many rows.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to count how many rows.
    */
   def count(): SummarizerFactory = CountSummarizerFactory()
 
@@ -41,7 +40,7 @@ object Summary {
    *   - "<column>_sum": [[DoubleType]], the summation of rows.
    *
    * @param column The column expected to perform the summation.
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to sum all rows for a given column.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to sum all rows for a given column.
    */
   def sum(column: String): SummarizerFactory = SumSummarizerFactory(column)
 
@@ -59,7 +58,7 @@ object Summary {
    *
    * @param valueColumn  The column expected to calculate the mean, deviation, t-stats etc.
    * @param weightColumn The column expected to provide a weight for each row.
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate the weighted mean,
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the weighted mean,
    *         weighted deviation, weighted t-stat, and the count of observations.
    */
   def weightedMeanTest(valueColumn: String, weightColumn: String): SummarizerFactory =
@@ -72,7 +71,7 @@ object Summary {
    *   - "<column>_mean": [[DoubleType]], the arithmetic mean of the `valueColumn`.
    *
    * @param column The column expected to calculate the mean.
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate the arithmetic mean.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the arithmetic mean.
    */
   def mean(column: String): SummarizerFactory = MeanSummarizerFactory(column)
 
@@ -83,7 +82,7 @@ object Summary {
    *  - "<column>_stddev": [[DoubleType]], the standard deviation of the `column`.
    *
    * @param column The column expected to calculate the standard deviation
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate the standard deviation.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the standard deviation.
    */
   def stddev(column: String): SummarizerFactory = StandardDeviationSummarizerFactory(column)
 
@@ -94,7 +93,7 @@ object Summary {
    *  - "<column>_variance": [[DoubleType]], the variance of the `column`.
    *
    * @param column The column expected to calculate the variance
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate the variance.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the variance.
    */
   def variance(column: String): SummarizerFactory = VarianceSummarizerFactory(column)
 
@@ -104,7 +103,7 @@ object Summary {
    * The output schema is:
    *  - "<columnX>_<columnY>_covariance": [[DoubleType]], the covariance of `columnX` and `columnY`
    *
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate the covariance.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the covariance.
    */
   def covariance(columnX: String, columnY: String): SummarizerFactory = CovarianceSummarizerFactory(columnX, columnY)
 
@@ -117,7 +116,7 @@ object Summary {
    * @param column                    The column expected to calculate the z-score.
    * @param excludeCurrentObservation Whether to use unbiased sample standard deviation with current observation or
    *                                  unbiased sample standard deviation excluding current observation.
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate z-score.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate z-score.
    */
   def zScore(column: String, excludeCurrentObservation: Boolean): SummarizerFactory =
     ZScoreSummarizerFactory(column, excludeCurrentObservation)
@@ -130,7 +129,7 @@ object Summary {
    *
    * @param column The column expected to calculate the n-th moment.
    * @param n      The order of moment expected to calculate.
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate n-th moment.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate n-th moment.
    */
   def nthMoment(column: String, n: Int): SummarizerFactory = NthMomentSummarizerFactory(column, n)
 
@@ -142,7 +141,7 @@ object Summary {
    *
    * @param column The column expected to calculate the n-th central moment.
    * @param n      The order of moment expected to calculate.
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate n-th central moment.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate n-th central moment.
    */
   def nthCentralMoment(column: String, n: Int): SummarizerFactory = NthCentralMomentSummarizerFactory(column, n)
 
@@ -155,7 +154,7 @@ object Summary {
    *     column "column2".
    *
    * @param columns columns expected to calculate pairwise correlations.
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate correlation
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate correlation
    *         between all different columns.
    */
   def correlation(columns: String*): SummarizerFactory = MultiCorrelationSummarizerFactory(columns.toArray, None)
@@ -172,7 +171,7 @@ object Summary {
    *
    * @param xColumns A sequence of column names.
    * @param yColumns A sequence of column names which are expected to have distinct names to `xColumns`.
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate correlation
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate correlation
    *         between all different columns.
    */
   def correlation(xColumns: Seq[String], yColumns: Seq[String]): SummarizerFactory =
@@ -198,7 +197,7 @@ object Summary {
    * @param xColumns        List of column names containing the independent variables.
    * @param weightColumn    Name of column containing weights.
    * @param shouldIntercept Whether the regression should consider an intercept term. Default is true.
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to calculate beta, intercept, stdErr,
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate beta, intercept, stdErr,
    *         t-stats, and r etc.
    */
   def OLSRegression(
@@ -224,7 +223,7 @@ object Summary {
    *       in the other summarize API(s) like summarizeWindows(), summarizeIntervals(), summarizeCycles() etc.
    * @param p The list of quantile probabilities. The probabilities must be great than 0.0 and less than or equal
    *          to 1.0.
-   * @return a [[summarizer.SummarizerFactory]] which could provide a summarizer to compute the quantiles.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to compute the quantiles.
    */
   def quantile(column: String, p: Seq[Double]): SummarizerFactory = QuantileSummarizerFactory(column, p.toArray)
 

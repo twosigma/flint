@@ -16,9 +16,9 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.summarize.Summary
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import com.twosigma.flint.timeseries.{ Schema, CSV, TimeSeriesRDD }
+import com.twosigma.flint.timeseries.{ Summarizers, CSV, TimeSeriesRDD }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ IntegerType, DoubleType, StructType }
 import org.scalactic.TolerantNumerics
@@ -54,29 +54,29 @@ class CorrelationSummarizerSpec extends FlatSpec with SharedSparkContext {
       "price5" -> DoubleType -> { r: Row => 0d }
     )
 
-    var results = input.summarize(Summary.correlation("price", "price2"), Seq("id")).collect()
+    var results = input.summarize(Summarizers.correlation("price", "price2"), Seq("id")).collect()
     assert(results(0).getAs[Double]("price_price2_correlation") === 1.0)
     assert(results(1).getAs[Double]("price_price2_correlation") === 1.0)
 
-    results = input.summarize(Summary.correlation("price", "price3"), Seq("id")).collect()
+    results = input.summarize(Summarizers.correlation("price", "price3"), Seq("id")).collect()
     assert(results(0).getAs[Double]("price_price3_correlation") === -1.0)
     assert(results(1).getAs[Double]("price_price3_correlation") === -1.0)
 
-    results = input.summarize(Summary.correlation("price", "price4"), Seq("id")).collect()
+    results = input.summarize(Summarizers.correlation("price", "price4"), Seq("id")).collect()
     assert(results(0).getAs[Double]("price_price4_correlation") === 1.0)
     assert(results(1).getAs[Double]("price_price4_correlation") === 1.0)
 
-    results = input.summarize(Summary.correlation("price", "price5"), Seq("id")).collect()
+    results = input.summarize(Summarizers.correlation("price", "price5"), Seq("id")).collect()
     assert(results(0).getAs[Double]("price_price5_correlation").isNaN)
     assert(results(1).getAs[Double]("price_price5_correlation").isNaN)
 
-    results = input.summarize(Summary.correlation("price", "forecast"), Seq("id")).collect()
+    results = input.summarize(Summarizers.correlation("price", "forecast"), Seq("id")).collect()
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlation") === -0.021896121374023046)
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlationTStat") === -0.04380274440368827)
     assert(results.find(_.getAs[Int]("id") == 3).head.getAs[Double]("price_forecast_correlation") === -0.47908485866330514)
     assert(results.find(_.getAs[Int]("id") == 3).head.getAs[Double]("price_forecast_correlationTStat") === -1.0915971793294055)
 
-    results = input.summarize(Summary.correlation("price", "price3", "forecast"), Seq("id")).collect()
+    results = input.summarize(Summarizers.correlation("price", "price3", "forecast"), Seq("id")).collect()
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_price3_correlation") === -1.0)
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_price3_correlationTStat") == Double.NegativeInfinity)
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlation") === -0.021896121374023046)
@@ -84,13 +84,14 @@ class CorrelationSummarizerSpec extends FlatSpec with SharedSparkContext {
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlationTStat") === -0.04380274440368827)
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price3_forecast_correlationTStat") === 0.04380274440368827)
 
-    results = input.summarize(Summary.correlation(Seq("price", "price3"), Seq("forecast")), Seq("id")).collect()
+    results = input.summarize(Summarizers.correlation(Seq("price", "price3"), Seq("forecast")), Seq("id")).collect()
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlation") === -0.021896121374023046)
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price3_forecast_correlation") === 0.021896121374023046)
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlationTStat") === -0.04380274440368827)
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price3_forecast_correlationTStat") === 0.04380274440368827)
+
     intercept[RuntimeException] {
-      input.summarize(Summary.correlation(Seq("price", "price3"), Seq("forecast", "price3")))
+      input.summarize(Summarizers.correlation(Seq("price", "price3"), Seq("forecast", "price3")))
     }
   }
 }

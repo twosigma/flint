@@ -14,12 +14,14 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.timeseries
+package com.twosigma.flint.timeseries.row
 
+import com.twosigma.flint.timeseries.TimeSeriesRDD
 import org.apache.spark.sql.types._
+
 import scala.collection.mutable
 
-object Schema {
+private[timeseries] object Schema {
   def addColumnPrefix(field: StructField, prefix: String): StructField =
     if (prefix == null) field else StructField(s"${prefix}_${field.name}", field.dataType)
 

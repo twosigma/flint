@@ -14,16 +14,15 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.row
+package com.twosigma.flint.timeseries.row
 
-import com.twosigma.flint.timeseries.Schema
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ ByteType, DataType, DoubleType, FloatType, IntegerType, LongType, NumericType, ShortType, StructField, StructType }
 
 /**
  * A set of functions to manipulate Catalyst InternalRow objects.
  */
-object InternalRowUtils {
+private[timeseries] object InternalRowUtils {
   private def concatArray(xs: Array[Any]*): InternalRow = concatSeq(xs.map(_.toSeq): _*)
 
   private def concatSeq(xs: Seq[Any]*): InternalRow = {

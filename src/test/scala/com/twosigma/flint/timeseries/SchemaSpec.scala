@@ -16,6 +16,7 @@
 
 package com.twosigma.flint.timeseries
 
+import com.twosigma.flint.timeseries.row.Schema
 import org.scalatest.FlatSpec
 import org.apache.spark.sql.types._
 

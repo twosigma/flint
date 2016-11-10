@@ -16,6 +16,7 @@
 
 package com.twosigma.flint.timeseries
 
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema

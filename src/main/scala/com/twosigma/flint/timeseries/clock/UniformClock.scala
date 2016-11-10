@@ -14,34 +14,22 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.timeseries
+package com.twosigma.flint.timeseries.clock
 
 import com.twosigma.flint.rdd.{ CloseOpen, OrderedRDD }
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.time.TimeFormat
+import com.twosigma.flint.timeseries.{ TimeSeriesRDD, TimeSeriesRDDImpl }
 import org.apache.spark.SparkContext
-import org.apache.spark.annotation.Experimental
 import org.apache.spark.sql.catalyst.InternalRow
 import org.joda.time.DateTimeZone
 
 import scala.concurrent.duration._
 
-object Clock {
-
-  /**
-   * Returns a [[TimeSeriesRDD]] with just a "time" column and rows at a specified frequency.
-   *
-   * @param sc            The spark context
-   * @param frequency     The time between rows, e.g "1s", "2m", "3d" etc.
-   * @param offset        The time to offset this clock from the begin time. Defaults to "0s". Note that specifying an
-   *                      offset greater than the frequency is the same as specifying (offset % frequency).
-   * @param beginDateTime A date time specifies the begin of this clock. Default "1990-01-01".
-   * @param endDateTime   A date time specifies the end of this clock. Default "2030-01-01". It is inclusive when the
-   *                      last tick is at the end of this clock.
-   * @param timeZone      The time zone which will be used to parse the `beginDateTime` and `endDateTime` when time
-   *                      zone information is not included in the date time string. Default "UTC".
-   * @return a [[TimeSeriesRDD]] with just a "time" column and rows at a specified frequency
-   */
-  @Experimental
+/**
+ * Clock with even intervals
+ */
+object UniformClock {
   def apply(
     sc: SparkContext,
     frequency: String,

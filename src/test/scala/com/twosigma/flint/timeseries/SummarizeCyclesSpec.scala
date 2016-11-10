@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.timeseries.summarize.Summary
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
 import org.apache.spark.sql.types.{ DoubleType, LongType, IntegerType, StructType }
 import org.scalatest.FlatSpec
@@ -41,7 +41,7 @@ class SummarizeCyclesSpec extends FlatSpec with SharedSparkContext {
   "SummarizeCycles" should "pass `SummarizeSingleColumn` test." in {
     val volumeTSRdd = from("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
     val resultTSRdd = from("SummarizeSingleColumn.results", Schema("volume_sum" -> DoubleType))
-    val summarizedVolumeTSRdd = volumeTSRdd.summarizeCycles(Summary.sum("volume"))
+    val summarizedVolumeTSRdd = volumeTSRdd.summarizeCycles(Summarizers.sum("volume"))
 
     assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
   }
@@ -49,7 +49,7 @@ class SummarizeCyclesSpec extends FlatSpec with SharedSparkContext {
   it should "pass `SummarizeSingleColumnPerKey` test, i.e. with additional a single key." in {
     val volumeTSRdd = from("Volume2.csv", Schema("id" -> IntegerType, "volume" -> LongType))
     val resultTSRdd = from("SummarizeSingleColumnPerKey.results", Schema("id" -> IntegerType, "volume_sum" -> DoubleType))
-    val summarizedVolumeTSRdd = volumeTSRdd.summarizeCycles(Summary.sum("volume"), Seq("id"))
+    val summarizedVolumeTSRdd = volumeTSRdd.summarizeCycles(Summarizers.sum("volume"), Seq("id"))
 
     // TODO: we should do this instead of the following 3 asserts
     // assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
@@ -71,7 +71,7 @@ class SummarizeCyclesSpec extends FlatSpec with SharedSparkContext {
       "SummarizeSingleColumnPerSeqOfKeys.results",
       Schema("id" -> IntegerType, "group" -> IntegerType, "volume_sum" -> DoubleType)
     )
-    val summarizedVolumeTSRdd = volumeTSRdd.summarizeCycles(Summary.sum("volume"), Seq("id", "group"))
+    val summarizedVolumeTSRdd = volumeTSRdd.summarizeCycles(Summarizers.sum("volume"), Seq("id", "group"))
 
     // TODO: we should do this instead of the following 3 asserts
     // assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)

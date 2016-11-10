@@ -14,12 +14,13 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.timeseries.summarize.summarizer
+package com.twosigma.flint.timeseries.summarize
 
-import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ LeftSubtractableSummarizer => OLeftSubtractableSummarizer }
 import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.{ OverlappableSummarizer => OOverlappableSummarizer }
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ LeftSubtractableSummarizer => OLeftSubtractableSummarizer }
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ Summarizer => OSummarizer }
-import com.twosigma.flint.timeseries.{ Schema, TimeWindow }
+import com.twosigma.flint.timeseries.row.Schema
+import com.twosigma.flint.timeseries.window.TimeWindow
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
 
@@ -119,7 +120,9 @@ trait OverlappableSummarizerFactory extends SummarizerFactory {
   val window: TimeWindow
 }
 
-trait OverlappableSummarizer extends Summarizer with OOverlappableSummarizer[InternalRow, Any, InternalRow] with InputOutputSchema {
+trait OverlappableSummarizer extends Summarizer
+  with OOverlappableSummarizer[InternalRow, Any, InternalRow]
+  with InputOutputSchema {
   type T
   type U
   type V

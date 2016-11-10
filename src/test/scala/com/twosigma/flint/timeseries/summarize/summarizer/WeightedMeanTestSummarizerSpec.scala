@@ -16,9 +16,9 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.summarize.Summary
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import com.twosigma.flint.timeseries.{ Schema, CSV, TimeSeriesRDD }
+import com.twosigma.flint.timeseries.{ Summarizers, CSV, TimeSeriesRDD }
 import org.apache.spark.sql.types.{ DoubleType, IntegerType, StructType }
 import org.scalactic.TolerantNumerics
 import org.scalatest.FlatSpec
@@ -47,7 +47,7 @@ class WeightedMeanTestSummarizerSpec extends FlatSpec with SharedSparkContext {
     val forecastTSRdd = from("Forecast.csv", Schema("id" -> IntegerType, "forecast" -> DoubleType))
     val result = priceTSRdd.leftJoin(
       forecastTSRdd, key = Seq("id")
-    ).summarize(Summary.weightedMeanTest("price", "forecast")).first
+    ).summarize(Summarizers.weightedMeanTest("price", "forecast")).first
 
     assert(result.getAs[Double]("price_forecast_weightedMean") === 0.11695906432748544)
     assert(result.getAs[Double]("price_forecast_weightedStandardDeviation") === 4.373623725800579)
