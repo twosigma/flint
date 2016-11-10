@@ -268,8 +268,7 @@ object InternalRowUtils {
 
   // Update values with given indices, and returns a new object
   def update(iRow: InternalRow, schema: StructType, updates: (Int, Any)*): InternalRow = {
-    // TODO: if a row is mutable - we should use the "setX" API
-    val values = iRow.toSeq(schema).toArray
+    val values = Array(iRow.toSeq(schema): _*)
     var i = 0
     while (i < updates.size) {
       values(updates(i)._1) = updates(i)._2
