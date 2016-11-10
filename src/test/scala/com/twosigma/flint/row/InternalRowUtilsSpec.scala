@@ -17,9 +17,10 @@
 package com.twosigma.flint.row
 
 import com.twosigma.flint.timeseries.Schema
+import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, Row }
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
-import org.apache.spark.sql.types.{ DataType, DoubleType, LongType, StringType, StructField, StructType }
+import org.apache.spark.sql.catalyst.expressions.{ GenericMutableRow, GenericRow, UnsafeProjection }
+import org.apache.spark.sql.types.{ ArrayType, DataType, DoubleType, LongType, StringType, StructField, StructType }
 import org.apache.spark.unsafe.types.UTF8String
 import org.scalatest.FlatSpec
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -28,72 +29,93 @@ class InternalRowUtilsSpec extends FlatSpec with TableDrivenPropertyChecks {
 
   val rows = Table(
     ("data", "schema"),
-    (Array[Any](123456789L), Schema.of("time" -> LongType)),
+    (new GenericRow(Array[Any](123456789L)), Schema.of("time" -> LongType)),
     (
-      Array[Any](1L, 2.0, UTF8String.fromString("test")),
-      Schema.of("time" -> LongType, "value" -> DoubleType, "info" -> StringType)
+      new GenericRow(Array[Any](1L, 2.0, "test", Array(3.0, 4.0).toSeq)),
+      Schema.of("time" -> LongType, "value" -> DoubleType, "info" -> StringType, "array" -> ArrayType(DoubleType))
+    ),
+    (
+      new GenericRow(Array[Any](10L, new GenericRow(Array[Any]("test", 1.0)))),
+      Schema.of("time" -> LongType, "nestedColumn" -> Schema.of("string" -> StringType, "double" -> DoubleType))
     )
   )
 
   val rowProjections = Table(
     "projection",
-    (data: Array[Any], _: StructType) => InternalRow.fromSeq(data),
-    (data: Array[Any], schema: StructType) => UnsafeProjection.create(schema).apply(InternalRow.fromSeq(data))
+    (row: Row, schema: StructType) => CatalystTypeConvertersWrapper.toCatalystRowConverter(schema)(row),
+    (row: Row, schema: StructType) => {
+      val internalRow = CatalystTypeConvertersWrapper.toCatalystRowConverter(schema)(row)
+      UnsafeProjection.create(schema).apply(internalRow)
+    },
+    (row: Row, schema: StructType) => {
+      val internalRow = CatalystTypeConvertersWrapper.toCatalystRowConverter(schema)(row)
+      new GenericMutableRow(internalRow.toSeq(schema).toArray)
+    }
   )
 
-  def testTemplate(assertion: (Array[Any], StructType, InternalRow) => Unit): Unit = {
-    forAll (rows) { (data: Array[Any], schema: StructType) =>
-      forAll(rowProjections) { projection: ((Array[Any], StructType) => InternalRow) =>
+  def testTemplate(assertion: (Row, StructType, InternalRow) => Unit): Unit = {
+    forAll (rows) { (data: GenericRow, schema: StructType) =>
+      forAll(rowProjections) { projection: ((Row, StructType) => InternalRow) =>
         val row = projection(data, schema)
+        val rowCopy = row.copy()
 
         assertion(data, schema, row)
+        // operations shouldn't change the original row
+        assert(row == rowCopy)
       }
     }
   }
 
   "InternalRowUtils" should "select indices correctly" in {
-    testTemplate { (data: Array[Any], schema: StructType, row: InternalRow) =>
+    testTemplate { (data: Row, schema: StructType, row: InternalRow) =>
       val fields = schema.zipWithIndex.map {
         case (field: StructField, i) => (i, field.dataType)
       }
 
+      // the result contains internal representation, so we can't use to compare with the original data
       val selected = InternalRowUtils.selectIndices(fields)(row)
-      assert(selected == data.toSeq)
+      val converted = CatalystTypeConvertersWrapper.toScalaRowConverter(schema)(InternalRow.fromSeq(selected))
+
+      assert(converted == data)
     }
   }
 
   it should "prepend values correctly" in {
-    testTemplate { (data: Array[Any], schema: StructType, row: InternalRow) =>
+    testTemplate { (data: Row, schema: StructType, row: InternalRow) =>
       val values = Seq(123.0, 456, UTF8String.fromString("789"))
 
       val newRow = InternalRowUtils.prepend(row, schema, values: _*)
-      assert(newRow == InternalRow.fromSeq(values ++ data))
+      assert(newRow == InternalRow.fromSeq(values ++ row.toSeq(schema)))
     }
   }
 
   it should "delete correctly" in {
-    testTemplate { (data: Array[Any], schema: StructType, row: InternalRow) =>
+    testTemplate { (data: Row, schema: StructType, row: InternalRow) =>
       val (deleteFn, newSchema) = InternalRowUtils.delete(schema, Seq(schema.fieldNames(0)))
 
       assert(newSchema.fields sameElements schema.fields.tail)
 
       val updatedRow = deleteFn(row)
-      assert(updatedRow.toSeq(newSchema) == data.tail.toSeq)
+      val converted = CatalystTypeConvertersWrapper.toScalaRowConverter(newSchema)(updatedRow)
+
+      assert(converted.toSeq == data.toSeq.tail)
     }
   }
 
   it should "select correctly" in {
-    testTemplate { (data: Array[Any], schema: StructType, row: InternalRow) =>
+    testTemplate { (data: Row, schema: StructType, row: InternalRow) =>
       val (selectFn, newSchema) = InternalRowUtils.select(schema, Seq(schema.fieldNames(0)))
 
       assert(newSchema.fields sameElements Array(schema.fields.head))
       val updatedRow = selectFn(row)
-      assert(updatedRow.toSeq(newSchema) == Seq(data.head))
+      val converted = CatalystTypeConvertersWrapper.toScalaRowConverter(newSchema)(updatedRow)
+
+      assert(converted.toSeq == Seq(data.toSeq.head))
     }
   }
 
   it should "add correctly" in {
-    testTemplate { (data: Array[Any], schema: StructType, row: InternalRow) =>
+    testTemplate { (data: Row, schema: StructType, row: InternalRow) =>
       val toAdd: Seq[(String, DataType)] = Seq("long" -> LongType, "double" -> DoubleType, "string" -> StringType)
       val values = Seq(5L, 3.0, UTF8String.fromString("test"))
       val (addFn, newSchema) = InternalRowUtils.add(schema, toAdd)
@@ -102,7 +124,54 @@ class InternalRowUtilsSpec extends FlatSpec with TableDrivenPropertyChecks {
       assert(newSchema.fields sameElements expectedFileds)
 
       val updatedRow = addFn(row, values)
-      assert(updatedRow.toSeq(newSchema) == (data ++ values).toSeq)
+      val converted = CatalystTypeConvertersWrapper.toScalaRowConverter(newSchema)(updatedRow)
+      assert(converted.toSeq == (data.toSeq ++ Seq(5L, 3.0, "test")))
+    }
+  }
+
+  it should "addOrUpdate correctly" in {
+    testTemplate { (data: Row, schema: StructType, row: InternalRow) =>
+      val toAdd: Seq[(String, DataType)] = Seq("time" -> LongType, "newColumnName" -> DoubleType)
+      val values = IndexedSeq[Any](5L, 3.0)
+      val (addOrUpdateFn, newSchema) = InternalRowUtils.addOrUpdate(schema, toAdd)
+
+      // we are expecting that time column exists in the rows
+      val expectedFileds = schema.fields ++ toAdd.tail.map{ case (name, dataType) => StructField(name, dataType) }
+      assert(newSchema.fields sameElements expectedFileds)
+
+      val updatedRow = addOrUpdateFn(row, values)
+      val converted = CatalystTypeConvertersWrapper.toScalaRowConverter(newSchema)(updatedRow)
+
+      val expected = Seq(values(0)) ++ data.toSeq.tail ++ Seq(values(1))
+      assert(converted.toSeq == expected)
+    }
+  }
+
+  it should "concat2 correctly" in {
+    testTemplate { (data: Row, schema: StructType, row: InternalRow) =>
+      val schemaToAdd = Schema.of("uniqueColumnName1" -> LongType, "uniqueColumnName2" -> DoubleType)
+      val rowToAdd = InternalRow.fromSeq(Seq[Any](5L, 3.0))
+      val (concatFn, concatenatedSchema) = InternalRowUtils.concat2(schema, schemaToAdd)
+
+      val expectedFileds = schema.fields ++ schemaToAdd.fields
+      val newSchema = new StructType(expectedFileds)
+      assert(concatenatedSchema.fields sameElements expectedFileds)
+
+      val updatedRow = concatFn(row, rowToAdd)
+      val converted = CatalystTypeConvertersWrapper.toScalaRowConverter(newSchema)(updatedRow)
+
+      val expected = data.toSeq ++ rowToAdd.toSeq(schemaToAdd)
+      assert(converted.toSeq == expected)
+    }
+  }
+
+  it should "update correctly" in {
+    testTemplate { (data: Row, schema: StructType, row: InternalRow) =>
+      val updatedRow = InternalRowUtils.update(row, schema, 0 -> 123L)
+
+      val converted = CatalystTypeConvertersWrapper.toScalaRowConverter(schema)(updatedRow)
+      val expected = Seq(123L) ++ data.toSeq.tail
+      assert(converted.toSeq == expected)
     }
   }
 }

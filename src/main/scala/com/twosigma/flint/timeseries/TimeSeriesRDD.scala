@@ -257,9 +257,9 @@ object TimeSeriesRDD {
     val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
     requireSchema(df.schema)
 
-    val internalRows = df.queryExecution.toRdd
-    val converter = getInternalRowConverter(df.schema, timeUnit)
-    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(internalRows.map(converter), isSorted), df.schema)
+    // TODO: use df.queryExecution.toRdd
+    val converter = getExternalRowConverter(df.schema, timeUnit)
+    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(df.rdd.map(converter), isSorted), df.schema)
   }
 
   /**
@@ -278,9 +278,8 @@ object TimeSeriesRDD {
     val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
     requireSchema(df.schema)
 
-    val internalRows = df.queryExecution.toRdd
-    val converter = getInternalRowConverter(df.schema, timeUnit)
-    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(internalRows.map(converter), ranges), df.schema)
+    val converter = getExternalRowConverter(df.schema, timeUnit)
+    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(df.rdd.map(converter), ranges), df.schema)
   }
 
   @PythonApi
@@ -295,9 +294,8 @@ object TimeSeriesRDD {
     val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
     requireSchema(df.schema)
 
-    val internalRows = df.queryExecution.toRdd
-    val converter = getInternalRowConverter(df.schema, timeUnit)
-    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(internalRows.map(converter), deps, rangeSplits), df.schema)
+    val converter = getExternalRowConverter(df.schema, timeUnit)
+    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(df.rdd.map(converter), deps, rangeSplits), df.schema)
   }
 
   /**
