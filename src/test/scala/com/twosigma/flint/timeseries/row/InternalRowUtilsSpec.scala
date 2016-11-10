@@ -14,9 +14,8 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.row
+package com.twosigma.flint.timeseries.row
 
-import com.twosigma.flint.timeseries.Schema
 import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, Row }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{ GenericMutableRow, GenericRow, UnsafeProjection }

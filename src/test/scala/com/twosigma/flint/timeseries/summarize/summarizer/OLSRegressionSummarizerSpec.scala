@@ -16,9 +16,8 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.summarize.Summary
 import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
-import com.twosigma.flint.timeseries.{ CSV, TimeSeriesRDD }
+import com.twosigma.flint.timeseries.{ Summarizers, CSV, TimeSeriesRDD }
 import org.apache.spark.sql.types.DoubleType
 import org.scalactic.TolerantNumerics
 import org.scalatest.FlatSpec
@@ -49,7 +48,7 @@ class OLSRegressionSummarizerSpec extends FlatSpec with SharedSparkContext {
   "OLSRegressionSummarizer" should "regression with or without intercept correctly " in {
     val tsRdd = from("data.csv")
     val count = tsRdd.count()
-    var result = tsRdd.summarize(Summary.OLSRegression("y", Seq("x1", "x2"), "w", true)).first()
+    var result = tsRdd.summarize(Summarizers.OLSRegression("y", Seq("x1", "x2"), "w", true)).first()
     assert(result.getAs[Double](OLSRegressionSummarizer.interceptColumn) === 3.117181999992637)
     assert(result.getAs[Boolean](OLSRegressionSummarizer.hasInterceptColumn) == true)
     assert(result.getAs[Long](OLSRegressionSummarizer.samplesColumn) == count)
@@ -70,7 +69,7 @@ class OLSRegressionSummarizerSpec extends FlatSpec with SharedSparkContext {
       Array(0.4770520600099199, 2.3576515883581814)
     )
 
-    result = tsRdd.summarize(Summary.OLSRegression("y", Seq("x1", "x2"), "w", false)).first()
+    result = tsRdd.summarize(Summarizers.OLSRegression("y", Seq("x1", "x2"), "w", false)).first()
     assert(result.getAs[Double](OLSRegressionSummarizer.interceptColumn) === 0.0)
     assert(result.getAs[Boolean](OLSRegressionSummarizer.hasInterceptColumn) == false)
     assert(result.getAs[Long](OLSRegressionSummarizer.samplesColumn) == count)
@@ -92,7 +91,7 @@ class OLSRegressionSummarizerSpec extends FlatSpec with SharedSparkContext {
 
   it should "return NaN beta for singular matrix" in {
     val tsRdd = from("data.csv").addColumns("x3" -> DoubleType -> { _ => 0.0 })
-    val result = tsRdd.summarize(Summary.OLSRegression("y", Seq("x3"), "w", false)).first()
+    val result = tsRdd.summarize(Summarizers.OLSRegression("y", Seq("x3"), "w", false)).first()
     assert(
       result.getAs[mutable.WrappedArray[Double]](OLSRegressionSummarizer.betaColumn)(0).isNaN
     )

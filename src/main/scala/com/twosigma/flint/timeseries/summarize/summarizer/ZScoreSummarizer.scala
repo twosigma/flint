@@ -17,7 +17,8 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ ZScoreState, ZScoreSummarizer => ZSSummarizer }
-import com.twosigma.flint.timeseries.Schema
+import com.twosigma.flint.timeseries.row.Schema
+import com.twosigma.flint.timeseries.summarize.{ SummarizerFactory, Summarizer }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 

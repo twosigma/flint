@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.timeseries.summarize.Summary
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
@@ -44,7 +44,7 @@ class SummarizeSpec extends FlatSpec with SharedSparkContext {
     val volumeTSRdd = from("Volume.csv", Schema("tid" -> IntegerType, "volume" -> LongType))
     val expectedSchema = Schema("volume_sum" -> DoubleType)
     val expectedResults = Array[Row](new GenericRowWithSchema(Array(0L, 7800.0), expectedSchema))
-    val results = volumeTSRdd.summarize(Summary.sum("volume"))
+    val results = volumeTSRdd.summarize(Summarizers.sum("volume"))
     assert(results.schema == expectedSchema)
     assert(results.collect().deep == expectedResults.deep)
   }
@@ -56,7 +56,7 @@ class SummarizeSpec extends FlatSpec with SharedSparkContext {
       new GenericRowWithSchema(Array(0L, 7, 4100.0), expectedSchema),
       new GenericRowWithSchema(Array(0L, 3, 3700.0), expectedSchema)
     )
-    val results = volumeTSRdd.summarize(Summary.sum("volume"), Seq("tid"))
+    val results = volumeTSRdd.summarize(Summarizers.sum("volume"), Seq("tid"))
     assert(results.schema == expectedSchema)
     assert(results.collect().sortBy(_.getAs[Int]("tid")).deep == expectedResults.sortBy(_.getAs[Int]("tid")).deep)
   }

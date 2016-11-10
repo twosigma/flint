@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.timeseries.summarize.Summary
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
 import org.apache.spark.sql.types._
 import org.scalatest.FlatSpec
@@ -44,7 +44,7 @@ class SummarizeWindowsSpec extends FlatSpec with SharedSparkContext {
       "SummarizeSingleColumn.results",
       Schema("tid" -> IntegerType, "volume" -> LongType, "volume_sum" -> DoubleType)
     )
-    val summarizedTSRdd = volumeTSRdd.summarizeWindows(Window.pastAbsoluteTime("100ns"), Summary.sum("volume"))
+    val summarizedTSRdd = volumeTSRdd.summarizeWindows(Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"))
     assert(summarizedTSRdd.schema == resultsTSRdd.schema)
     assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
   }
@@ -55,7 +55,9 @@ class SummarizeWindowsSpec extends FlatSpec with SharedSparkContext {
       "SummarizeSingleColumnPerKey.results",
       Schema("tid" -> IntegerType, "volume" -> LongType, "volume_sum" -> DoubleType)
     )
-    val summarizedTSRdd = volumeTSRdd.summarizeWindows(Window.pastAbsoluteTime("100ns"), Summary.sum("volume"), Seq("tid"))
+    val summarizedTSRdd = volumeTSRdd.summarizeWindows(
+      Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"), Seq("tid")
+    )
     assert(summarizedTSRdd.schema == resultsTSRdd.schema)
     assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
   }
@@ -70,7 +72,7 @@ class SummarizeWindowsSpec extends FlatSpec with SharedSparkContext {
       Schema("tid" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "volume_sum" -> DoubleType)
     )
     val summarizedTSRdd = volumeTSRdd.summarizeWindows(
-      Window.pastAbsoluteTime("100ns"), Summary.sum("volume"), Seq("tid", "group")
+      Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"), Seq("tid", "group")
     )
     assert(summarizedTSRdd.schema == resultsTSRdd.schema)
     assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)

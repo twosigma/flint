@@ -18,6 +18,7 @@ package com.twosigma.flint.timeseries
 
 import java.nio.charset.Charset
 import com.twosigma.flint.rdd.Conversion
+import com.twosigma.flint.timeseries.row.Schema
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, SQLContext }
 import org.apache.spark.sql.types._

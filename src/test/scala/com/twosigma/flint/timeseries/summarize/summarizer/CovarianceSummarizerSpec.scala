@@ -16,9 +16,9 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.summarize.Summary
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import com.twosigma.flint.timeseries.{ Schema, CSV, TimeSeriesRDD }
+import com.twosigma.flint.timeseries.{ Summarizers, CSV, TimeSeriesRDD }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ DoubleType, IntegerType, StructType }
 import org.scalactic.TolerantNumerics
@@ -54,23 +54,23 @@ class CovarianceSummarizerSpec extends FlatSpec with SharedSparkContext {
       "price5" -> DoubleType -> { r: Row => 0d }
     )
 
-    var results = input.summarize(Summary.covariance("price", "price2"), Seq("tid")).collect()
+    var results = input.summarize(Summarizers.covariance("price", "price2"), Seq("tid")).collect()
     assert(results.find(_.getAs[Int]("tid") == 7).head.getAs[Double]("price_price2_covariance") === 3.368055556)
     assert(results.find(_.getAs[Int]("tid") == 3).head.getAs[Double]("price_price2_covariance") === 2.534722222)
 
-    results = input.summarize(Summary.covariance("price", "price3"), Seq("tid")).collect()
+    results = input.summarize(Summarizers.covariance("price", "price3"), Seq("tid")).collect()
     assert(results.find(_.getAs[Int]("tid") == 7).head.getAs[Double]("price_price3_covariance") === -3.368055556)
     assert(results.find(_.getAs[Int]("tid") == 3).head.getAs[Double]("price_price3_covariance") === -2.534722222)
 
-    results = input.summarize(Summary.covariance("price", "price4"), Seq("tid")).collect()
+    results = input.summarize(Summarizers.covariance("price", "price4"), Seq("tid")).collect()
     assert(results.find(_.getAs[Int]("tid") == 7).head.getAs[Double]("price_price4_covariance") === 6.736111111)
     assert(results.find(_.getAs[Int]("tid") == 3).head.getAs[Double]("price_price4_covariance") === 5.069444444)
 
-    results = input.summarize(Summary.covariance("price", "price5"), Seq("tid")).collect()
+    results = input.summarize(Summarizers.covariance("price", "price5"), Seq("tid")).collect()
     assert(results.find(_.getAs[Int]("tid") == 7).head.getAs[Double]("price_price5_covariance") === 0d)
     assert(results.find(_.getAs[Int]("tid") == 3).head.getAs[Double]("price_price5_covariance") === 0d)
 
-    results = input.summarize(Summary.covariance("price", "forecast"), Seq("tid")).collect()
+    results = input.summarize(Summarizers.covariance("price", "forecast"), Seq("tid")).collect()
     assert(results.find(_.getAs[Int]("tid") == 7).head.getAs[Double]("price_forecast_covariance") === -0.190277778)
     assert(results.find(_.getAs[Int]("tid") == 3).head.getAs[Double]("price_forecast_covariance") === -3.783333333)
   }

@@ -16,34 +16,18 @@
 
 package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.rdd
-import com.twosigma.flint.rdd.CountWindow
+import com.twosigma.flint.timeseries.window.{ AbsoluteTimeWindow, TimeWindow }
+import scala.concurrent.duration.Duration
 
-import scala.concurrent.duration._
-
-trait Window extends Serializable {
-  // Name of the window. New window column is named s"window_${name}"
-  val name: String
-}
-
-trait TimeWindow extends Window with rdd.Window[Long]
-
-trait RowCountWindow extends Window with CountWindow
-
-case class AbsoluteTimeWindow(override val name: String, val length: Long, val past: Boolean = true)
-  extends TimeWindow {
-  override def of(t: Long): (Long, Long) = if (past) (t - length, t) else (t, t + length)
-}
-
-object Window {
+object Windows {
 
   /**
-   * Provide an [[AbsoluteTimeWindow]] for a given length.
+   * Provide a past [[AbsoluteTimeWindow]] for a given length.
    *
    * @param length A string representation of window length, like `10s` or `10sec` etc. The
    * the unit could be one of the follows: `d day`, `h hour`, `min minute`, `s sec second`,
    * `ms milli millisecond`, `µs micro microsecond`, and `ns nano nanosecond`.
-   * @return an [[AbsoluteTimeWindow]] for the given window length.
+   * @return a past [[AbsoluteTimeWindow]] for the given window length.
    */
   def pastAbsoluteTime(length: String): TimeWindow = {
     val ns = Duration(length).toNanos
@@ -51,11 +35,17 @@ object Window {
     new AbsoluteTimeWindow(s"past_$length", ns, true)
   }
 
+  /**
+   * Provide a future [[AbsoluteTimeWindow]] for a given length.
+   *
+   * @param length A string representation of window length, like `10s` or `10sec` etc. The
+   * the unit could be one of the follows: `d day`, `h hour`, `min minute`, `s sec second`,
+   * `ms milli millisecond`, `µs micro microsecond`, and `ns nano nanosecond`.
+   * @return a future [[AbsoluteTimeWindow]] for the given window length.
+   */
   def futureAbsoluteTime(length: String): TimeWindow = {
     val ns = Duration(length).toNanos
     require(ns > 0)
     new AbsoluteTimeWindow(s"future_$length", ns, false)
   }
-
-  def row(count: Int): RowCountWindow = throw new IllegalStateException("To be implemented.")
 }

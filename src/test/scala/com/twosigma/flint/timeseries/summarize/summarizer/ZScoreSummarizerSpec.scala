@@ -16,9 +16,9 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.summarize.Summary
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import com.twosigma.flint.timeseries.{ Schema, CSV, TimeSeriesRDD }
+import com.twosigma.flint.timeseries.{ Summarizers, CSV, TimeSeriesRDD }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.types.{ IntegerType, DoubleType, StructType }
@@ -48,7 +48,7 @@ class ZScoreSummarizerSpec extends FlatSpec with SharedSparkContext {
     val priceTSRdd = from("Price.csv", Schema("tid" -> IntegerType, "price" -> DoubleType))
     val expectedSchema = Schema("price_zScore" -> DoubleType)
     val expectedResults = Array[Row](new GenericRowWithSchema(Array(0L, 1.5254255396193801), expectedSchema))
-    val results = priceTSRdd.summarize(Summary.zScore("price", true))
+    val results = priceTSRdd.summarize(Summarizers.zScore("price", true))
     assert(results.schema == expectedSchema)
     assert(results.collect().deep == expectedResults.deep)
   }
@@ -57,7 +57,7 @@ class ZScoreSummarizerSpec extends FlatSpec with SharedSparkContext {
     val priceTSRdd = from("Price.csv", Schema("tid" -> IntegerType, "price" -> DoubleType))
     val expectedSchema = Schema("price_zScore" -> DoubleType)
     val expectedResults = Array[Row](new GenericRowWithSchema(Array(0L, 1.8090680674665818), expectedSchema))
-    val results = priceTSRdd.summarize(Summary.zScore("price", false))
+    val results = priceTSRdd.summarize(Summarizers.zScore("price", false))
     assert(results.schema == expectedSchema)
     assert(results.collect().deep == expectedResults.deep)
   }

@@ -16,9 +16,9 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.summarize.Summary
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import com.twosigma.flint.timeseries.{ Schema, CSV, TimeSeriesRDD }
+import com.twosigma.flint.timeseries.{ Summarizers, CSV, TimeSeriesRDD }
 import org.apache.spark.sql.types.{ DoubleType, IntegerType, StructType }
 import org.scalactic.TolerantNumerics
 import org.scalatest.FlatSpec
@@ -44,7 +44,7 @@ class MeanSummarizerSpec extends FlatSpec with SharedSparkContext {
 
   "MeanSummarizer" should "compute `mean` correctly" in {
     val priceTSRdd = from("Price.csv", Schema("tid" -> IntegerType, "price" -> DoubleType))
-    val result = priceTSRdd.summarize(Summary.mean("price")).first()
+    val result = priceTSRdd.summarize(Summarizers.mean("price")).first()
     assert(result.getAs[Double]("price_mean") === 3.25)
   }
 }

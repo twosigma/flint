@@ -20,6 +20,9 @@ import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.annotation.PythonApi
 import com.twosigma.flint.rdd.Conversion
+import com.twosigma.flint.timeseries.row.{ Schema, InternalRowUtils }
+import com.twosigma.flint.timeseries.summarize.{ OverlappableSummarizer, OverlappableSummarizerFactory, SummarizerFactory }
+import com.twosigma.flint.timeseries.window.{ TimeWindow, Window }
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ Dependency, SparkContext }
 import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DFConverter, DataFrame, Row, SQLContext }
@@ -27,11 +30,8 @@ import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSch
 import org.apache.spark.sql.types._
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.annotation.Experimental
-import com.twosigma.flint.timeseries.summarize.Summary
-import com.twosigma.flint.timeseries.summarize.summarizer.{ OverlappableSummarizer, OverlappableSummarizerFactory }
+import com.twosigma.flint.timeseries.summarize.OverlappableSummarizer
 import com.twosigma.flint.rdd.{ RangeSplit, CloseOpen, OrderedRDD }
-import com.twosigma.flint.row.InternalRowUtils
-import com.twosigma.flint.timeseries.summarize.summarizer.SummarizerFactory
 import com.twosigma.flint.timeseries.time.TimeFormat
 import org.apache.spark.sql.catalyst.InternalRow
 
@@ -850,7 +850,7 @@ trait TimeSeriesRDD extends Serializable {
    * An example of calculating the summations over rows within a cycle is given as follows. The summations are over
    * the values under the specified column name "col".
    *
-   * @param summarizer A summarizer expected to perform aggregation. See [[Summary]] for supported summarizers.
+   * @param summarizer A summarizer expected to perform aggregation. See [[Summarizers]] for supported summarizers.
    * @param key        Columns that could be used as the grouping key and aggregations will be performed per
    *                   key per cycle level if specified.
    * @return a [[TimeSeriesRDD]] with summarized column.
@@ -872,7 +872,7 @@ trait TimeSeriesRDD extends Serializable {
    *
    * @param clock          A [[TimeSeriesRDD]] whose timestamps will be used to defined intervals, i.e. two sequential
    *                       timestamps define an interval.
-   * @param summarizer     A summarizer expected to perform aggregation. See [[Summary]] for supported summarizers.
+   * @param summarizer     A summarizer expected to perform aggregation. See [[Summarizers]] for supported summarizers.
    * @param key            Columns that could be used as the grouping key and aggregations will be performed per
    *                       key per cycle level if specified.
    * @param beginInclusive For rows within an interval, it will round the timestamps of rows to the begin of the
@@ -906,7 +906,7 @@ trait TimeSeriesRDD extends Serializable {
    * `window` and the summations are over values under the specified column name "col".
    *
    * @param window     A window specifies a time range for any time stamp of a row.
-   * @param summarizer A summarizer expected to perform aggregation. See [[Summary]] for supported summarizers.
+   * @param summarizer A summarizer expected to perform aggregation. See [[Summarizers]] for supported summarizers.
    * @param key        For a particular row and those rows whose timestamps within its window, those rows will be
    *                   considered to be within that window iff they share the same keys. By default, the it is empty,
    *                   i.e. not specified and it will include all rows of that window.
@@ -953,7 +953,7 @@ trait TimeSeriesRDD extends Serializable {
   /**
    * Adds a summary column that summarizes one or more columns for each row.
    *
-   * @param summarizer A summarizer expected to perform aggregation. See [[Summary]] for supported summarizers.
+   * @param summarizer A summarizer expected to perform aggregation. See [[Summarizers]] for supported summarizers.
    * @param key        Columns that could be used as the grouping key and the aggregations will be performed
    *                   per key level.
    * @return a [[TimeSeriesRDD]] with an additional summarized column.
@@ -1157,18 +1157,18 @@ class TimeSeriesRDDImpl(
     new TimeSeriesRDDImpl(newRdd, newSchema)
   }
 
-  def groupByCycle(key: Seq[String] = Seq.empty): TimeSeriesRDD = summarizeCycles(Summary.rows("rows"), key)
+  def groupByCycle(key: Seq[String] = Seq.empty): TimeSeriesRDD = summarizeCycles(Summarizers.rows("rows"), key)
 
   def groupByInterval(
     clock: TimeSeriesRDD,
     key: Seq[String] = Seq.empty,
     beginInclusive: Boolean = true
-  ): TimeSeriesRDD = summarizeIntervals(clock, Summary.rows("rows"), key, beginInclusive)
+  ): TimeSeriesRDD = summarizeIntervals(clock, Summarizers.rows("rows"), key, beginInclusive)
 
   def addWindows(
     window: Window,
     key: Seq[String] = Seq.empty
-  ): TimeSeriesRDD = summarizeWindows(window, Summary.rows(s"window_${window.name}"), key)
+  ): TimeSeriesRDD = summarizeWindows(window, Summarizers.rows(s"window_${window.name}"), key)
 
   def merge(other: TimeSeriesRDD): TimeSeriesRDD = {
     require(

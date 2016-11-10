@@ -16,7 +16,8 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.Schema
+import com.twosigma.flint.timeseries.row.Schema
+import com.twosigma.flint.timeseries.summarize.SummarizerFactory
 import org.apache.spark.sql.types._
 
 case class MeanSummarizerFactory(column: String) extends SummarizerFactory {

@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.timeseries.summarize.Summary
+import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
@@ -29,7 +29,7 @@ class SummarizerSpec extends FlatSpec with SharedSparkContext {
       val expectedSchema = Schema("C1" -> IntegerType, "C2" -> DoubleType)
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source, sorted = true)
       assert(timeseriesRdd.schema == expectedSchema)
-      val result: Row = timeseriesRdd.summarize(Summary.count().alias("alias")).first()
+      val result: Row = timeseriesRdd.summarize(Summarizers.count().alias("alias")).first()
       assert(result.getAs[Long]("alias_count") == timeseriesRdd.count())
     }
   }
