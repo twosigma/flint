@@ -70,7 +70,7 @@ object TimeSeriesRDD {
    * @note  if timeUnit is different from [[NANOSECONDS]] then the function needs to make an extra copy
    *        of the row value.
    */
-  private[timeseries] def getExternalRowConverter(
+  private[this] def getExternalRowConverter(
     schema: StructType,
     timeUnit: TimeUnit
   ): Row => (Long, InternalRow) = {
@@ -94,27 +94,31 @@ object TimeSeriesRDD {
   /**
    * Similar to getRowConverter(), but used to convert a [[DataFrame]] into a [[TimeSeriesRDD]]
    *
-   * @param schema    The schema of the input rows.
-   * @param timeUnit  The unit of time (as Long type) under the time column in the rows as input of the returning
-   *                  function.
-   * @return          a function to convert [[InternalRow]] into a tuple.
-   * @note            if timeUnit is different from [[NANOSECONDS]] then the function needs to make an extra copy
-   *                  of the row value. Otherwise it makes no copies of the row.
+   * @param schema          The schema of the input rows.
+   * @param timeUnit        The unit of time (as Long type) under the time column in the rows as input of the returning
+   *                        function.
+   * @param requireNewCopy  Whether to reuse row objects, or make a copy.
+   * @return                a function to convert [[InternalRow]] into a tuple.
+   * @note                  if `requireNewCopy` is true or timeUnit is different from [[NANOSECONDS]] then the function
+   *                        makes an extra copy of the row value. Otherwise it makes no copies of the row.
    */
-  private[timeseries] def getInternalRowConverter(
+  private[this] def getInternalRowConverter(
     schema: StructType,
-    timeUnit: TimeUnit
+    timeUnit: TimeUnit,
+    requireNewCopy: Boolean
   ): InternalRow => (Long, InternalRow) = {
     val timeColumnIndex = schema.fieldIndex(timeColumnName)
 
     if (timeUnit == NANOSECONDS) {
       (internalRow: InternalRow) =>
-        (internalRow.getLong(timeColumnIndex), internalRow)
+        val rowInstance = if (requireNewCopy) internalRow.copy() else internalRow
+        (internalRow.getLong(timeColumnIndex), rowInstance)
     } else {
       (internalRow: InternalRow) =>
         val t = TimeUnit.NANOSECONDS.convert(internalRow.getLong(timeColumnIndex), timeUnit)
-
-        (t, InternalRowUtils.update(internalRow, schema, timeColumnIndex -> t))
+        // the line below creates a new InternalRow object
+        val updatedRow = InternalRowUtils.update(internalRow, schema, timeColumnIndex -> t)
+        (t, updatedRow)
     }
   }
 
@@ -225,6 +229,26 @@ object TimeSeriesRDD {
   }
 
   /**
+   * Convert a [[org.apache.spark.sql.DataFrame]] into a pair RDD.
+   *
+   * @param dataFrame  The given [[org.apache.spark.sql.DataFrame]].
+   * @param timeUnit   The time unit of the time column.
+   * @return a pair RDD.
+   */
+  private[this] def dfToPairRdd(
+    dataFrame: DataFrame,
+    timeUnit: TimeUnit
+  ): RDD[(Long, InternalRow)] = {
+
+    val internalRows = dataFrame.queryExecution.toRdd
+    // we couldn't reuse Catalyst's UnsafeRow objects (they got modified by Spark afterwards)
+    // this why we require a new copy for unsafe rows.
+    val requireNewCopy = dataFrame.queryExecution.sparkPlan.outputsUnsafeRows
+    val converter = getInternalRowConverter(dataFrame.schema, timeUnit, requireNewCopy)
+    internalRows.map(converter)
+  }
+
+  /**
    * Convert a [[org.apache.spark.sql.DataFrame]] to a [[TimeSeriesRDD]].
    *
    * @param dataFrame  The [[org.apache.spark.sql.DataFrame]] expected to convert. Its schema is expected to have a
@@ -257,9 +281,8 @@ object TimeSeriesRDD {
     val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
     requireSchema(df.schema)
 
-    // TODO: use df.queryExecution.toRdd
-    val converter = getExternalRowConverter(df.schema, timeUnit)
-    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(df.rdd.map(converter), isSorted), df.schema)
+    val pairRdd = dfToPairRdd(dataFrame, timeUnit)
+    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(pairRdd, isSorted), df.schema)
   }
 
   /**
@@ -278,8 +301,8 @@ object TimeSeriesRDD {
     val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
     requireSchema(df.schema)
 
-    val converter = getExternalRowConverter(df.schema, timeUnit)
-    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(df.rdd.map(converter), ranges), df.schema)
+    val pairRdd = dfToPairRdd(dataFrame, timeUnit)
+    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(pairRdd, ranges), df.schema)
   }
 
   @PythonApi
@@ -294,8 +317,8 @@ object TimeSeriesRDD {
     val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
     requireSchema(df.schema)
 
-    val converter = getExternalRowConverter(df.schema, timeUnit)
-    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(df.rdd.map(converter), deps, rangeSplits), df.schema)
+    val pairRdd = dfToPairRdd(dataFrame, timeUnit)
+    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(pairRdd, deps, rangeSplits), df.schema)
   }
 
   /**
