@@ -19,9 +19,8 @@ package com.twosigma.flint.timeseries
 import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.window.Window
 import org.scalatest.FlatSpec
-import com.twosigma.flint.SharedSparkContext
+import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
 import com.twosigma.flint.rdd.OrderedRDD
 import org.apache.spark.sql.functions.{ col, udf }
 import org.apache.spark.sql.Row
@@ -540,6 +539,37 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
     val tsFiltered = ts.keepRows(_.getAs[ExternalRow]("test").length == 2)
 
     assert(tsFiltered.count() == 12)
+  }
+
+  it should "read parquet files" in {
+    SpecUtils.withResource("/timeseries/parquet/PriceWithHeader.parquet") { source =>
+      val expectedSchema = Schema("tid" -> IntegerType, "price" -> DoubleType, "info" -> StringType)
+      val tsrdd = TimeSeriesRDD.fromParquet(sc, "file://" + source + "/*")(true, NANOSECONDS)
+      val rows = tsrdd.collect()
+
+      assert(tsrdd.schema == expectedSchema)
+      assert(rows(0).getAs[Long](TimeSeriesRDD.timeColumnName) == 1000L)
+      assert(rows(0).getAs[Integer]("tid") == 7)
+      assert(rows(0).getAs[Double]("price") == 0.5)
+      assert(rows(0).getAs[String]("info") == "test")
+      assert(rows.length == 12)
+    }
+  }
+
+  it should "not modify original rows during conversions/modifications" in {
+    SpecUtils.withResource("/timeseries/parquet/PriceWithHeader.parquet") { source =>
+      val tsrdd = TimeSeriesRDD.fromParquet(sc, "file://" + source + "/*")(true, NANOSECONDS)
+      // fromParquet outputs UnsafeRows. Recording the initial state.
+      val rows = tsrdd.collect()
+
+      // conversions and modifications shouldn't affect the original RDD
+      val convertedTSRDD = TimeSeriesRDD.fromDF(tsrdd.toDF)(isSorted = true, NANOSECONDS)
+      convertedTSRDD.setTime(_.getAs[Long](TimeSeriesRDD.timeColumnName) + 1).count()
+      convertedTSRDD.leftJoin(priceTSRdd, key = Seq("tid"), leftAlias = "left", rightAlias = "right").count()
+
+      val finalRows = convertedTSRDD.collect()
+      assert(rows.deep == finalRows.deep)
+    }
   }
 
 }
