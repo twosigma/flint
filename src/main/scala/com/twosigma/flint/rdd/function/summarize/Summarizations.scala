@@ -93,7 +93,6 @@ object Summarizations {
     skFn: V => SK
   ): OrderedRDD[K, (V, V2)] = {
     val partitionIdToIntermediate = Summarize.summarizePartition(rdd, summarizer, skFn)
-
     // prefixes(k) is the prefix sum (per secondary key) of partitions 0 until (k - 1)
     val prefixes = partitionIdToIntermediate.foldLeft(
       // The elements of a tuple is a partition index k, the prefix sum (per secondary key)
@@ -103,13 +102,13 @@ object Summarizations {
         case (p, (i, uPerSK)) =>
           val uPerSK1 = p.head._2
           val uPerSK2 = p.head._3
-          (i, uPerSK, (uPerSK1 ++ uPerSK2).map {
+          (i, (uPerSK1 ++ uPerSK2).map {
             case (sk, _) => (sk, summarizer.merge(
               uPerSK1.getOrElse(sk, summarizer.zero()), uPerSK2.getOrElse(sk, summarizer.zero())
             ))
-          }) :: p
+          }, uPerSK) :: p
         // Remove the start value per calling foldLeft()
-      }.reverse.tail.map { x => (x._1, x._3) }.toMap
+      }.reverse.tail.map { x => (x._1, x._2) }.toMap
 
     rdd.mapPartitionsWithIndexOrdered {
       case (idx, iter) => scanLeft(iter, MHashMap.empty ++ prefixes(idx)){
