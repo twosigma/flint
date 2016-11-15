@@ -249,6 +249,64 @@ object Summarizers {
   def compose(summarizers: SummarizerFactory*): SummarizerFactory = summarizers.reduce(CompositeSummarizerFactory(_, _))
 
   /**
+   * Performs single exponential smoothing over a column. Primes the EMA by maintaining two EMAs, one over the series
+   * (0.0, x_1, x_2, ...) and one over the series (0.0, 1.0, 1.0, ...). The smoothed series is the result of dividing
+   * each element in the EMA of the first series by the element at the same index in the second series.
+   *
+   * More concretely, the primary EMA is caclulated as follows: suppose we have a time series
+   * X = ((x_1, t_1), (x_2, t_2), ..., (x_n, t_n)). Then, we calculate the primary EMA as
+   * <pre><code>(EMA<sub>p</sub> (X))<sub>i</sub> = &alpha;(t<sub>i-1</sub>, t<sub>i</sub>) (EMA<sub>p</sub> (X))<sub>i-1</sub> + (1 - &alpha;(t<sub>i-1</sub>, t<sub>i</sub>)) x<sub>i</sub> </code>
+   * </pre>
+   * with the initial conditions
+   * <pre><code>(EMA<sub>p</sub> (X))<sub>0</sub> = 0.0, t<sub>0</sub> = t<sub>1</sub> - primingPeriods </code>
+   * </pre>
+   * and where <pre><code>&alpha;(t<sub>i-1</sub>, t<sub>i</sub>)</code></pre>
+   * is the decay between the timestamps jointly specified by timestampsToPeriods and decayPerPeriod, i.e.
+   * <pre><code>&alpha;(t<sub>i-1</sub>, t<sub>i</sub>) = exp(timestampsToPeriods(t<sub>i-1</sub>, t<sub>i</sub>) * ln(1 - decayPerPeriod)) </code>
+   * </pre>
+   *
+   * Likewise, the auxiliary EMA is calculated as
+   * <pre><code>(EMA<sub>a</sub> (X))<sub>i</sub> = &alpha;(t<sub>i-1</sub>, t<sub>i</sub>) (EMA<sub>a</sub> (X))<sub>i-1</sub> + (1 - &alpha;(t<sub>i-1</sub>, t<sub>i</sub>)) </code>
+   * </pre>
+   * with the same initial conditions.
+   *
+   * Finally, we take
+   * <pre><code>(EMA (X))<sub>i</sub> = (EMA<sub>p</sub> (X))<sub>i</sub> / (EMA<sub>a</sub> (X))<sub>i</sub> </code>
+   * </pre>
+   *
+   * @note The implementation does not find the exponential moving average via a one-pass streaming algorithm. Rather,
+   *       it calculates the EMA of the data in each partition and then during the merge phase calculates correction
+   *       factors to account for using the wrong decay values (primingPeriods vs. the number of periods elapsed between
+   *       the last data point of the previous partition and the first data point in the current partition). Moreover,
+   *       the implementation collects summary data for each data point in xColumn onto the master when used via the
+   *       summarize() API which may be a concern for IO or memory-bound applications.
+   * @param xColumn              Name of column containing series to be smoothed
+   * @param timeColumn           Name of column containing the timestamp
+   * @param decayPerPeriod       Parameter setting the decay rate of the average
+   * @param primingPeriods       Parameter used to find the initial decay parameter - taken to be the time elapsed
+   *                             before the first data point
+   * @param timestampsToPeriods  Function that takes two longs and returns the number of periods that should be
+   *                             considered to have elapsed between them
+   * @return a [[SummarizerFactory]] which provides a summarizer to calculate the exponentially smoothed
+   *         series
+   */
+  def exponentialSmoothing(
+    xColumn: String,
+    timeColumn: String = TimeSeriesRDD.timeColumnName,
+    decayPerPeriod: Double = 0.05,
+    primingPeriods: Double = 1.0,
+    timestampsToPeriods: (Long, Long) => Double = (t1: Long, t2: Long) =>
+      (t2 - t1) / (24 * 60 * 60 * 1e9)
+  ): SummarizerFactory =
+    ExponentialSmoothingSummarizerFactory(
+      xColumn,
+      timeColumn,
+      decayPerPeriod,
+      primingPeriods,
+      timestampsToPeriods
+    )
+
+  /**
    * Calculates the min for a column.
    *
    * The output schema is:
