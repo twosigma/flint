@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.timeseries.window.{ AbsoluteTimeWindow, TimeWindow }
+import com.twosigma.flint.timeseries.window.{ ShiftTimeWindow, AbsoluteTimeWindow }
 import scala.concurrent.duration.Duration
 
 object Windows {
@@ -29,7 +29,7 @@ object Windows {
    * `ms milli millisecond`, `µs micro microsecond`, and `ns nano nanosecond`.
    * @return a past [[AbsoluteTimeWindow]] for the given window length.
    */
-  def pastAbsoluteTime(length: String): TimeWindow = {
+  def pastAbsoluteTime(length: String): ShiftTimeWindow = {
     val ns = Duration(length).toNanos
     require(ns > 0)
     new AbsoluteTimeWindow(s"past_$length", ns, true)
@@ -43,7 +43,7 @@ object Windows {
    * `ms milli millisecond`, `µs micro microsecond`, and `ns nano nanosecond`.
    * @return a future [[AbsoluteTimeWindow]] for the given window length.
    */
-  def futureAbsoluteTime(length: String): TimeWindow = {
+  def futureAbsoluteTime(length: String): ShiftTimeWindow = {
     val ns = Duration(length).toNanos
     require(ns > 0)
     new AbsoluteTimeWindow(s"future_$length", ns, false)

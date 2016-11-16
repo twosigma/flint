@@ -22,7 +22,7 @@ import com.twosigma.flint.annotation.PythonApi
 import com.twosigma.flint.rdd.Conversion
 import com.twosigma.flint.timeseries.row.{ Schema, InternalRowUtils }
 import com.twosigma.flint.timeseries.summarize.{ OverlappableSummarizer, OverlappableSummarizerFactory, SummarizerFactory }
-import com.twosigma.flint.timeseries.window.{ TimeWindow, Window }
+import com.twosigma.flint.timeseries.window.{ ShiftTimeWindow, TimeWindow, Window }
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ Dependency, SparkContext }
 import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DFConverter, DataFrame, Row, SQLContext }
@@ -1003,6 +1003,7 @@ trait TimeSeriesRDD extends Serializable {
    * val resultTimeSeriesRdd = timeSeriesRdd.lookBackwardClock("10h")
    * }}}
    */
+  @deprecated("Use shift(Windows.pastAbsoluteTime(shiftAmount)) instead")
   def lookBackwardClock(shiftAmount: String): TimeSeriesRDD
 
   /**
@@ -1015,7 +1016,9 @@ trait TimeSeriesRDD extends Serializable {
    * val timeSeriesRdd = ...
    * val resultTimeSeriesRdd = timeSeriesRdd.lookForwardClock("10h")
    * }}}
+   *
    */
+  @deprecated("Use shift(Windows.futureAbsoluteTime(shiftAmount)) instead")
   def lookForwardClock(shiftAmount: String): TimeSeriesRDD
 
   /**
@@ -1033,7 +1036,7 @@ trait TimeSeriesRDD extends Serializable {
   def cast(columns: (String, NumericType)*): TimeSeriesRDD
 
   /**
-   * Changes the timestamp on each row by specifying a function that computes new timestamps.
+   * Changes the timestamp of each row by specifying a function that computes new timestamps.
    * A non-default window value will be used to optimize RDD sorting.
    *
    * @param fn A function that computes new timestamps in NANOSECONDS.
@@ -1054,6 +1057,21 @@ trait TimeSeriesRDD extends Serializable {
    * }}}
    */
   def setTime(fn: Row => Long, window: String = null): TimeSeriesRDD
+
+  /**
+   * Shift the timestamp of each row by a length defined a [[ShiftTimeWindow]].
+   *
+   * @example
+   * {{{
+   * val timeSeriesRdd = ...
+   * // Shift timestamp of each row backward for one day
+   * val shifted = timeSeriesRdd.shift(Windows.pastAbsoluteTime("1day"))
+   * }}}
+   *
+   * @param window A [[ShiftTimeWindow]] that specfies the shift amount for each row
+   * @return a [[TimeSeriesRDD]] with shifted timestamps.
+   */
+  def shift(window: ShiftTimeWindow): TimeSeriesRDD
 }
 
 class TimeSeriesRDDImpl(
@@ -1348,22 +1366,9 @@ class TimeSeriesRDDImpl(
     new TimeSeriesRDDImpl(rowRdd, newSchema)
   }
 
-  private[this] def shiftAbsolute(shiftAmount: String, backward: Boolean = true): TimeSeriesRDD = {
-    val ns = Duration(shiftAmount).toNanos
-    require(ns >= 0)
-    val fn: Long => Long = if (backward) { _ - ns } else { _ + ns }
-    val timeIndex = schema.fieldIndex(TimeSeriesRDD.timeColumnName)
-    val newRdd = orderedRdd.shift(fn).mapValues {
-      case (t, iRow) =>
-        InternalRowUtils.update(iRow, schema, timeIndex -> t)
-    }
+  def lookBackwardClock(shiftAmount: String): TimeSeriesRDD = shift(Windows.pastAbsoluteTime(shiftAmount))
 
-    new TimeSeriesRDDImpl(newRdd, schema)
-  }
-
-  def lookBackwardClock(shiftAmount: String): TimeSeriesRDD = shiftAbsolute(shiftAmount, true)
-
-  def lookForwardClock(shiftAmount: String): TimeSeriesRDD = shiftAbsolute(shiftAmount, false)
+  def lookForwardClock(shiftAmount: String): TimeSeriesRDD = shift(Windows.futureAbsoluteTime(shiftAmount))
 
   def cast(updates: (String, NumericType)*): TimeSeriesRDD = {
     val (castRow, newSchema) = InternalRowUtils.cast(schema, updates: _*)
@@ -1388,4 +1393,13 @@ class TimeSeriesRDDImpl(
     }
   }
 
+  def shift(window: ShiftTimeWindow): TimeSeriesRDD = {
+    val timeIndex = schema.fieldIndex(TimeSeriesRDD.timeColumnName)
+
+    val newRdd = orderedRdd.shift(window.shift).mapValues {
+      case (t, iRow) => InternalRowUtils.update(iRow, schema, timeIndex -> t)
+    }
+
+    new TimeSeriesRDDImpl(newRdd, schema)
+  }
 }
