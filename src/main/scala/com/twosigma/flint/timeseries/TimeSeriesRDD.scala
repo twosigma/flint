@@ -20,18 +20,18 @@ import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.annotation.PythonApi
 import com.twosigma.flint.rdd.Conversion
-import com.twosigma.flint.timeseries.row.{ Schema, InternalRowUtils }
+import com.twosigma.flint.timeseries.row.{ InternalRowUtils, Schema }
 import com.twosigma.flint.timeseries.summarize.{ OverlappableSummarizer, OverlappableSummarizerFactory, SummarizerFactory }
 import com.twosigma.flint.timeseries.window.{ ShiftTimeWindow, TimeWindow, Window }
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ Dependency, SparkContext }
 import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DFConverter, DataFrame, Row, SQLContext }
-import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ERow }
+import org.apache.spark.sql.catalyst.expressions.{ GenericRow, UnsafeProjection, UnsafeRow, GenericRowWithSchema => ERow }
 import org.apache.spark.sql.types._
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.annotation.Experimental
 import com.twosigma.flint.timeseries.summarize.OverlappableSummarizer
-import com.twosigma.flint.rdd.{ RangeSplit, CloseOpen, OrderedRDD }
+import com.twosigma.flint.rdd.{ CloseOpen, OrderedRDD, RangeSplit }
 import com.twosigma.flint.timeseries.time.TimeFormat
 import org.apache.spark.sql.catalyst.InternalRow
 
@@ -97,22 +97,23 @@ object TimeSeriesRDD {
    * @param schema          The schema of the input rows.
    * @param timeUnit        The unit of time (as Long type) under the time column in the rows as input of the returning
    *                        function.
-   * @param requireNewCopy  Whether to reuse row objects, or make a copy.
    * @return                a function to convert [[InternalRow]] into a tuple.
    * @note                  if `requireNewCopy` is true or timeUnit is different from [[NANOSECONDS]] then the function
    *                        makes an extra copy of the row value. Otherwise it makes no copies of the row.
    */
   private[this] def getInternalRowConverter(
     schema: StructType,
-    timeUnit: TimeUnit,
-    requireNewCopy: Boolean
+    timeUnit: TimeUnit
   ): InternalRow => (Long, InternalRow) = {
     val timeColumnIndex = schema.fieldIndex(timeColumnName)
+    val projection = UnsafeProjection.create(schema)
 
     if (timeUnit == NANOSECONDS) {
       (internalRow: InternalRow) =>
-        val rowInstance = if (requireNewCopy) internalRow.copy() else internalRow
-        (internalRow.getLong(timeColumnIndex), rowInstance)
+        val unsafeRow = projection(internalRow)
+        // projected unsafe rows use the same byte buffer (inside one partition). This is why we need
+        // to make a copy if the object is used more than once.
+        (internalRow.getLong(timeColumnIndex), unsafeRow.copy())
     } else {
       (internalRow: InternalRow) =>
         val t = TimeUnit.NANOSECONDS.convert(internalRow.getLong(timeColumnIndex), timeUnit)
@@ -240,12 +241,12 @@ object TimeSeriesRDD {
     timeUnit: TimeUnit
   ): RDD[(Long, InternalRow)] = {
 
+    val schema = dataFrame.schema
     val internalRows = dataFrame.queryExecution.toRdd
-    // we couldn't reuse Catalyst's UnsafeRow objects (they got modified by Spark afterwards)
-    // this why we require a new copy for unsafe rows.
-    val requireNewCopy = dataFrame.queryExecution.sparkPlan.outputsUnsafeRows
-    val converter = getInternalRowConverter(dataFrame.schema, timeUnit, requireNewCopy)
-    internalRows.map(converter)
+    internalRows.mapPartitions { rows =>
+      val converter = getInternalRowConverter(schema, timeUnit)
+      rows.map(converter)
+    }
   }
 
   /**

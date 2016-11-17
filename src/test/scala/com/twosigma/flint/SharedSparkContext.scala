@@ -47,6 +47,8 @@ trait SharedSparkContext extends BeforeAndAfterAll {
 
   override def beforeAll() {
     conf.set("spark.ui.enabled", "false")
+    // we want to detect memory leaks as soon as possible
+    conf.set("spark.unsafe.exceptionOnMemoryLeak", "true")
       // The codec used to compress internal data such as RDD partitions, broadcast variables and shuffle outputs.
       // By default, Spark provides three codecs: lz4, lzf, and snappy. Here, using lzf is to reduce the dependency
       // of snappy codec for compiling issue with other codebase(s).
