@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.timeseries.row.Schema
 import org.scalatest.FlatSpec
+import org.scalatest.tagobjects.Slow
 import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
 import com.twosigma.flint.rdd.OrderedRDD
 import org.apache.spark.sql.functions.{ col, udf }
@@ -347,7 +348,9 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
     val windowColumnName = s"window_past_$windowLength"
 
     val innerRowSchema = Schema("id" -> IntegerType, "volume" -> LongType)
-    val expectedSchema = Schema("id" -> IntegerType, "volume" -> LongType, windowColumnName -> ArrayType(innerRowSchema))
+    val expectedSchema = Schema(
+      "id" -> IntegerType, "volume" -> LongType, windowColumnName -> ArrayType(innerRowSchema)
+    )
 
     val rows = volData.map(_._2)
 
@@ -541,7 +544,8 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
     assert(tsFiltered.count() == 12)
   }
 
-  it should "read parquet files" ignore {
+  // This test is temporarily tagged as "Slow" so that scalatest runner could exclude this test optionally.
+  it should "read parquet files" taggedAs (Slow) ignore {
     SpecUtils.withResource("/timeseries/parquet/PriceWithHeader.parquet") { source =>
       val expectedSchema = Schema("id" -> IntegerType, "price" -> DoubleType, "info" -> StringType)
       val tsrdd = TimeSeriesRDD.fromParquet(sc, "file://" + source + "/*")(true, NANOSECONDS)
@@ -556,7 +560,8 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
     }
   }
 
-  it should "not modify original rows during conversions/modifications" ignore {
+  // This test is temporarily tagged as "Slow" so that scalatest runner could exclude this test optionally.
+  it should "not modify original rows during conversions/modifications" taggedAs (Slow) ignore {
     SpecUtils.withResource("/timeseries/parquet/PriceWithHeader.parquet") { source =>
       val tsrdd = TimeSeriesRDD.fromParquet(sc, "file://" + source + "/*")(true, NANOSECONDS)
       // fromParquet outputs UnsafeRows. Recording the initial state.
