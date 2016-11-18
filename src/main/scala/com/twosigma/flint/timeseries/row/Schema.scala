@@ -61,7 +61,7 @@ private[timeseries] object Schema {
   }
 
   def addOrUpdate(schema: StructType, columns: Seq[((String, DataType), Option[Int])]): StructType = {
-    val oldFields = schema.fields
+    val oldFields = schema.fields.clone()
     columns.foreach {
       case ((name, dataType), Some(index)) => oldFields(index) = StructField(name, dataType)
       case _ => // Nothing
