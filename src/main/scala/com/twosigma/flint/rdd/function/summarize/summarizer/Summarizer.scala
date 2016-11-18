@@ -30,7 +30,7 @@ trait Summarizer[T, U, V] extends Serializable {
   def zero(): U
 
   /**
-   * Update a state with a given value.
+   * Update a state with a given value. The original u can be changed after [[add()]].
    *
    * @param u The prior state.
    * @param t A value expected to use for updating the prior state.
@@ -39,7 +39,7 @@ trait Summarizer[T, U, V] extends Serializable {
   def add(u: U, t: T): U
 
   /**
-   * Merge two summarizer states.
+   * Merge two summarizer states. The original u1 and u2 can be changed after [[merge()]]
    *
    * For two sequences (a[1], a[2], ..., a[n]), (a'[1], a'[2], ..., a'[m]), and two states u1 and
    * u1 where
@@ -56,7 +56,7 @@ trait Summarizer[T, U, V] extends Serializable {
   def merge(u1: U, u2: U): U
 
   /**
-   * Renders a state into the output type
+   * Renders a state into the output type. The original u should NOT change after [[render()]]
    *
    * @param u state expected to render
    * @return a rendered value with desired type.
