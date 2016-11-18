@@ -130,19 +130,29 @@ class InternalRowUtilsSpec extends FlatSpec with TableDrivenPropertyChecks {
 
   it should "addOrUpdate correctly" in {
     testTemplate { (data: Row, schema: StructType, row: InternalRow) =>
-      val toAdd: Seq[(String, DataType)] = Seq("time" -> LongType, "newColumnName" -> DoubleType)
-      val values = IndexedSeq[Any](5L, 3.0)
-      val (addOrUpdateFn, newSchema) = InternalRowUtils.addOrUpdate(schema, toAdd)
+      val toAdd1: Seq[(String, DataType)] = Seq("time" -> LongType, "newColumnName" -> DoubleType)
+      val values1 = IndexedSeq[Any](5L, 3.0)
+      val (addOrUpdateFn1, newSchema1) = InternalRowUtils.addOrUpdate(schema, toAdd1)
 
       // we are expecting that time column exists in the rows
-      val expectedFileds = schema.fields ++ toAdd.tail.map{ case (name, dataType) => StructField(name, dataType) }
-      assert(newSchema.fields sameElements expectedFileds)
+      val expectedFields1 = schema.fields ++ toAdd1.tail.map{ case (name, dataType) => StructField(name, dataType) }
+      assert(newSchema1.fields sameElements expectedFields1)
 
-      val updatedRow = addOrUpdateFn(row, values)
-      val converted = CatalystTypeConvertersWrapper.toScalaRowConverter(newSchema)(updatedRow)
+      val updatedRow1 = addOrUpdateFn1(row, values1)
+      val converted1 = CatalystTypeConvertersWrapper.toScalaRowConverter(newSchema1)(updatedRow1)
 
-      val expected = Seq(values(0)) ++ data.toSeq.tail ++ Seq(values(1))
-      assert(converted.toSeq == expected)
+      val expected1 = Seq(values1(0)) ++ data.toSeq.tail ++ Seq(values1(1))
+      assert(converted1.toSeq == expected1)
+      assert(converted1.getAs[Double]("newColumnName") == 3.0)
+
+      val toAdd2 = Seq("time" -> LongType, "newColumnName" -> LongType)
+      val values2 = IndexedSeq[Any](5L, 30L)
+      val (addOrUpdateFn2, newSchema2) = InternalRowUtils.addOrUpdate(newSchema1, toAdd2)
+      val updatedRow2 = addOrUpdateFn2(updatedRow1, values2)
+      val expectedFields2 = schema.fields ++ toAdd2.tail.map{ case (name, dataType) => StructField(name, dataType) }
+      assert(newSchema2.fields sameElements expectedFields2)
+      val converted2 = CatalystTypeConvertersWrapper.toScalaRowConverter(newSchema2)(updatedRow2)
+      assert(converted2.getAs[Long]("newColumnName") == 30L)
     }
   }
 
