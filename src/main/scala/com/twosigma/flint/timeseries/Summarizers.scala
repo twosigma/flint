@@ -235,7 +235,7 @@ object Summarizers {
    *
    * Column names conflict:
    * Sometimes, the output column names of multiple summarizers can be the same, for instance, "count", "beta", and etc.
-   * To deal with this, user need to use [[SummarizerFactory.prefix()]] to rename conflicting output columns.
+   * To deal with this, user need to use [[SummarizerFactory.prefix()]] to rename conflicting output columns.\
    *
    * For instance:
    * {{{
@@ -248,13 +248,31 @@ object Summarizers {
    */
   def compose(summarizers: SummarizerFactory*): SummarizerFactory = summarizers.reduce(CompositeSummarizerFactory(_, _))
 
+  /**
+   * Calculates the min for a column.
+   *
+   * The output schema is:
+   *   - "<column>_min": Type of input column
+   *
+   * @param column The column expected to calculate the min.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the min.
+   */
+  def min(column: String): SummarizerFactory = ExtremeSummarizerFactory(column, ExtremeSummarizerType.Min)
+
+  /**
+   * Calculates the max for a column.
+   *
+   * The output schema is:
+   *   - "<column>_max": Type of input column
+   *
+   * @param column The column expected to calculate the max.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the max.
+   */
+  def max(column: String): SummarizerFactory = ExtremeSummarizerFactory(column, ExtremeSummarizerType.Max)
+
   // TODO: These might be useful to implement
 
   // def geometricMean
-
-  // def min
-
-  // def max
 
   // def describe
 

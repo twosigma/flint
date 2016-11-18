@@ -16,7 +16,10 @@
 
 package com.twosigma.flint.timeseries
 
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
+
+import scala.reflect.{ ClassTag, classTag }
 
 package object summarize {
   def anyToDouble(dataType: DataType): Any => Double = dataType match {
@@ -25,5 +28,21 @@ package object summarize {
     case FloatType => { any: Any => any.asInstanceOf[Float].toDouble }
     case DoubleType => { any: Any => any.asInstanceOf[Double] }
     case _ => throw new IllegalArgumentException(s"Cannot cast $dataType to DoubleType")
+  }
+
+  def toClassTag(dataType: DataType): ClassTag[_] = dataType match {
+    case IntegerType => classTag[Int]
+    case LongType => classTag[Long]
+    case FloatType => classTag[Float]
+    case DoubleType => classTag[Double]
+    case _ => throw new IllegalArgumentException(s"Unsupported data type: $dataType")
+  }
+
+  def toOrdering(dataType: DataType): Ordering[_] = dataType match {
+    case IntegerType => Ordering[Int]
+    case LongType => Ordering[Long]
+    case FloatType => Ordering[Float]
+    case DoubleType => Ordering[Double]
+    case _ => throw new IllegalArgumentException(s"Unsupported data type: $dataType")
   }
 }
