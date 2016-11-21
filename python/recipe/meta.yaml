@@ -1,0 +1,24 @@
+package:
+  name: ts-flint
+  version: {{ environ.get('GIT_DESCRIBE_TAG', '') }}
+
+source:
+  git_url: ../
+
+build:
+  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+
+requirements:
+  build:
+    - python
+    - setuptools
+  run:
+    - python
+
+test:
+  imports:
+    - ts.flint
+
+about:
+  home: https://gitlab.twosigma.com/leif/ts-flint
+  summary: Distributed time-series analysis on Spark

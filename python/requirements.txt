@@ -1,0 +1,5 @@
+python
+setuptools
+coverage
+Sphinx
+sphinx_rtd_theme
