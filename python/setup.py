@@ -20,19 +20,16 @@ setup(
     author='Leif Walsh',
     author_email='leif@twosigma.com',
     packages=['ts.flint'],
-    entry_points={
-        'console_scripts': [
-            'ts-flint-eminem = ts.flint.module:main',
-        ],
-    },
     setup_requires=[
-        'flake8',
-        'Sphinx',
-        'sphinx_rtd_theme'
     ],
-    install_requires=[],
+    install_requires=[
+        'ts-elastic',
+    ],
     tests_require=[
-        'coverage'
+        'coverage',
+        'numpy',
+        'pandas',
+        'ts-spark',
     ],
     test_suite='tests',
     version=versioneer.get_version(),

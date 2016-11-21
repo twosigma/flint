@@ -14,16 +14,12 @@
 #  limitations under the License.
 #
 
-'''ts.flint contains python bindings for Flint.'''
+import pyspark.sql.functions
 
-from .context import FlintContext
-from .dataframe import TimeSeriesDataFrame
-from .udf import udf
 
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
+def udf(return_type):
+    def _udf(fn):
+        return pyspark.sql.functions.udf(fn, return_type)
+    return _udf
 
-__author__ = 'Leif Walsh'
-__maintainer__ = 'Leif Walsh'
-__email__ = 'leif@twosigma.com'
+

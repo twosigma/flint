@@ -14,7 +14,7 @@ You can install directly with `setup.py` or by using `pip`:
     
 You can also install directly from gitlab:
 
-    pip install git+https://gitlab.twosigma.com/leif/ts-flint@<version tag>
+    pip install 'git+https://gitlab.twosigma.com/analytics/flint@<version tag>#subdirectory=python'
 
 Developing
 ----------
@@ -78,14 +78,14 @@ Once this tag exists, future package and documentation builds will
 automatically get that version, and users can `pip install` using that
 git tag from gitlab.
 
-    pip install git+https://gitlab.twosigma.com/leif/ts-flint@0.1.2
+    pip install git+https://gitlab.twosigma.com/analytics/flint@0.1.2#subdirectory=python
 
 Other projects can depend on your project with `dependency_links`:
 
     setup(
         ...,
         install_requires=['ts-flint==0.1.2'],
-        dependency_links=['https://gitlab.twosigma.com/leif/ts-flint@0.1.2#egg=ts-flint-0.1.2'],
+        dependency_links=['https://gitlab.twosigma.com/analytics/flint@0.1.2#egg=ts-flint-0.1.2&subdirectory=python'],
     )
 
 Bugs
