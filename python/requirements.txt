@@ -3,3 +3,10 @@ setuptools
 coverage
 Sphinx
 sphinx_rtd_theme
+flake8
+ts-elastic
+ts-spark
+numpy
+pandas
+pytest
+pytest-cov

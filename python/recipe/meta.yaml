@@ -3,7 +3,7 @@ package:
   version: {{ environ.get('GIT_DESCRIBE_TAG', '') }}
 
 source:
-  git_url: ../
+  git_url: ../..
 
 build:
   number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
@@ -13,12 +13,14 @@ requirements:
     - python
     - setuptools
   run:
+    - pandas
     - python
+    - ts-elastic
 
 test:
   imports:
     - ts.flint
 
 about:
-  home: https://gitlab.twosigma.com/leif/ts-flint
+  home: https://gitlab.twosigma.com/analytics/flint
   summary: Distributed time-series analysis on Spark

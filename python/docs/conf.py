@@ -341,3 +341,65 @@ texinfo_documents = [
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 #
 # texinfo_no_detailmenu = False
+
+# We can put external documentation links here that we want to
+# reference frequently.  This will format them like code (using the
+# replace directive) and link them where we want them to go.  I'm
+# working with the convention of replacing dots with underscores, I
+# don't know if that's necessary.
+rst_epilog = '''
+.. |pandas_DataFrame| replace:: ``pandas.DataFrame``
+.. _pandas_DataFrame: http://pandas.pydata.org/pandas-docs/stable/generated/pandas.DataFrame.htm
+
+.. |pyspark_sql_DataFrame| replace:: ``pyspark.sql.DataFrame``
+.. _pyspark_sql_DataFrame: http://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.DataFrame
+
+.. |pyspark_sql_Row| replace:: ``pyspark.sql.Row``
+.. _pyspark_sql_Row: http://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.Row
+
+.. |pyspark_sql_SQLContext| replace:: ``pyspark.sql.SQLContext``
+.. _pyspark_sql_SQLContext: http://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.SQLContext
+
+.. |pyspark_sql_functions| replace:: ``pyspark.sql.functions``
+.. _pyspark_sql_functions: https://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#module-pyspark.sql.functions
+
+.. |pyspark_sql_functions_udf| replace:: ``pyspark.sql.functions.udf``
+.. _pyspark_sql_functions_udf: https://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.functions.udf
+
+.. |pyspark_sql_types_DataType| replace:: ``pyspark.sql.types.DataType``
+.. _pyspark_sql_types_DataType: https://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#module-pyspark.sql.types
+
+.. |pyspark_sql_DataFrame_withColumn| replace:: ``pyspark.sql.DataFrame.withColumn``
+.. _pyspark_sql_DataFrame_withColumn: http://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.DataFrame.withColumn
+
+.. |pyspark_sql_DataFrame_withColumnRenamed| replace:: ``pyspark.sql.DataFrame.withColumnRenamed``
+.. _pyspark_sql_DataFrame_withColumnRenamed: http://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.DataFrame.withColumnRenamed
+
+.. |pyspark_sql_DataFrame_filter| replace:: ``pyspark.sql.DataFrame.filter``
+.. _pyspark_sql_DataFrame_filter: https://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.DataFrame.filter
+
+.. |pyspark_sql_DataFrame_drop| replace:: ``pyspark.sql.DataFrame.drop``
+.. _pyspark_sql_DataFrame_drop: https://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.DataFrame.drop
+
+.. |pyspark_sql_DataFrame_dropna| replace:: ``pyspark.sql.DataFrame.dropna``
+.. _pyspark_sql_DataFrame_dropna: https://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.DataFrame.dropna
+
+.. |pyspark_sql_DataFrame_cache| replace:: ``pyspark.sql.DataFrame.cache``
+.. _pyspark_sql_DataFrame_cache: https://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.DataFrame.cache
+
+.. |pyspark_sql_DataFrame_persist| replace:: ``pyspark.sql.DataFrame.persist``
+.. _pyspark_sql_DataFrame_persist: https://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.DataFrame.persist
+
+.. |pyspark_sql_DataFrame_unpersist| replace:: ``pyspark.sql.DataFrame.unpersist``
+.. _pyspark_sql_DataFrame_unpersist: https://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.DataFrame.unpersist
+
+.. |pyspark_sql_DataFrame_collect| replace:: ``pyspark.sql.DataFrame.collect``
+.. _pyspark_sql_DataFrame_collect: https://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.DataFrame.collect
+
+.. |pyspark_sql_Column| replace:: ``pyspark.sql.Column``
+.. _pyspark_sql_Column: http://spark.apache.org/docs/1.6.2/api/python/pyspark.sql.html#pyspark.sql.Column
+
+.. |scala_concurrent_duration_Duration| replace:: ``scala.concurrent.duration.Duration``
+.. _scala_concurrent_duration_Duration: http://www.scala-lang.org/api/2.11.7/#scala.concurrent.duration.Duration
+
+'''
