@@ -23,7 +23,7 @@ import org.scalatest.FlatSpec
 class RangeMergeJoinSpec extends FlatSpec {
   case class Split(override val index: Int) extends Partition
 
-  val thisSplits = Seq(
+  val thisSplits = IndexedSeq(
     RangeSplit(Split(0), CloseOpen(1, Some(2))),
     RangeSplit(Split(1), CloseOpen(2, Some(3))),
     RangeSplit(Split(2), CloseOpen(3, Some(4))),
@@ -31,7 +31,7 @@ class RangeMergeJoinSpec extends FlatSpec {
     RangeSplit(Split(4), CloseOpen(5, None))
   )
 
-  val thatSplits = Seq(
+  val thatSplits = IndexedSeq(
     RangeSplit(Split(0), CloseOpen(1, Some(3))),
     RangeSplit(Split(1), CloseOpen(3, Some(7))),
     RangeSplit(Split(2), CloseOpen(7, None))

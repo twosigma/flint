@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.rdd.function.group
 
-import com.twosigma.flint.rdd.{ Conversion, PartitionsIterator, RangeSplit }
+import com.twosigma.flint.rdd.{ Conversion, PartitionsIterator, RangeSplit, Range }
 
 import scala.collection.Searching._
 import com.twosigma.flint.rdd.OrderedRDD
@@ -103,9 +103,10 @@ object Intervalize {
   ): OrderedRDD[K, (K, V)] = {
     val rddSplits = rdd.rangeSplits
     val clockSplits = clock.rangeSplits
+    require(RangeSplit.isSortedByRange(clockSplits))
 
     val rddPartToClockParts = rddSplits.map { split =>
-      val clockParts = RangeSplit.getSplitsWithinRange(split.range, clockSplits).map(_.partition)
+      val clockParts = RangeSplit.getIntersectingSplits(split.range, clockSplits).map(_.partition)
       val extraPart = if (beginInclusive) {
         val pos = clockParts.map(_.index).min
         if (pos > 0) Some(clockSplits(pos - 1).partition) else None

@@ -54,7 +54,11 @@ object Summarizations {
    * a partition to an iterator with desired type. It is quite similar to Iterator.scanLeft but
    * easier to use.
    */
-  private[this] def scanLeft[K, SK, V, Z, V2](iter: Iterator[(K, V)], z: Z)(op: (Z, (K, V)) => (Z, V2)): Iterator[(K, (V, V2))] =
+  private[this] def scanLeft[K, SK, V, Z, V2](
+    iter: Iterator[(K, V)], z: Z
+  )(
+    op: (Z, (K, V)) => (Z, V2)
+  ): Iterator[(K, (V, V2))] =
     new Iterator[(K, (V, V2))] {
       var s = z
 
@@ -80,8 +84,8 @@ object Summarizations {
    *                   secondary key is defined by this function.
    * @return an [[OrderedRDD]] of tuples (K, (V, V2)) where V2 is the summary of all rows prior
    *         to and also including the current row.
-   * @note In the current implementation, the first pass is not lazy. We should implement OrderedRDD.treeAggregateOrdered()
-   *       similar to RDD.treeAggregated() method and make it lazy.
+   * @note In the current implementation, the first pass is not lazy. We should implement
+   *       OrderedRDD.treeAggregateOrdered() similar to RDD.treeAggregated() method and make it lazy.
    */
   def apply[K, SK, V, U, V2](
     rdd: OrderedRDD[K, V],
