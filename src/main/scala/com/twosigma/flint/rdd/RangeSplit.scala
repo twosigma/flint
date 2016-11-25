@@ -19,29 +19,50 @@ package com.twosigma.flint.rdd
 import com.twosigma.flint.rdd.{ CloseOpen, Range }
 import org.apache.spark.Partition
 
+import scala.collection.Searching._
+
 object RangeSplit {
 
   /**
-   * Find the first begin from among the [[RangeSplit]]s that is strictly greater than
-   * the given begin. This new begin can be None if not found.
+   * Find the first begin among the `begins` such that it is strictly greater than the given `begin`.
+   * Return None if not found.
+   *
+   * The `begins` must be sorted.
    */
-  private[rdd] def getNextBegin[K](begin: K, splits: Seq[RangeSplit[K]])(
+  private[rdd] def getNextBegin[K](begin: K, begins: IndexedSeq[K])(
     implicit
     ord: Ordering[K]
   ): Option[K] = {
-    splits.map { _.range.begin }.sorted.find { ord.gt(_, begin) }
+    val result: SearchResult = begins.search(begin)
+    var i = result.insertionPoint
+    while (i < begins.length && !ord.gt(begins(i), begin)) {
+      i = i + 1
+    }
+    if (i < begins.length) {
+      Some(begins(i))
+    } else {
+      None
+    }
   }
 
   /**
    * Find all [[RangeSplit]]s that intersect with a given range.
+   *
+   * The `splits` has been sorted by their ranges. See [[isSortedByRange]] for more details.
    */
-  private[rdd] def getSplitsWithinRange[K: Ordering](
-    range: Range[K],
-    splits: Seq[RangeSplit[K]]
+  private[rdd] def getIntersectingSplits[K: Ordering](
+    range: CloseOpen[K],
+    splits: IndexedSeq[RangeSplit[K]]
   ): Seq[RangeSplit[K]] = {
-    // TODO: it should do a binary search instead of a linear scan.
-    splits.filter { _.range.intersects(range) }.sortBy { _.range.begin }
+    val split = RangeSplit(OrderedRDDPartition(0), range)
+    Range.intersect(split, splits, { r: RangeSplit[K] => r.range }, true).map(splits(_))
   }
+
+  /**
+   * Test whether `splits` are sorted by their ranges.
+   */
+  private[rdd] def isSortedByRange[K: Ordering](splits: Seq[RangeSplit[K]]): Boolean =
+    Range.isSorted(splits, { r: RangeSplit[K] => r.range })
 }
 
 /**

@@ -17,6 +17,7 @@
 package com.twosigma.flint.rdd
 
 import org.apache.spark.Partition
+import scala.reflect.ClassTag
 
 /**
  * :: DeveloperApi ::
@@ -33,13 +34,13 @@ private[rdd] object RangeDependency {
    *                              [[BasicNormalizationStrategy]].
    * @return A sequence of [[RangeDependency]].
    */
-  def normalize[K, P <: Partition](
+  def normalize[K, P <: Partition: ClassTag](
     headers: Seq[OrderedPartitionHeader[K, P]],
     normalizationStrategy: PartitionNormalizationStrategy = HeavyKeysNormalizationStrategy
   )(implicit ord: Ordering[K]): Seq[RangeDependency[K, P]] = {
     require(headers.nonEmpty, "Need at least one partition")
 
-    val sortedHeaders = headers.sortBy(_.partition.index)
+    val sortedHeaders = headers.sortBy(_.partition.index).toArray
     // Assume partitions are sorted, i.e. the keys of ith partition are less or equal than those of (i + 1)th partition.
     sortedHeaders.reduceOption {
       (h1, h2) =>
@@ -52,22 +53,24 @@ private[rdd] object RangeDependency {
         }
     }
 
-    val normalizedRanges = normalizationStrategy.normalize(sortedHeaders)
-    val indexToHeader = sortedHeaders.zipWithIndex.map(_.swap).toMap
-    val nonNormalizedPartitionWithRange = indexToHeader.map {
-      case (idx1, header) =>
-        val end = indexToHeader.get(idx1 + 1).map(_.firstKey)
-        // This is by the best of our knowledge to tell the range of records in each partition.
-        (header.partition, end.fold(Range.closeOpen(header.firstKey, None))(
+    val (nonNormalizedPartitions, nonNormalizedRanges) = sortedHeaders.zipWithIndex.map {
+      case (hdr, idx) =>
+        val range = if (idx < sortedHeaders.length - 1) {
           // It must be close-close range except the last one.
-          Range.closeClose(header.firstKey, _)
-        ))
-    }
+          Range.closeClose(hdr.firstKey, sortedHeaders(idx + 1).firstKey)
+        } else {
+          // This is by the best of our knowledge to tell the range of records in each partition.
+          Range.closeOpen(hdr.firstKey, None)
+        }
+        (hdr.partition, range)
+    }.unzip
 
-    // TODO: should use a more efficient algorithm instead of O(n^2) naive algorithm for finding dependency.
+    require(Range.isSorted(nonNormalizedRanges))
+
+    val normalizedRanges = normalizationStrategy.normalize(sortedHeaders)
     normalizedRanges.sortBy(_.begin).zipWithIndex.map {
       case (normalizedRange, idx) =>
-        val parents = nonNormalizedPartitionWithRange.filter(_._2.intersects(normalizedRange)).keys.toSeq
+        val parents = normalizedRange.intersectsWith(nonNormalizedRanges, true).map(nonNormalizedPartitions(_))
         RangeDependency[K, P](idx, normalizedRange, parents)
     }
   }
@@ -115,10 +118,15 @@ private[rdd] case class RangeDependency[K, P <: Partition](
 
 private[rdd] trait PartitionNormalizationStrategy {
   /**
-   * Return a sequence of close-open ranges from a sequence of [[OrderedPartitionHeader]]s that could be used to define the
-   * ranges of normalized partitions.
+   * Return a sequence of close-open ranges from a sequence of [[OrderedPartitionHeader]]s that could be
+   * used to define the ranges of normalized partitions.
    */
-  def normalize[K, P <: Partition](headers: Seq[OrderedPartitionHeader[K, P]])(implicit ord: Ordering[K]): Seq[CloseOpen[K]]
+  def normalize[K, P <: Partition](
+    headers: Seq[OrderedPartitionHeader[K, P]]
+  )(
+    implicit
+    ord: Ordering[K]
+  ): Seq[CloseOpen[K]]
 }
 
 private[rdd] object BasicNormalizationStrategy extends PartitionNormalizationStrategy {
@@ -217,7 +225,7 @@ private[rdd] object HeavyKeysNormalizationStrategy extends PartitionNormalizatio
 
     val partitionIntervals = if (distinctBoundaries.size > 1) {
       distinctBoundaries.sliding(2).map {
-        case List(begin, end) => CloseOpen(begin, Some(end))
+        case Seq(begin, end) => CloseOpen(begin, Some(end))
       }.toSeq
     } else {
       Seq.empty

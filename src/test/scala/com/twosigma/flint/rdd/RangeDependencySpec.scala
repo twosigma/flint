@@ -122,7 +122,7 @@ class RangeDependencySpec extends FlatSpec {
     assert(dep(0) == RangeDependency(
       0,
       CloseOpen(1, Some(4)),
-      Seq(
+      List(
         OrderedRDDPartition(0)
       )
     ))
@@ -130,7 +130,7 @@ class RangeDependencySpec extends FlatSpec {
     assert(dep(1) == RangeDependency(
       1,
       CloseOpen(4, Some(5)),
-      Seq(
+      List(
         OrderedRDDPartition(0),
         OrderedRDDPartition(1),
         OrderedRDDPartition(2)
@@ -140,7 +140,7 @@ class RangeDependencySpec extends FlatSpec {
     assert(dep(2) == RangeDependency(
       2,
       CloseOpen(5, Some(8)),
-      Seq(
+      List(
         OrderedRDDPartition(2),
         OrderedRDDPartition(3)
       )
@@ -149,7 +149,7 @@ class RangeDependencySpec extends FlatSpec {
     assert(dep(3) == RangeDependency(
       3,
       CloseOpen(8, Some(14)),
-      Seq(
+      List(
         OrderedRDDPartition(3),
         OrderedRDDPartition(4)
       )
@@ -158,7 +158,7 @@ class RangeDependencySpec extends FlatSpec {
     assert(dep(4) == RangeDependency(
       4,
       CloseOpen(14, None),
-      Seq(
+      List(
         OrderedRDDPartition(4)
       )
     ))
@@ -175,7 +175,7 @@ class RangeDependencySpec extends FlatSpec {
     assert(dep(0) == RangeDependency(
       0,
       CloseOpen(1, Some(5)),
-      Seq(
+      List(
         OrderedRDDPartition(0),
         OrderedRDDPartition(1),
         OrderedRDDPartition(2)
@@ -185,7 +185,7 @@ class RangeDependencySpec extends FlatSpec {
     assert(dep(1) == RangeDependency(
       1,
       CloseOpen(5, Some(8)),
-      Seq(
+      List(
         OrderedRDDPartition(2),
         OrderedRDDPartition(3)
       )
@@ -194,7 +194,7 @@ class RangeDependencySpec extends FlatSpec {
     assert(dep(2) == RangeDependency(
       2,
       CloseOpen(8, Some(14)),
-      Seq(
+      List(
         OrderedRDDPartition(3),
         OrderedRDDPartition(4)
       )
@@ -203,7 +203,7 @@ class RangeDependencySpec extends FlatSpec {
     assert(dep(3) == RangeDependency(
       3,
       CloseOpen(14, None),
-      Seq(
+      List(
         OrderedRDDPartition(4)
       )
     ))

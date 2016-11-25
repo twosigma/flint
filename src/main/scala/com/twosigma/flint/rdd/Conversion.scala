@@ -79,11 +79,11 @@ object Conversion {
     val splits = rangeDep.map {
       d => RangeSplit(OrderedRDDPartition(d.index).asInstanceOf[Partition], d.range)
     }
-    val broadcastDependencies = rdd.sparkContext.broadcast(rangeDep.map(d => (d.index, d)).toMap)
+    val partitionIndexToParents = rangeDep.map{ d => (d.index, d) }.toMap
 
     new OrderedRDD[K, V](rdd.sparkContext, splits, Seq(dep))(
       (part, context) => {
-        val thisDep = broadcastDependencies.value.getOrElse(
+        val thisDep = partitionIndexToParents.getOrElse(
           part.index,
           sys.error(s"Unclear dependency for the parents of partition ${part.index}.")
         )

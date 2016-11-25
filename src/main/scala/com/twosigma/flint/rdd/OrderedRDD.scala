@@ -149,8 +149,8 @@ object OrderedRDD {
  */
 class OrderedRDD[K: ClassTag, V: ClassTag](
   @transient val sc: SparkContext,
-  private[flint] val splits: Seq[RangeSplit[K]],
-  private[flint] val deps: Seq[Dependency[_]] = Nil
+  @transient private[flint] val splits: Seq[RangeSplit[K]],
+  @transient private[flint] val deps: Seq[Dependency[_]] = Nil
 )(create: (Partition, TaskContext) => Iterator[(K, V)])(implicit ord: Ordering[K])
   extends RDD[(K, V)](sc, deps) {
 
