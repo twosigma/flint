@@ -135,7 +135,7 @@ object TimeSeriesRDD {
     val rdd = sc.parallelize(
       rows.map { row => (row.getLong(timeIndex), row) }, numSlices
     )
-    new TimeSeriesRDDImpl(Conversion.fromSortedRDD(rdd), schema)
+    TimeSeriesRDD.fromInternalOrderedRDD(Conversion.fromSortedRDD(rdd), schema)
   }
 
   /**
@@ -150,7 +150,7 @@ object TimeSeriesRDD {
     schema: StructType
   ): TimeSeriesRDD = {
     val converter = CatalystTypeConvertersWrapper.toCatalystRowConverter(schema)
-    new TimeSeriesRDDImpl(rdd.mapValues {
+    TimeSeriesRDD.fromInternalOrderedRDD(rdd.mapValues {
       case (_, row) => converter(row)
     }, schema)
   }
@@ -226,8 +226,20 @@ object TimeSeriesRDD {
     requireSchema(newSchema)
     val converter = getExternalRowConverter(newSchema, timeUnit)
     val pairRdd = rdd.map(converter)
-    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(pairRdd, isSorted, isNormalized), newSchema)
+    TimeSeriesRDD.fromInternalOrderedRDD(OrderedRDD.fromRDD(pairRdd, isSorted, isNormalized), newSchema)
   }
+
+  /**
+   * Convert an [[OrderedRDD]] with internal rows to a [[TimeSeriesRDD]].
+   *
+   * @param rdd     An [[OrderedRDD]] with timestamps in NANOSECONDS and internal rows.
+   * @param schema  The schema of the input `rdd`.
+   * @return a [[TimeSeriesRDD]].
+   */
+  private[flint] def fromInternalOrderedRDD(
+    rdd: OrderedRDD[Long, InternalRow],
+    schema: StructType
+  ): TimeSeriesRDD = new TimeSeriesRDDImpl(rdd, schema)
 
   /**
    * Convert a [[org.apache.spark.sql.DataFrame]] into a pair RDD.
@@ -283,7 +295,7 @@ object TimeSeriesRDD {
     requireSchema(df.schema)
 
     val pairRdd = dfToPairRdd(dataFrame, timeUnit)
-    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(pairRdd, isSorted), df.schema)
+    TimeSeriesRDD.fromInternalOrderedRDD(OrderedRDD.fromRDD(pairRdd, isSorted), df.schema)
   }
 
   /**
@@ -303,7 +315,7 @@ object TimeSeriesRDD {
     requireSchema(df.schema)
 
     val pairRdd = dfToPairRdd(dataFrame, timeUnit)
-    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(pairRdd, ranges), df.schema)
+    TimeSeriesRDD.fromInternalOrderedRDD(OrderedRDD.fromRDD(pairRdd, ranges), df.schema)
   }
 
   @PythonApi
@@ -319,7 +331,7 @@ object TimeSeriesRDD {
     requireSchema(df.schema)
 
     val pairRdd = dfToPairRdd(dataFrame, timeUnit)
-    new TimeSeriesRDDImpl(OrderedRDD.fromRDD(pairRdd, deps, rangeSplits), df.schema)
+    TimeSeriesRDD.fromInternalOrderedRDD(OrderedRDD.fromRDD(pairRdd, deps, rangeSplits), df.schema)
   }
 
   /**
@@ -1075,7 +1087,7 @@ trait TimeSeriesRDD extends Serializable {
   def shift(window: ShiftTimeWindow): TimeSeriesRDD
 }
 
-class TimeSeriesRDDImpl(
+class TimeSeriesRDDImpl private[timeseries] (
   override val orderedRdd: OrderedRDD[Long, InternalRow],
   override val schema: StructType
 ) extends TimeSeriesRDD {
@@ -1133,37 +1145,39 @@ class TimeSeriesRDDImpl(
   }
 
   def repartition(numPartitions: Int): TimeSeriesRDD =
-    new TimeSeriesRDDImpl(orderedRdd.repartition(numPartitions), schema)
+    TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.repartition(numPartitions), schema)
 
   def coalesce(numPartitions: Int): TimeSeriesRDD =
-    new TimeSeriesRDDImpl(orderedRdd.coalesce(numPartitions), schema)
+    TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.coalesce(numPartitions), schema)
 
   def keepRows(fn: Row => Boolean): TimeSeriesRDD =
-    new TimeSeriesRDDImpl(orderedRdd.filterOrdered { (t: Long, r: InternalRow) => fn(toExternalRow(r)) }, schema)
+    TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.filterOrdered {
+      (t: Long, r: InternalRow) => fn(toExternalRow(r))
+    }, schema)
 
   def deleteRows(fn: Row => Boolean): TimeSeriesRDD =
-    new TimeSeriesRDDImpl(orderedRdd.filterOrdered {
+    TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.filterOrdered {
       (t: Long, r: InternalRow) => !fn(toExternalRow(r))
     }, schema)
 
   def keepColumns(columns: String*): TimeSeriesRDD = {
     val (select, newSchema) = InternalRowUtils.select(schema, Schema.prependTimeIfMissing(columns))
-    new TimeSeriesRDDImpl(orderedRdd.mapValues { (_, row) => select(row) }, newSchema)
+    TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.mapValues { (_, row) => select(row) }, newSchema)
   }
 
   def deleteColumns(columns: String*): TimeSeriesRDD = {
     val (delete, newSchema) = InternalRowUtils.delete(schema, columns)
-    new TimeSeriesRDDImpl(orderedRdd.mapValues { (_, row) => delete(row) }, newSchema)
+    TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.mapValues { (_, row) => delete(row) }, newSchema)
   }
 
   def renameColumns(fromTo: (String, String)*): TimeSeriesRDD = {
-    new TimeSeriesRDDImpl(orderedRdd, Schema.rename(this.schema, fromTo))
+    TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd, Schema.rename(this.schema, fromTo))
   }
 
   def addColumns(columns: ((String, DataType), Row => Any)*): TimeSeriesRDD = {
     val (add, newSchema) = InternalRowUtils.addOrUpdate(schema, columns.map(_._1))
 
-    new TimeSeriesRDDImpl(
+    TimeSeriesRDD.fromInternalOrderedRDD(
       orderedRdd.mapValues {
         (_, row) =>
           add(row, columns.map {
@@ -1196,7 +1210,7 @@ class TimeSeriesRDDImpl(
         }
     }
 
-    new TimeSeriesRDDImpl(newRdd, newSchema)
+    TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
   }
 
   def groupByCycle(key: Seq[String] = Seq.empty): TimeSeriesRDD = summarizeCycles(Summarizers.rows("rows"), key)
@@ -1218,7 +1232,7 @@ class TimeSeriesRDDImpl(
       s"Cannot merge this TimeSeriesRDD of schema $schema with other TimeSeriesRDD with schema ${other.schema} "
     )
     val otherOrderedRdd = other.orderedRdd
-    new TimeSeriesRDDImpl(orderedRdd.merge(otherOrderedRdd), schema)
+    TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.merge(otherOrderedRdd), schema)
   }
 
   def leftJoin(
@@ -1246,7 +1260,7 @@ class TimeSeriesRDDImpl(
       case (k, (r1, Some((_, r2)))) => concat(Seq(r1, r2))
       case (k, (r1, None)) => concat(Seq(r1, rightNullRow))
     }
-    new TimeSeriesRDDImpl(newRdd, newSchema)
+    TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
   }
 
   def futureLeftJoin(
@@ -1275,7 +1289,7 @@ class TimeSeriesRDDImpl(
       case (k, (r1, Some((_, r2)))) => concat(Seq(r1, r2))
       case (k, (r1, None)) => concat(Seq(r1, rightNullRow))
     }
-    new TimeSeriesRDDImpl(newRdd, newSchema)
+    TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
   }
 
   def summarizeCycles(summarizer: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {
@@ -1292,7 +1306,7 @@ class TimeSeriesRDDImpl(
         val row = sum.render(result)
         prependTimeAndKey(t, rows.head, row, sum.outputSchema, key)
     }
-    new TimeSeriesRDDImpl(newRdd, newSchema)
+    TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
   }
 
   def summarizeIntervals(
@@ -1308,7 +1322,7 @@ class TimeSeriesRDDImpl(
     val grouped = intervalized.groupByKey(safeGetAsAny(key))
     val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(schema(_)))
 
-    new TimeSeriesRDDImpl(
+    TimeSeriesRDD.fromInternalOrderedRDD(
       grouped.collectOrdered {
         // Rows must have the same key if a key is provided
         case (t: Long, rows: Array[InternalRow]) if !rows.isEmpty =>
@@ -1338,7 +1352,7 @@ class TimeSeriesRDDImpl(
     }
 
     val newRdd = summarizedRdd.mapValues { case (_, (row1, row2)) => concat(row1, row2) }
-    new TimeSeriesRDDImpl(newRdd, newSchema)
+    TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
   }
 
   def summarize(summarizerFactory: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {
@@ -1364,7 +1378,7 @@ class TimeSeriesRDDImpl(
     val rowRdd = reductionsRdd.mapValues {
       case (_: Long, (row1, row2)) => concat(row1, row2)
     }
-    new TimeSeriesRDDImpl(rowRdd, newSchema)
+    TimeSeriesRDD.fromInternalOrderedRDD(rowRdd, newSchema)
   }
 
   def lookBackwardClock(shiftAmount: String): TimeSeriesRDD = shift(Windows.pastAbsoluteTime(shiftAmount))
@@ -1376,7 +1390,7 @@ class TimeSeriesRDDImpl(
     if (schema == newSchema) {
       this
     } else {
-      new TimeSeriesRDDImpl(orderedRdd.mapValues{ case (_, row) => castRow(row) }, newSchema)
+      TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.mapValues{ case (_, row) => castRow(row) }, newSchema)
     }
   }
 
@@ -1384,7 +1398,7 @@ class TimeSeriesRDDImpl(
   def setTime(fn: Row => Long, window: String): TimeSeriesRDD = {
     if (window == null) {
       val timeIndex = schema.fieldIndex(TimeSeriesRDD.timeColumnName)
-      new TimeSeriesRDDImpl(orderedRdd.mapOrdered {
+      TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.mapOrdered {
         case (t: Long, r: InternalRow) =>
           val timeStamp = fn(toExternalRow(r))
           (timeStamp, InternalRowUtils.update(r, schema, timeIndex -> timeStamp))
@@ -1401,6 +1415,6 @@ class TimeSeriesRDDImpl(
       case (t, iRow) => InternalRowUtils.update(iRow, schema, timeIndex -> t)
     }
 
-    new TimeSeriesRDDImpl(newRdd, schema)
+    TimeSeriesRDD.fromInternalOrderedRDD(newRdd, schema)
   }
 }
