@@ -182,7 +182,7 @@ object CSV {
       case _ => sys.error("The CSV file doesn't seem to include a `time` column.")
     }
 
-    var timeSeriesRdd: TimeSeriesRDD = new TimeSeriesRDDImpl(
+    var timeSeriesRdd: TimeSeriesRDD = TimeSeriesRDD.fromInternalOrderedRDD(
       if (sorted) {
         Conversion.fromSortedRDD(rdd)
       } else {

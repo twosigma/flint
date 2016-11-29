@@ -47,7 +47,7 @@ object UniformClock {
     val rdd = apply(sc, beginNanos, endNanos, frequencyNanos, offsetNanos, sc.defaultParallelism).mapValues {
       case (t, _) => InternalRow(t)
     }
-    new TimeSeriesRDDImpl(rdd, schema)
+    TimeSeriesRDD.fromInternalOrderedRDD(rdd, schema)
   }
 
   protected[flint] def apply(
