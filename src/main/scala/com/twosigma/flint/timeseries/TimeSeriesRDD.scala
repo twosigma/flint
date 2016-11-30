@@ -236,7 +236,7 @@ object TimeSeriesRDD {
    * @param schema  The schema of the input `rdd`.
    * @return a [[TimeSeriesRDD]].
    */
-  private[flint] def fromInternalOrderedRDD(
+  def fromInternalOrderedRDD(
     rdd: OrderedRDD[Long, InternalRow],
     schema: StructType
   ): TimeSeriesRDD = new TimeSeriesRDDImpl(rdd, schema)
