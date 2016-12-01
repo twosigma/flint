@@ -16,6 +16,7 @@
 
 package com.twosigma.flint.timeseries.row
 
+import org.apache.spark.sql.CatalystTypeConvertersWrapper
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ ByteType, DataType, DoubleType, FloatType, IntegerType, LongType, NumericType, ShortType, StructField, StructType }
 
@@ -51,10 +52,10 @@ private[timeseries] object InternalRowUtils {
   }
 
   // updates existing elements, or appends a new element to the end if index isn't provided
-  private def updateOrAppend(original: Array[Any], newValues: (Option[Int], Any)*): InternalRow = {
+  private def updateOrAppend(original: Array[Any], newValues: Array[(Option[Int], Any)]): InternalRow = {
     var i = 0
     var j = 0
-    while (i < newValues.size) {
+    while (i < newValues.length) {
       if (newValues(i)._1.isEmpty) {
         j += 1
       }
@@ -68,7 +69,7 @@ private[timeseries] object InternalRowUtils {
 
     i = 0
     j = original.length
-    while (i < newValues.size) {
+    while (i < newValues.length) {
       val newValue = newValues(i)._2
       newValues(i)._1.fold {
         ret(j) = newValue
@@ -147,10 +148,20 @@ private[timeseries] object InternalRowUtils {
   ): ((InternalRow, Seq[Any]) => InternalRow, StructType) = {
     val namesToIndex = schema.fieldNames.zipWithIndex.toMap
     val indices = toAdd.map{ case (name, _) => namesToIndex.get(name) }
+    val dataTypes = toAdd.map(_._2)
+    val converters = dataTypes.map(dataType => CatalystTypeConvertersWrapper.toCatalystConverter(dataType))
 
     val newSchema = Schema.addOrUpdate(schema, toAdd.zip(indices))
     val fn = {
-      (row: InternalRow, values: Seq[Any]) => updateOrAppend(row.toSeq(schema).toArray, indices.zip(values): _*)
+      (row: InternalRow, values: Seq[Any]) =>
+        val newValues = new Array[(Option[Int], Any)](values.length)
+        var i = 0
+        values.foreach { v =>
+          newValues(i) = (indices(i), converters(i)(v))
+          i = i + 1
+        }
+
+        updateOrAppend(row.toSeq(schema).toArray, newValues)
     }
     (fn, newSchema)
   }

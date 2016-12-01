@@ -604,11 +604,11 @@ trait TimeSeriesRDD extends Serializable {
    * // -------------------------------------------
    * // 1000L 0   1.0          3.0
    * // 1000L 1   2.0          6.0
-   * // 1000L 1   2.0          6.0
+   * // 1000L 1   3.0          9.0
    * // 2000L 0   3.0         12.0
-   * // 2000L 0   3.0         12.0
-   * // 2000L 1   4.0         16.0
-   * // 2000L 2   5.0         20.0
+   * // 2000L 0   4.0         16.0
+   * // 2000L 1   5.0         20.0
+   * // 2000L 2   6.0         24.0
    * }}}
    */
   def addColumnsForCycle(columns: ((String, DataType), Seq[Row] => Map[Row, Any])*): TimeSeriesRDD
@@ -647,11 +647,11 @@ trait TimeSeriesRDD extends Serializable {
    * // ---------------------------------------------
    * // 1000L 0   1.0          1.0
    * // 1000L 1   2.0          4.0
-   * // 1000L 1   2.0          4.0
+   * // 1000L 1   3.0          6.0
    * // 2000L 0   3.0          6.0
-   * // 2000L 0   3.0          6.0
-   * // 2000L 1   4.0          4.0
-   * // 2000L 2   5.0          6.0
+   * // 2000L 0   4.0          8.0
+   * // 2000L 1   5.0          5.0
+   * // 2000L 2   6.0          6.0
    * }}}
    */
   def addColumnsForCycle(
@@ -1186,11 +1186,9 @@ class TimeSeriesRDDImpl private[timeseries] (
     TimeSeriesRDD.fromInternalOrderedRDD(
       orderedRdd.mapValues {
         (_, row) =>
+          val extRow = toExternalRow(row)
           add(row, columns.map {
-            case ((_, dataType), columnFunc) =>
-              // TODO: should we move the conversion logic to addOrUpdate?
-              val converter = CatalystTypeConvertersWrapper.toCatalystConverter(dataType)
-              converter(columnFunc(toExternalRow(row)))
+            case (_, columnFunc) => columnFunc(extRow)
           })
       },
       newSchema
