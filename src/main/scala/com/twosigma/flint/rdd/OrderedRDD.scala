@@ -34,24 +34,22 @@ object OrderedRDD {
   /**
    * Convert an [[org.apache.spark.rdd.RDD RDD]] to an [[OrderedRDD]].
    *
-   * @param rdd           The [[org.apache.spark.rdd.RDD RDD]] of (K, V) tuples expected to convert.
-   * @param isSorted      Whether the `rdd` is sorted.
-   * @param isNormalized  Whether the `rdd` is normalized (it means sorted and partitioned in a such way that
-   *                      all rows with timestamp `ts` (for each ts) belong to one partition).
+   * @param rdd     The [[org.apache.spark.rdd.RDD RDD]] of (K, V) tuples expected to convert.
+   * @param rddType The type of `rdd`.
+   * @param keyRdd  The [[org.apache.spark.rdd.RDD]] of keys of `rdd`. The `keyRdd` is expected to have exactly the
+   *                same distribution of keys as that of `rdd`, i.e. same number of partition; the i-th partitions
+   *                of `rdd` and `keyRdd` have exactly the same sequences of keys. An example of `keyRdd` could
+   *                be obtained by {{ rdd.map(_._1) }}. This parameter is optional with default null.
    * @return an [[OrderedRDD]].
    */
   def fromRDD[K: ClassTag, V: ClassTag](
     rdd: RDD[(K, V)],
-    isSorted: Boolean,
-    isNormalized: Boolean = false
-  )(implicit ord: Ordering[K]): OrderedRDD[K, V] = if (isSorted) {
-    if (isNormalized) {
-      Conversion.fromNormalizedSortedRDD(rdd)
-    } else {
-      Conversion.fromSortedRDD(rdd)
-    }
-  } else {
-    Conversion.fromUnsortedRDD(rdd)
+    rddType: KeyPartitioningType,
+    keyRdd: RDD[K] = null
+  )(implicit ord: Ordering[K]): OrderedRDD[K, V] = rddType match {
+    case KeyPartitioningType.NormalizedSorted => Conversion.fromNormalizedSortedRDD(rdd)
+    case KeyPartitioningType.Sorted => Conversion.fromSortedRDD(rdd, keyRdd)
+    case KeyPartitioningType.UnSorted => Conversion.fromUnsortedRDD(rdd)
   }
 
   /**
@@ -68,58 +66,13 @@ object OrderedRDD {
     ranges: Seq[CloseOpen[K]]
   ): OrderedRDD[K, V] = Conversion.fromRDD(rdd, ranges)
 
+  @DeveloperApi
   @PythonApi
   def fromRDD[K: Ordering: ClassTag, V: ClassTag](
     rdd: RDD[(K, V)],
     deps: Seq[Dependency[_]],
     rangeSplits: Seq[RangeSplit[K]]
   ): OrderedRDD[K, V] = Conversion.fromRDD(rdd, deps, rangeSplits)
-
-  /**
-   * Convert a sorted [[org.apache.spark.rdd.RDD RDD]] to an [[OrderedRDD]].
-   *
-   * An [[org.apache.spark.rdd.RDD RDD]] is considered to be sorted iff all keys of rows in the k-th partition are less
-   * or equal than those of (k + 1)-th partition for all possible k and each partition's rows are also sorted by their
-   * primary keys.
-   *
-   * @param rdd The [[org.apache.spark.rdd.RDD RDD]] of (K, V) tuples expected to convert. Note that the first partition
-   *            does not necessarily has tuples with the smallest keys.
-   * @return an [[OrderedRDD]].
-   */
-  def fromSortedRDD[K: ClassTag, V: ClassTag](
-    rdd: RDD[(K, V)]
-  )(implicit ord: Ordering[K]): OrderedRDD[K, V] = fromRDD(rdd, isSorted = true)
-
-  /**
-   * Convert a normalized sorted [[org.apache.spark.rdd.RDD RDD]] to an [[OrderedRDD]].
-   *
-   * An [[org.apache.spark.rdd.RDD RDD]] is considered to be sorted and normalized iff all keys of records in the k-th partition
-   * are strictly less than those of (k + 1)-th partition for all possible k, i.e. there is no single key across multiple
-   * partitions and each partition's rows are also sorted by their keys.
-   *
-   * @param rdd The [[org.apache.spark.rdd.RDD RDD]]  of (K, V) tuples expected to convert. Note that the first partition does not
-   *            necessarily have tuples with the smallest keys.
-   * @return an [[OrderedRDD]].
-   */
-  def fromNormalizedSortedRDD[K: Ordering: ClassTag, V: ClassTag](
-    rdd: RDD[(K, V)]
-  ): OrderedRDD[K, V] = Conversion.fromNormalizedSortedRDD(rdd)
-
-  /**
-   * Convert an [[org.apache.spark.rdd.RDD RDD]]  to an [[OrderedRDD]].
-   *
-   * Internally, it will sort [[org.apache.spark.rdd.RDD RDD]]  by
-   * {{{
-   * rdd.sortBy(_._1)
-   * }}}
-   * which will invoke shuffling of rows and thus will be slow and IO/Memory intensive.
-   *
-   * @param rdd The RDD of (K, V) tuples expected to convert.
-   * @return an [[OrderedRDD]].
-   */
-  def fromUnsortedRDD[K: Ordering: ClassTag, V: ClassTag](
-    rdd: RDD[(K, V)]
-  ): OrderedRDD[K, V] = fromRDD(rdd, isSorted = false)
 
   /**
    * Convert a sorted rows stored as a CSV file into an [[OrderedRDD]].
@@ -410,7 +363,8 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * @param skFn       A function to extract keys from rows. The summarization will be applied per key level.
    * @return the summarized result(s).
    */
-  def summarize[SK, U, V2](summarizer: Summarizer[V, U, V2], skFn: V => SK): Map[SK, V2] = Summarize(self, summarizer, skFn)
+  def summarize[SK, U, V2](summarizer: Summarizer[V, U, V2], skFn: V => SK): Map[SK, V2] =
+    Summarize(self, summarizer, skFn)
 
   /**
    * Apply an [[OverlappableSummarizer]] to all rows of an [[OrderedRDD]].
@@ -451,7 +405,8 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * @param fn A function that takes and returns a key-value pair.
    * @return a new [[OrderedRDD]] by applying a function to all rows and sorting the result by key.
    */
-  def mapOrdered[V2: ClassTag](fn: ((K, V)) => (K, V2)): OrderedRDD[K, V2] = OrderedRDD.fromUnsortedRDD(super.map(fn))
+  def mapOrdered[V2: ClassTag](fn: ((K, V)) => (K, V2)): OrderedRDD[K, V2] =
+    OrderedRDD.fromRDD(super.map(fn), KeyPartitioningType.UnSorted)
 
   /**
    * Similar to [[org.apache.spark.rdd.RDD.map]], but the ordering of this [[OrderedRDD]] will be preserved.

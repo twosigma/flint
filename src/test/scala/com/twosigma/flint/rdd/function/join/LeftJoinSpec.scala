@@ -19,7 +19,7 @@ package com.twosigma.flint.rdd.function.join
 import org.scalatest.FlatSpec
 
 import com.twosigma.flint.SharedSparkContext
-import com.twosigma.flint.rdd.OrderedRDD
+import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 
 class LeftJoinSpec extends FlatSpec with SharedSparkContext {
 
@@ -64,8 +64,8 @@ class LeftJoinSpec extends FlatSpec with SharedSparkContext {
 
   override def beforeAll() {
     super.beforeAll()
-    leftRdd = OrderedRDD.fromSortedRDD(sc.parallelize(left, 4))
-    rightRdd = OrderedRDD.fromSortedRDD(sc.parallelize(right, 4))
+    leftRdd = OrderedRDD.fromRDD(sc.parallelize(left, 4), KeyPartitioningType.Sorted)
+    rightRdd = OrderedRDD.fromRDD(sc.parallelize(right, 4), KeyPartitioningType.Sorted)
   }
 
   "LeftJoin" should "`futureJoin` per tid with strictForward correctly" in {

@@ -19,7 +19,7 @@ package com.twosigma.flint.timeseries
 import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.annotation.PythonApi
-import com.twosigma.flint.rdd.Conversion
+import com.twosigma.flint.rdd._
 import com.twosigma.flint.timeseries.row.{ InternalRowUtils, Schema }
 import com.twosigma.flint.timeseries.summarize.{ OverlappableSummarizer, OverlappableSummarizerFactory, SummarizerFactory }
 import com.twosigma.flint.timeseries.window.{ ShiftTimeWindow, TimeWindow, Window }
@@ -31,7 +31,6 @@ import org.apache.spark.sql.types._
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.annotation.Experimental
 import com.twosigma.flint.timeseries.summarize.OverlappableSummarizer
-import com.twosigma.flint.rdd.{ CloseOpen, OrderedRDD, RangeSplit }
 import com.twosigma.flint.timeseries.time.TimeFormat
 import org.apache.spark.sql.catalyst.InternalRow
 
@@ -226,7 +225,11 @@ object TimeSeriesRDD {
     requireSchema(newSchema)
     val converter = getExternalRowConverter(newSchema, timeUnit)
     val pairRdd = rdd.map(converter)
-    TimeSeriesRDD.fromInternalOrderedRDD(OrderedRDD.fromRDD(pairRdd, isSorted, isNormalized), newSchema)
+    // TODO We should use KeyPartitioningType for the TimeSeriesRDD level APIs as well.
+    TimeSeriesRDD.fromInternalOrderedRDD(
+      OrderedRDD.fromRDD(pairRdd, KeyPartitioningType(isSorted, isNormalized)),
+      newSchema
+    )
   }
 
   /**
@@ -295,7 +298,11 @@ object TimeSeriesRDD {
     requireSchema(df.schema)
 
     val pairRdd = dfToPairRdd(dataFrame, timeUnit)
-    TimeSeriesRDD.fromInternalOrderedRDD(OrderedRDD.fromRDD(pairRdd, isSorted), df.schema)
+    val keyRdd = dfToPairRdd(dataFrame.select(timeColumnName), timeUnit).map(_._1)
+    TimeSeriesRDD.fromInternalOrderedRDD(
+      OrderedRDD.fromRDD(pairRdd, KeyPartitioningType(isSorted, false), keyRdd),
+      df.schema
+    )
   }
 
   /**
@@ -1080,7 +1087,6 @@ trait TimeSeriesRDD extends Serializable {
    * // Shift timestamp of each row backward for one day
    * val shifted = timeSeriesRdd.shift(Windows.pastAbsoluteTime("1day"))
    * }}}
-   *
    * @param window A [[ShiftTimeWindow]] that specfies the shift amount for each row
    * @return a [[TimeSeriesRDD]] with shifted timestamps.
    */

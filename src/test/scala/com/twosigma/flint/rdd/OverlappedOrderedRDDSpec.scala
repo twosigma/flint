@@ -32,7 +32,7 @@ class OverlappedOrderedRDDSpec extends FlatSpec with SharedSparkContext {
 
   var overlappedOrderedRdd: OverlappedOrderedRDD[Int, Int] = _
 
-  def window(t: Int) = (t - 2, t)
+  private def window(t: Int): (Int, Int) = (t - 2, t)
 
   override def beforeAll() {
     super.beforeAll()
@@ -40,7 +40,7 @@ class OverlappedOrderedRDDSpec extends FlatSpec with SharedSparkContext {
     rdd = sc.parallelize(0 until numSlices, numSlices).flatMap {
       i => (1 to s).map { j => i * s + j }
     }.map { x => (x, x) }
-    orderedRdd = OrderedRDD.fromSortedRDD(rdd)
+    orderedRdd = OrderedRDD.fromRDD(rdd, KeyPartitioningType.Sorted)
     overlappedOrderedRdd = OverlappedOrderedRDD(orderedRdd, window)
   }
 

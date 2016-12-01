@@ -76,7 +76,7 @@ class ConversionSpec extends FlatSpec with SharedSparkContext {
 
   it should "convert RDD with deps and ranges to OrderedRDD" in {
     val rddA = genRandomSortedRdd(1234567, 100, 123)
-    val orddA = OrderedRDD.fromSortedRDD(rddA)
+    val orddA = OrderedRDD.fromRDD(rddA, KeyPartitioningType.Sorted)
 
     val depsA = orddA.deps
     val rangeSplitsA = orddA.rangeSplits
@@ -84,7 +84,7 @@ class ConversionSpec extends FlatSpec with SharedSparkContext {
     val rddC = rddA.filter(_._1 % 2 == 0)
 
     val orddC1 = Conversion.fromRDD(rddC, depsA, rangeSplitsA)
-    val orddC2 = OrderedRDD.fromSortedRDD(rddC)
+    val orddC2 = OrderedRDD.fromRDD(rddC, KeyPartitioningType.Sorted)
     assert(orddC1.collect().deep == orddC2.collect().deep)
     assert(orddC1.rangeSplits.size == orddA.rangeSplits.size)
 

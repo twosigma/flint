@@ -101,8 +101,8 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
     sortedRDD2 = sc.parallelize(sortedData2, numSlices)
     sortedRDD3 = sc.parallelize(sortedData2, 1)
 
-    orderedRDD1 = OrderedRDD.fromUnsortedRDD(unsortedRDD)
-    orderedRDD2 = OrderedRDD.fromSortedRDD(sortedRDD1)
+    orderedRDD1 = OrderedRDD.fromRDD(unsortedRDD, KeyPartitioningType.UnSorted)
+    orderedRDD2 = OrderedRDD.fromRDD(sortedRDD1, KeyPartitioningType.Sorted)
   }
 
   "The OrderedRDD" should "be constructed by `fromUnsortedRDD` correctly" in {
@@ -114,7 +114,7 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       case ((k1, isOrdered), (k2, _)) => (k2, isOrdered && k1 <= k2)
     }._2
     )
-    val orderedRDD = OrderedRDD.fromUnsortedRDD(sc.parallelize(unsortedData, unsortedData.length * 10))
+    val orderedRDD = OrderedRDD.fromRDD(sc.parallelize(unsortedData, unsortedData.length * 10), KeyPartitioningType.UnSorted)
     assert(orderedRDD.partitions.length <= unsortedData.length)
   }
 
@@ -127,18 +127,18 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       case ((k1, isOrdered), (k2, _)) => (k2, isOrdered && k1 <= k2)
     }._2
     )
-    val orderedRDD = OrderedRDD.fromUnsortedRDD(sc.parallelize(unsortedData, unsortedData.length * 10))
+    val orderedRDD = OrderedRDD.fromRDD(sc.parallelize(unsortedData, unsortedData.length * 10), KeyPartitioningType.UnSorted)
     assert(orderedRDD.partitions.length <= unsortedData.length)
   }
 
   it should "be able to take the 1st row" in {
-    val orderedRDD = OrderedRDD.fromSortedRDD(sortedRDD2)
+    val orderedRDD = OrderedRDD.fromRDD(sortedRDD2, KeyPartitioningType.Sorted)
     assert(orderedRDD.take(1).length == 1)
   }
 
   it should "be able to take the 1st row from an OrderedRDD converted from " +
     "an RDD with only one partition" in {
-      val orderedRDD = OrderedRDD.fromSortedRDD(sortedRDD3)
+      val orderedRDD = OrderedRDD.fromRDD(sortedRDD3, KeyPartitioningType.Sorted)
       assert(sortedRDD3.partitions.length == 1)
       assert(orderedRDD.take(1).length == 1)
     }
@@ -204,8 +204,8 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
     val numPartitions = 5
     val targetNumPartitions = 50
     val data = (1 to 10000) zip (1 to 10000)
-    val rdd = OrderedRDD.fromSortedRDD(
-      sc.parallelize(data, numPartitions)
+    val rdd = OrderedRDD.fromRDD(
+      sc.parallelize(data, numPartitions), KeyPartitioningType.Sorted
     ).repartition(targetNumPartitions)
     assert(rdd.partitions.length == targetNumPartitions)
     assertResult(data.size) { rdd.count() }
@@ -255,7 +255,7 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
 
   it should "`groupByKey` correctly" in {
     val rdd = sc.parallelize(sortedData3, 4)
-    val orderedRDD = OrderedRDD.fromSortedRDD(rdd)
+    val orderedRDD = OrderedRDD.fromRDD(rdd, KeyPartitioningType.Sorted)
     val orderedRDD2 = orderedRDD.groupByKey({ _ => None })
     val orderedRDD2Values = orderedRDD2.collect()
 
@@ -287,7 +287,7 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
     )
 
     val rdd = sc.parallelize(data, 2)
-    val orderedRDD = OrderedRDD.fromSortedRDD(rdd)
+    val orderedRDD = OrderedRDD.fromRDD(rdd, KeyPartitioningType.Sorted)
 
     val noneSkFn: ((Int, Double)) => Any = { _ => None }
     val skFn = { case ((sk, _)) => sk }: ((Int, Double)) => Int

@@ -54,14 +54,6 @@ class CompositeSummarizerSpec extends FlatSpec with SharedSparkContext {
     assert(row.getAs[Double]("price_stddev") == 1.8027756377319946)
   }
 
-  it should "throw exception for non supported summarizers (dk)" in {
-    intercept[Exception] {
-      Summarizers.compose(
-        Summarizers.driscollKraayRegression("time", Seq("price")), Summarizers.mean("price")
-      )
-    }
-  }
-
   it should "throw exception for conflicting output columns" in {
     intercept[Exception] {
       val priceTSRdd = from("Price.csv", Schema("tid" -> IntegerType, "price" -> DoubleType))

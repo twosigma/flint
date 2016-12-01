@@ -21,7 +21,7 @@ import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.LeftSub
 import org.scalatest.FlatSpec
 import org.scalactic.{ TolerantNumerics, Equality }
 import com.twosigma.flint.SharedSparkContext
-import com.twosigma.flint.rdd.OrderedRDD
+import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 
 case class KVSumSummarizer() extends LeftSubtractableSummarizer[(Int, Double), Double, Double] {
   val sum = SumSum[Double]()
@@ -68,7 +68,7 @@ class SummarizeSpec extends FlatSpec with SharedSparkContext {
 
   override def beforeAll() {
     super.beforeAll()
-    orderedRDD = OrderedRDD.fromSortedRDD(sc.parallelize(data, 4))
+    orderedRDD = OrderedRDD.fromRDD(sc.parallelize(data, 4), KeyPartitioningType.Sorted)
   }
 
   "Summarize" should "apply correctly" in {

@@ -26,23 +26,41 @@ import scala.reflect.ClassTag
 object Conversion {
 
   /**
-   * Convert a sorted [[org.apache.spark.rdd.RDD]] to an [[OrderedRDD]]. An rdd is considered to be sorted iff
-   * all keys of records in the kth partition are less or equal than those of (k + 1)th partition for all possible
-   * k and each partition's rows are also sorted by their keys.
+   * Convert a sorted [[org.apache.spark.rdd.RDD]] to an [[OrderedRDD]].
    *
-   * @param rdd The [[org.apache.spark.rdd.RDD]] of (K, V) tuple(s) expected to convert. Note that the first partition
-   *            does not necessarily have tuple(s) with the smallest keys.
+   * An `rdd` is considered to be sorted iff
+   *   - all keys of rows in the k-th partition are less or equal than those of (k + 1)-th partition for all k;
+   *   - all rows of any partition are also sorted by their keys.
+   *
+   * The key reason for using `keyRdd` is to faster the process of finding the boundaries of each partition.
+   *
+   * @param rdd    The [[org.apache.spark.rdd.RDD]] of (K, V) tuple(s) expected to convert. Note that the
+   *               first partition does not necessarily have tuple(s) with the smallest keys.
+   * @param keyRdd The [[org.apache.spark.rdd.RDD]] of keys of `rdd`. The `keyRdd` is expected to have exactly the
+   *               same distribution of keys as that of `rdd`, i.e. the same number of partition; the i-th partitions
+   *               of `rdd` and `keyRdd` have exactly the same sequences of keys. An example of `keyRdd` could
+   *               be obtained by {{ rdd.map(_._1) }}.
    * @return an [[OrderedRDD]].
    */
-  def fromSortedRDD[K: ClassTag, V: ClassTag](
-    rdd: RDD[(K, V)]
+  protected[flint] def fromSortedRDD[K: ClassTag, V: ClassTag](
+    rdd: RDD[(K, V)],
+    keyRdd: RDD[K] = null
   )(implicit ord: Ordering[K]): OrderedRDD[K, V] = {
+    val keys = if (keyRdd == null) {
+      rdd.map(_._1)
+    } else {
+      keyRdd
+    }
 
-    // Get the header information for each partition from the given parent rdd.
-    val headers = rdd.mapPartitionsWithIndex {
+    require(rdd.partitions.length == keys.partitions.length)
+
+    // Gather header information for each partition from the given `rdd` via the `keyRdd`.
+    // We use `keyRdd` instead of `rdd` could potentially utilize the fact that iterating
+    // through `keyRdd` could be much faster than that of `rdd`.
+    val headers = keys.mapPartitionsWithIndex {
       case (idx, iter) =>
         Iterator(if (iter.nonEmpty) {
-          val firstKey = iter.next._1
+          val firstKey = iter.next
           // XXX Try to find the first two distinct keys for every partition. If there is
           // only one key in the whole partition, put the second key as None.
           // A basic assumption we made here is that there are not too many records with the
@@ -53,7 +71,7 @@ object Conversion {
             // partition. We will convert it back later on.
             OrderedRDDPartition(idx),
             firstKey,
-            iter.find(it => ord.gt(it._1, firstKey)).map(_._1)
+            iter.find(it => ord.gt(it, firstKey))
           ))
         } else {
           Seq.empty
@@ -62,6 +80,7 @@ object Conversion {
       // Convert the partition type back. This is a trick to avoid propagating the partition of
       // parent rdd all around.
       hdr =>
+        // Note that the following uses the partitions from `rdd` instead of partitions from `keyRdd`.
         require(rdd.partitions(hdr.partition.index).index == hdr.partition.index)
         OrderedPartitionHeader(rdd.partitions(hdr.partition.index), hdr.firstKey, hdr.secondKey)
     }
@@ -97,13 +116,15 @@ object Conversion {
   }
 
   /**
-   * Convert a normalized sorted [[org.apache.spark.rdd.RDD]] to an [[OrderedRDD]]. An rdd is considered to be
-   * sorted and normalized iff all keys of records in the kth partition are strictly less than
-   * those of (k + 1)th partition for all possible k, i.e. there is no a single key existing multiple
-   * partitions and each partition's rows are also sorted by their primary keys.
+   * Convert a normalized sorted [[org.apache.spark.rdd.RDD]] to an [[OrderedRDD]].
+   *
+   * An rdd is considered to be sorted and normalized iff
+   *   - all keys of rows in the k-th partition are strictly less than those of (k + 1)-th partition for all k,
+   *     i.e. there is no key existing multiple partitions;
+   *   - all rows of any partition are also sorted by their keys.
    *
    * @param rdd The [[org.apache.spark.rdd.RDD]] of (K, V) tuple(s) expected to convert. Note that the first partition
-   *           does not necessarily have tuple(s) with the smallest keys.
+   *            does not necessarily have tuple(s) with the smallest keys.
    * @return an [[OrderedRDD]].
    */
   def fromNormalizedSortedRDD[K: Ordering: ClassTag, V: ClassTag](rdd: RDD[(K, V)]): OrderedRDD[K, V] = {
@@ -231,7 +252,7 @@ object Conversion {
 
     require(
       dep.isInstanceOf[NarrowDependency[_]],
-      s"Dependency must be narrow dependency. Dep: ${dep}"
+      s"Dependency must be narrow dependency. Dep: $dep"
     )
 
     val narrowDep = dep.asInstanceOf[NarrowDependency[_]]
@@ -253,7 +274,7 @@ object Conversion {
           override def getParents(partitionId: Int): Seq[Int] =
             indexToParentPartIndices(partitionId)
         }
-      case _ => sys.error(s"Unsupported dependency ${narrowDep}")
+      case _ => sys.error(s"Unsupported dependency $narrowDep")
     }
 
     // This copy might not be necessary because OrderedRDDPartition is immutable. However, the code is cleaner this way
