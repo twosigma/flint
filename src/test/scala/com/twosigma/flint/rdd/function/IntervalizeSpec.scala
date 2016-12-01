@@ -21,7 +21,7 @@ import org.scalatest.FlatSpec
 
 import com.twosigma.flint.SharedSparkContext
 import Intervalize._
-import com.twosigma.flint.rdd.OrderedRDD
+import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 
 class IntervalizeSpec extends FlatSpec with SharedSparkContext {
 
@@ -69,8 +69,8 @@ class IntervalizeSpec extends FlatSpec with SharedSparkContext {
 
   override def beforeAll() {
     super.beforeAll()
-    orderedRDD = OrderedRDD.fromSortedRDD(sc.parallelize(data, 4))
-    clockRDD = OrderedRDD.fromSortedRDD(sc.parallelize(clock.map { k => (k, k) }, 2))
+    orderedRDD = OrderedRDD.fromRDD(sc.parallelize(data, 4), KeyPartitioningType.Sorted)
+    clockRDD = OrderedRDD.fromRDD(sc.parallelize(clock.map { k => (k, k) }, 2), KeyPartitioningType.Sorted)
   }
 
   "Intervalize" should "round correctly" in {

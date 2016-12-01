@@ -23,7 +23,7 @@ import scala.Serializable
 import org.scalatest.FlatSpec
 import org.scalactic.{ TolerantNumerics, Equality }
 import com.twosigma.flint.SharedSparkContext
-import com.twosigma.flint.rdd.OrderedRDD
+import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 
 class SummarizationsSpec extends FlatSpec with SharedSparkContext {
 
@@ -112,8 +112,8 @@ class SummarizationsSpec extends FlatSpec with SharedSparkContext {
 
   override def beforeAll() {
     super.beforeAll()
-    orderedRDD = OrderedRDD.fromSortedRDD(sc.parallelize(data, 4))
-    orderedRDD1 = OrderedRDD.fromSortedRDD(sc.parallelize(data, 1))
+    orderedRDD = OrderedRDD.fromRDD(sc.parallelize(data, 4), KeyPartitioningType.Sorted)
+    orderedRDD1 = OrderedRDD.fromRDD(sc.parallelize(data, 1), KeyPartitioningType.Sorted)
   }
 
   "Summarizations" should "apply correctly" in {

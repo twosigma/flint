@@ -56,7 +56,7 @@ object PythonUtils {
     schema: StructType,
     keyColumn: String
   ): TimeSeriesRDDImpl = {
-    val ordd = OrderedRDD.fromSortedRDD(formatRDD[Long](rdd, schema, keyColumn))
+    val ordd = OrderedRDD.fromRDD(formatRDD[Long](rdd, schema, keyColumn), KeyPartitioningType.Sorted)
     TimeSeriesRDD.fromOrderedRDD(ordd, schema).asInstanceOf[TimeSeriesRDDImpl]
   }
 
@@ -69,7 +69,7 @@ object PythonUtils {
     schema: StructType,
     keyColumn: String
   ): TimeSeriesRDDImpl = {
-    val orderedRdd = OrderedRDD.fromUnsortedRDD(formatRDD[Long](rdd, schema, keyColumn))
+    val orderedRdd = OrderedRDD.fromRDD(formatRDD[Long](rdd, schema, keyColumn), KeyPartitioningType.UnSorted)
     TimeSeriesRDD.fromOrderedRDD(orderedRdd, schema).asInstanceOf[TimeSeriesRDDImpl]
   }
 

@@ -22,7 +22,7 @@ import com.twosigma.flint.timeseries.row.Schema
 import org.scalatest.FlatSpec
 import org.scalatest.tagobjects.Slow
 import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
-import com.twosigma.flint.rdd.OrderedRDD
+import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 import org.apache.spark.sql.functions.{ col, udf }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
@@ -169,26 +169,32 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
   override def beforeAll() {
     super.beforeAll()
     priceTSRdd = TimeSeriesRDD.fromOrderedRDD(
-      OrderedRDD.fromSortedRDD(sc.parallelize(priceData, defaultNumPartitions)), priceSchema
+      OrderedRDD.fromRDD(sc.parallelize(priceData, defaultNumPartitions), KeyPartitioningType.Sorted),
+      priceSchema
     )
     forecastTSRdd = TimeSeriesRDD.fromOrderedRDD(
-      OrderedRDD.fromSortedRDD(sc.parallelize(forecastData, defaultNumPartitions)), forecastSchema
+      OrderedRDD.fromRDD(sc.parallelize(forecastData, defaultNumPartitions), KeyPartitioningType.Sorted),
+      forecastSchema
     )
     forecastSwitchColumnTSRdd = TimeSeriesRDD.fromOrderedRDD(
-      OrderedRDD.fromSortedRDD((sc.parallelize(forecastSwitchColumnData, defaultNumPartitions))),
+      OrderedRDD.fromRDD(sc.parallelize(forecastSwitchColumnData, defaultNumPartitions), KeyPartitioningType.Sorted),
       forecastSwitchColumnSchema
     )
     volTSRdd = TimeSeriesRDD.fromOrderedRDD(
-      OrderedRDD.fromSortedRDD(sc.parallelize(volData, defaultNumPartitions)), volSchema
+      OrderedRDD.fromRDD(sc.parallelize(volData, defaultNumPartitions), KeyPartitioningType.Sorted),
+      volSchema
     )
     clockTSRdd = TimeSeriesRDD.fromOrderedRDD(
-      OrderedRDD.fromSortedRDD(sc.parallelize(clockData, defaultNumPartitions)), clockSchema
+      OrderedRDD.fromRDD(sc.parallelize(clockData, defaultNumPartitions), KeyPartitioningType.Sorted),
+      clockSchema
     )
     vol2TSRdd = TimeSeriesRDD.fromOrderedRDD(
-      OrderedRDD.fromSortedRDD(sc.parallelize(vol2Data, defaultNumPartitions)), volSchema
+      OrderedRDD.fromRDD(sc.parallelize(vol2Data, defaultNumPartitions), KeyPartitioningType.Sorted),
+      volSchema
     )
     vol3TSRdd = TimeSeriesRDD.fromOrderedRDD(
-      OrderedRDD.fromSortedRDD(sc.parallelize(vol3Data, defaultNumPartitions)), volSchema
+      OrderedRDD.fromRDD(sc.parallelize(vol3Data, defaultNumPartitions), KeyPartitioningType.Sorted),
+      volSchema
     )
   }
 
