@@ -17,9 +17,9 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
+import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.types.{ LongType, StructType, IntegerType, DoubleType }
+import org.apache.spark.sql.types.{ DoubleType, IntegerType, LongType, StringType, StructType }
 import org.scalatest.FlatSpec
 
 class AddColumnsForCycleSpec extends FlatSpec with SharedSparkContext {
@@ -50,6 +50,23 @@ class AddColumnsForCycleSpec extends FlatSpec with SharedSparkContext {
         { rows: Seq[Row] =>
           val size = rows.size
           rows.map { row => row -> row.getDouble(2) * size }.toMap
+        }
+    )
+    assert(adjustedPriceTSRdd.schema == resultTSRdd.schema)
+    assert(adjustedPriceTSRdd.collect().deep == resultTSRdd.collect().deep)
+  }
+
+  it should "support non-primitive types" in {
+    val priceTSRdd = from("Price.csv", Schema("tid" -> IntegerType, "price" -> DoubleType))
+    val resultTSRdd = from(
+      "AddAdjustedPrice.results",
+      Schema("tid" -> IntegerType, "price" -> DoubleType, "adjustedPrice" -> StringType)
+    )
+    val adjustedPriceTSRdd = priceTSRdd.addColumnsForCycle(
+      "adjustedPrice" -> StringType ->
+        { rows: Seq[Row] =>
+          val size = rows.size
+          rows.map { row => row -> (row.getDouble(2) * size).toString }.toMap
         }
     )
     assert(adjustedPriceTSRdd.schema == resultTSRdd.schema)
