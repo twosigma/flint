@@ -726,6 +726,12 @@ def test_summary_linearRegression(pyspark, summarizers, tests_utils, price, fore
     joined = price.leftJoin(forecast, key="tid")
     result = joined.summarize(summarizers.linear_regression("price", ["forecast"])).collect()
 
+def test_summary_max(pyspark, summarizers, tests_utils, forecast):
+    expected_pdf = make_pdf([
+        (0, 6.4,)
+    ], ["time", "forecast_max"])
+    result = forecast.summarize(summarizers.max("forecast")).toPandas()
+    pdt.assert_frame_equal(result, expected_pdf)
 
 def test_summary_mean(pyspark, summarizers, tests_utils, price, forecast):
     expected_pdf = make_pdf([
@@ -735,6 +741,19 @@ def test_summary_mean(pyspark, summarizers, tests_utils, price, forecast):
     result = joined.summarize(summarizers.mean("price")).toPandas()
     pdt.assert_frame_equal(result, expected_pdf)
 
+def test_summary_min(pyspark, summarizers, tests_utils, forecast):
+    expected_pdf = make_pdf([
+        (0, -9.6,)
+    ], ["time", "forecast_min"])
+    result = forecast.summarize(summarizers.min("forecast")).toPandas()
+    pdt.assert_frame_equal(result, expected_pdf)
+
+def test_summary_quantile(sc, summarizers, forecast):
+    expected_pdf = make_pdf([
+        (0, -4.6, 1.75)
+    ], ["time", "forecast_0.2quantile", "forecast_0.5quantile"])
+    result = forecast.summarize(summarizers.quantile(sc, "forecast", (0.2, 0.5))).toPandas()
+    pdt.assert_frame_equal(result, expected_pdf)
 
 def test_summary_stddev(pyspark, summarizers, tests_utils, price, forecast):
     expected_pdf = make_pdf([
@@ -762,6 +781,16 @@ def test_summary_covariance(pyspark, summarizers, tests_utils, price, forecast):
     result = joined.summarize(summarizers.covariance("price", "forecast")).toPandas()
     pdt.assert_frame_equal(result, expected_pdf)
 
+def test_summary_compose(pyspark, summarizers, tests_utils, price):
+    expected_pdf = make_pdf([
+        (0, 6.0, 0.5, 3.25, 1.802775638,)
+    ], ["time", "price_max", "price_min", "price_mean", "price_stddev"])
+
+    result = price.summarize([summarizers.max("price"),
+                              summarizers.min("price"),
+                              summarizers.mean("price"),
+                              summarizers.stddev("price")]).toPandas()
+    pdt.assert_frame_equal(result, expected_pdf)
 
 def test_addSummaryColumns(summarizers, tests_utils, vol):
     expected_pdf = make_pdf([

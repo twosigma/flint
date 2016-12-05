@@ -27,7 +27,7 @@ import pandas as pd
 
 from . import java
 from . import utils
-
+from . import summarizers
 
 __all__ = ['TimeSeriesDataFrame']
 
@@ -558,14 +558,15 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             >>> # count the number of rows in each cycle
             >>> counts = df.summarizeCycles(summarizers.count())
 
-        :param summarizer: A summarizer that will calculate results for the new columns. Lists of summarizers can be found in :mod:`.summarizers`.
+        :param summarizer: A summarizer or a list of summarizers that will calculate results for the new columns. Available summarizers can be found in :mod:`.summarizers`.
         :param key: Optional. One or multiple column names to use as the grouping key
         :type key: str, list of str
         :returns: a new dataframe with summarization columns
         :rtype: :class:`TimeSeriesDataFrame`
         """
         scala_key = utils.list_to_seq(self._sc, key)
-        tsrdd = self.timeSeriesRDD.summarizeCycles(summarizer._jsummarizer(self._sc), scala_key)
+        composed_summarizer = summarizers.compose(self._sc, summarizer)
+        tsrdd = self.timeSeriesRDD.summarizeCycles(composed_summarizer._jsummarizer(self._sc), scala_key)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def summarizeIntervals(self, clock, summarizer, key=None, beginInclusive=True):
@@ -580,7 +581,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         :param clock: A dataframe used to determine the intervals
         :type clock: :class:`TimeSeriesDataFrame`
-        :param summarizer: A summarizer that will calculate results for the new columns. Lists of summarizers can be found in :mod:`.summarizers`.
+        :param summarizer: A summarizer or a list of summarizers that will calculate results for the new columns. Available summarizers can be found in :mod:`.summarizers`.
         :param key: Optional. One or multiple column names to use as the grouping key
         :type key: str, list of str
         :param begin_inclusive: Optional. Default True. If True, timestamp of output dataframe will
@@ -591,7 +592,8 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         :rtype: :class:`TimeSeriesDataFrame`
         """
         scala_key = utils.list_to_seq(self._sc, key)
-        tsrdd = self.timeSeriesRDD.summarizeIntervals(clock.timeSeriesRDD, summarizer._jsummarizer(self._sc), scala_key, beginInclusive)
+        composed_summarizer = summarizers.compose(self._sc, summarizer)
+        tsrdd = self.timeSeriesRDD.summarizeIntervals(clock.timeSeriesRDD, composed_summarizer._jsummarizer(self._sc), scala_key, beginInclusive)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def summarizeWindows(self, window, summarizer, key=None):
@@ -606,14 +608,16 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
            ...                               key="tid"))
 
         :param window: A window that specifies which rows to add to the new column. Lists of windows can be found in :mod:`.windows`.
-        :param summarizer: A summarizer that will calculate results for the new columns. Lists of summarizers can be found in :mod:`.summarizers`.
+        :param summarizer: A summarizer or a list of summarizers that will calculate results for the new columns. Available summarizers can be found in :mod:`.summarizers`.
         :param key: Optional. One or multiple column names to use as the grouping key
         :type key: str, list of str
         :returns: a new dataframe with summarization columns
         :rtype: :class:`TimeSeriesDataFrame`
         """
         scala_key = utils.list_to_seq(self._sc, key)
-        tsrdd = self.timeSeriesRDD.summarizeWindows(window._jwindow(self._sc), summarizer._jsummarizer(self._sc), scala_key)
+        composed_summarizer = summarizers.compose(self._sc, summarizer)
+        tsrdd = self.timeSeriesRDD.summarizeWindows(window._jwindow(self._sc), composed_summarizer._jsummarizer(self._sc), scala_key)
+
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def summarize(self, summarizer, key=None):
@@ -626,14 +630,16 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             >>> result = df.summarize(summarizers.weighted_mean("return", "volume"), key="tid")
             >>> result = df.summarize(summarizers.weighted_mean("return", "volume"), key=["tid", "industryGroup"])
 
-        :param summarizer: A summarizer that will calculate results for the new columns. Lists of summarizers can be found in :mod:`.summarizers`.
+        :param summarizer: A summarizer or a list of summarizers that will calculate results for the new columns. Available summarizers can be found in :mod:`.summarizers`.
         :param key: Optional. One or multiple column names to use as the grouping key
         :type key: str, list of str
         :returns: a new dataframe with summarization columns
         :rtype: :class:`TimeSeriesDataFrame`
         """
+
         scala_key = utils.list_to_seq(self._sc, key)
-        tsrdd = self.timeSeriesRDD.summarize(summarizer._jsummarizer(self._sc), scala_key)
+        composed_summarizer = summarizers.compose(self._sc, summarizer)
+        tsrdd = self.timeSeriesRDD.summarize(composed_summarizer._jsummarizer(self._sc), scala_key)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def addSummaryColumns(self, summarizer, key=None):
@@ -646,14 +652,15 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             >>> # Add row number to each row
             >>> dfWithRowNum = df.addSummaryColumns(summarizers.count())
 
-        :param summarizer: A summarizer that will calculate results for the new columns. Lists of summarizers can be found in :mod:`.summarizers`.
+        :param summarizer: A summarizer or a list of summarizers that will calculate results for the new columns. Available summarizers can be found in :mod:`.summarizers`.
         :param key: One or multiple column names to use as the grouping key
         :type key: str, list of str
         :returns: a new dataframe with the summarization columns added
         :rtype: :class:`TimeSeriesDataFrame`
         """
         scala_key = utils.list_to_seq(self._sc, key)
-        tsrdd = self.timeSeriesRDD.addSummaryColumns(summarizer._jsummarizer(self._sc), scala_key)
+        composed_summarizer = summarizers.compose(self._sc, summarizer)
+        tsrdd = self.timeSeriesRDD.addSummaryColumns(composed_summarizer._jsummarizer(self._sc), scala_key)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def addWindows(self, window, key=None):

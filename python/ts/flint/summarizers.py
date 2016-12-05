@@ -31,7 +31,6 @@ Example:
 
 from . import java
 from . import utils
-from .dataframe import TimeSeriesDataFrame
 
 
 __all__ = [
@@ -39,9 +38,12 @@ __all__ = [
     'count',
     'covariance',
     'linear_regression',
+    'max',
     'mean',
+    'min',
     'nth_central_moment',
     'nth_moment',
+    'quantile',
     'stddev',
     'sum',
     'variance',
@@ -204,6 +206,20 @@ def linear_regression(y_column, x_columns, weight_column=None, *, use_intercept=
     return SummarizerFactory('OLSRegression', y_column, x_columns, weight_column, use_intercept)
 
 
+def max(column):
+    '''Get the max of a column.
+
+    **Adds columns:**
+
+    <column>_max
+        The max of the column
+
+    :param column: name of the column to be summarized
+    :type column: str
+    '''
+    return SummarizerFactory('max', column)
+
+
 def mean(column):
     '''Computes the arithmetic mean of a column.
 
@@ -217,6 +233,19 @@ def mean(column):
     '''
     return SummarizerFactory('mean', column)
 
+
+def min(column):
+    '''Get the min of a column.
+
+    **Adds columns:**
+
+    <column>_min
+        The min of the column
+
+    :param column: name of the column to be summarized
+    :type column: str
+    '''
+    return SummarizerFactory('min', column)
 
 def nth_central_moment(column, n):
     '''Computes the nth central moment of the values in a column.
@@ -252,12 +281,32 @@ def nth_moment(column, n):
     return SummarizerFactory('nthMoment', column, n)
 
 
+def quantile(sc, column, phis):
+    '''Computes the quantiles of the values in a column.
+
+    **Adds columns:**
+
+    <column>_<phi>quantile (*float*)
+        The quantiles of values in ``<column>``.
+
+    :param sc: Spark context
+    :type sc: SparkContext
+    :param column: name of the column to be summarized
+    :type column: str
+    :param phis: the quantiles to compute, ranging in value from (0.0,1.0]
+    :type phis: list
+
+    '''
+    phis_seq = utils.list_to_seq(sc, phis)
+    return SummarizerFactory('quantile', column, phis_seq)
+
+
 def stddev(column):
     '''Computes the stddev of a column
 
     **Adds columns:**
 
-    <column>_sum (*float*)
+    <column>_stddev (*float*)
         The standard deviation of ``<column>``
 
     :param column: name of the column to be summarized
@@ -349,3 +398,12 @@ def zscore(column, in_sample):
 
     '''
     return SummarizerFactory('zScore', column, in_sample)
+
+
+def compose(sc, summarizer):
+    if isinstance(summarizer, SummarizerFactory):
+        return summarizer
+    elif isinstance(summarizer, list) or isinstance(summarizer, tuple):
+        return SummarizerFactory('compose', [s._jsummarizer(sc) for s in summarizer])
+    else:
+        raise ValueError("summarizer should be a SummarizerFactory, a list, or a tuple")
