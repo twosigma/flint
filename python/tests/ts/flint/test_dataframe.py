@@ -952,6 +952,16 @@ def test_replace_preserve_order(sqlContext, flintContext):
     assert_invariants_unchanged(df_eager, func)
 
 
+def test_from_tsrdd(sqlContext, flintContext, flint):
+    df = flintContext.read.pandas(make_pdf(forecast_data, ["time", "tid", "forecast"]))
+    tsrdd = df.timeSeriesRDD
+    df2 = flint.TimeSeriesDataFrame._from_tsrdd(tsrdd, sqlContext)
+    tsrdd2 = df2.timeSeriesRDD
+
+    assert(tsrdd.count() == tsrdd2.count())
+    assert(tsrdd.orderedRdd().getNumPartitions() == tsrdd2.orderedRdd().getNumPartitions())
+
+
 def assert_invariants_unchanged(input_df, func):
     """Assert certain properties of a :class:`TimeSeriesDataFrame` is unchanged after a tranformation.
 

@@ -307,8 +307,36 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         :param unit: Unit of time_column, can be (s,ms,us,ns) (default: ``DEFAULT_UNIT``)
         :returns: a new :class:`TimeSeriesDataFrame` from the given Scala ``TimeSeriesRDD``
         """
+        sc = sql_ctx._sc
         df = pyspark.sql.DataFrame(tsrdd.toDF(), sql_ctx)
-        tsrdd_part_info = TimeSeriesDataFrame._get_tsrdd_part_info(tsrdd)
+
+        # TODO: Change ValueError to FlintError or FlintInternalError
+        # because this isn't something we expect user to deal with
+        if tsrdd.orderedRdd().partitions()[0].index() != 0:
+            raise ValueError("Cannot take a tsrdd whose partition index doesn't start with 0")
+
+        # MCA-187
+        # In the general case, if we create a tsdf from a regular df,
+        # we run the normalization procedure and change
+        # partitioning. However, here because we are creating a a tsdf
+        # from a tsrdd, we already know the time ranges of partitions
+        # and can avoid normalization.
+        jrange_splits = TimeSeriesDataFrame._get_tsrdd_part_info(tsrdd).jrange_splits
+
+
+        # We can only reuse dependency from tsrdd A to create a tsdf B
+        # iff:
+        # (1) We know tsrdd A is part of a tsdf A and
+        # (2) tsdf A -> tsdf B is partition preserving
+        # They don't hold here. tsrdd A -> tsdf B -> tsrdd B all have
+        # one to one dependency, so we explictly create one.
+
+        # df.rdd is just a place holder. It doesn't matter which rdd
+        # we use to create the dependency here, because fromDFUnsafe
+        # will always recreate a dependency with the correct rdd.
+        jdep = sc._jvm.org.apache.spark.OneToOneDependency(df.rdd._jrdd.rdd())
+        jdeps = utils.list_to_seq(sc, [jdep])
+        tsrdd_part_info = TimeSeriesRDDPartInfo(jdeps, jrange_splits)
 
         return TimeSeriesDataFrame(df,
                                    sql_ctx,
