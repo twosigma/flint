@@ -19,18 +19,18 @@ package com.twosigma.flint.timeseries
 import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.annotation.PythonApi
-import com.twosigma.flint.rdd.{ CloseOpen, Conversion, KeyPartitioningType, OrderedRDD, RangeSplit }
+import com.twosigma.flint.rdd.{ Conversion, KeyPartitioningType, OrderedRDD, RangeSplit }
 import com.twosigma.flint.timeseries.row.{ InternalRowUtils, Schema }
 import com.twosigma.flint.timeseries.summarize.{ OverlappableSummarizer, OverlappableSummarizerFactory, SummarizerFactory }
 import com.twosigma.flint.timeseries.time.TimeFormat
 import com.twosigma.flint.timeseries.window.{ ShiftTimeWindow, TimeWindow, Window }
-
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{ Dependency, SparkContext }
+import org.apache.spark.{ Dependency, OneToOneDependency, SparkContext }
 import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DFConverter, DataFrame, Row, SQLContext }
 import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ERow }
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.storage.StorageLevel
 
@@ -94,32 +94,35 @@ object TimeSeriesRDD {
    * Similar to getRowConverter(), but used to convert a [[DataFrame]] into a [[TimeSeriesRDD]]
    *
    * @param schema          The schema of the input rows.
-   * @param timeUnit        The unit of time (as Long type) under the time column in the rows as input of the returning
-   *                        function.
    * @param requireCopy     Whether to require new row objects or reuse the existing ones.
    * @return                a function to convert [[InternalRow]] into a tuple.
-   * @note                  if `requireNewCopy` is true or timeUnit is different from [[NANOSECONDS]] then the function
-   *                        makes an extra copy of the row value. Otherwise it makes no copies of the row.
+   * @note                  if `requireNewCopy` is true then the function makes an extra copy of the row value.
+   *                        Otherwise it makes no copies of the row.
    */
-  private[this] def getInternalRowConverter(
+  private[timeseries] def getInternalRowConverter(
     schema: StructType,
-    timeUnit: TimeUnit,
     requireCopy: Boolean
   ): InternalRow => (Long, InternalRow) = {
     val timeColumnIndex = schema.fieldIndex(timeColumnName)
 
-    if (timeUnit == NANOSECONDS) {
-      if (requireCopy) {
-        (internalRow: InternalRow) => (internalRow.getLong(timeColumnIndex), internalRow.copy())
-      } else {
-        (internalRow: InternalRow) => (internalRow.getLong(timeColumnIndex), internalRow)
-      }
+    if (requireCopy) {
+      (internalRow: InternalRow) => (internalRow.getLong(timeColumnIndex), internalRow.copy())
     } else {
-      (internalRow: InternalRow) =>
-        val t = TimeUnit.NANOSECONDS.convert(internalRow.getLong(timeColumnIndex), timeUnit)
-        // the line below creates a new InternalRow object
-        val updatedRow = InternalRowUtils.update(internalRow, schema, timeColumnIndex -> t)
-        (t, updatedRow)
+      (internalRow: InternalRow) => (internalRow.getLong(timeColumnIndex), internalRow)
+    }
+  }
+
+  private[flint] def convertDfTimestamps(
+    dataFrame: DataFrame,
+    timeUnit: TimeUnit
+  ): DataFrame = {
+    if (timeUnit == NANOSECONDS) {
+      dataFrame
+    } else {
+      val converter: Long => Long = TimeUnit.NANOSECONDS.convert(_, timeUnit)
+      val udfConverter = udf(converter)
+
+      dataFrame.withColumn(timeColumnName, udfConverter(col(timeColumnName)))
     }
   }
 
@@ -234,75 +237,6 @@ object TimeSeriesRDD {
   }
 
   /**
-   * Convert an [[OrderedRDD]] with internal rows to a [[TimeSeriesRDD]].
-   *
-   * @param orderedRdd  An [[OrderedRDD]] with timestamps in NANOSECONDS and internal rows.
-   * @param schema      The schema of the input `rdd`.
-   * @return a [[TimeSeriesRDD]].
-   */
-  def fromInternalOrderedRDD(
-    orderedRdd: OrderedRDD[Long, InternalRow],
-    schema: StructType
-  ): TimeSeriesRDD = {
-    val sc = orderedRdd.sparkContext
-    val sqlContext = SQLContext.getOrCreate(sc)
-    val df = DFConverter.toDataFrame(sqlContext, schema, orderedRdd)
-    val ranges = orderedRdd.rangeSplits.map(_.range).toSeq
-
-    new TimeSeriesRDDImpl(df, ranges)
-  }
-
-  /**
-   * Creates a [[TimeSeriesRDD]] from a [[DataFrame]] and ranges.
-   *
-   * @param dataFrame   A dataframe.
-   * @param ranges      Partition ranges.
-   * @return a [[TimeSeriesRDD]].
-   */
-  private[flint] def fromDfWithRanges(
-    dataFrame: DataFrame,
-    ranges: Seq[CloseOpen[Long]]
-  ): TimeSeriesRDD = new TimeSeriesRDDImpl(dataFrame, ranges)
-
-  /**
-   * Convert a [[org.apache.spark.sql.DataFrame]] into a pair RDD.
-   *
-   * @param dataFrame   The given [[org.apache.spark.sql.DataFrame]].
-   * @param timeUnit    The time unit of the time column.
-   * @param requireCopy Whether to require new row objects or reuse the existing ones.
-   *
-   * @return a pair RDD.
-   */
-  private[this] def dfToPairRdd(
-    dataFrame: DataFrame,
-    timeUnit: TimeUnit,
-    requireCopy: Boolean
-  ): RDD[(Long, InternalRow)] = {
-
-    val schema = dataFrame.schema
-    val internalRows = dataFrame.queryExecution.toRdd
-    internalRows.mapPartitions { rows =>
-      val converter = getInternalRowConverter(schema, timeUnit, requireCopy)
-      rows.map(converter)
-    }
-  }
-
-  /**
-   * Unsafe method to create a [[OrderedRDD]] from a [[org.apache.spark.sql.DataFrame]] with timestamps
-   * in NANOSECONDS.
-   *
-   * This method takes time ranges of the dataframe and avoid data scanning to find out the ranges.
-   */
-  private[timeseries] def dfToOrderedRdd(
-    dataFrame: DataFrame,
-    ranges: Seq[CloseOpen[Long]],
-    requireCopy: Boolean
-  ): OrderedRDD[Long, InternalRow] = {
-    val pairRdd = dfToPairRdd(dataFrame, NANOSECONDS, requireCopy)
-    OrderedRDD.fromRDD(pairRdd, ranges)
-  }
-
-  /**
    * Convert a [[org.apache.spark.sql.DataFrame]] to a [[TimeSeriesRDD]].
    *
    * @param dataFrame  The [[org.apache.spark.sql.DataFrame]] expected to convert. Its schema is expected to have a
@@ -331,17 +265,13 @@ object TimeSeriesRDD {
     timeUnit: TimeUnit,
     timeColumn: String = timeColumnName
   ): TimeSeriesRDD = {
-    // TODO: convert timestamps on the dataframe if we need to
     val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
     requireSchema(df.schema)
 
-    // pairRdd needs to be normalized, this is why we require row copies
-    val pairRdd = dfToPairRdd(dataFrame, timeUnit, requireCopy = true)
-    val keyRdd = dfToPairRdd(dataFrame.select(timeColumnName), timeUnit, requireCopy = false).map(_._1)
-    TimeSeriesRDD.fromInternalOrderedRDD(
-      OrderedRDD.fromRDD(pairRdd, KeyPartitioningType(isSorted, false), keyRdd),
-      df.schema
-    )
+    val convertedDf = convertDfTimestamps(dataFrame, timeUnit)
+    val sortedDf = if (isSorted) convertedDf else convertedDf.sort(timeColumnName)
+
+    fromDfWithPartInfo(sortedDf, None)
   }
 
   @PythonApi
@@ -355,9 +285,10 @@ object TimeSeriesRDD {
   ): TimeSeriesRDD = {
     val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
     requireSchema(df.schema)
+    val convertedDf = convertDfTimestamps(df, timeUnit)
 
-    val pairRdd = dfToPairRdd(dataFrame, timeUnit, requireCopy = false)
-    TimeSeriesRDD.fromInternalOrderedRDD(OrderedRDD.fromRDD(pairRdd, deps, rangeSplits), df.schema)
+    val partitionInfo = PartitionInfo(rangeSplits, deps)
+    TimeSeriesRDD.fromDfWithPartInfo(convertedDf, Some(partitionInfo))
   }
 
   /**
@@ -409,6 +340,45 @@ object TimeSeriesRDD {
       timeColumn = timeColumn
     )
   }
+
+  /*
+      Two functions below are factory methods. Only they call TimeSeriesRDDImpl constructor directly.
+  */
+
+  /**
+   * Convert an [[OrderedRDD]] with internal rows to a [[TimeSeriesRDD]].
+   *
+   * @param orderedRdd  An [[OrderedRDD]] with timestamps in NANOSECONDS and internal rows.
+   * @param schema      The schema of the input `rdd`.
+   * @return a [[TimeSeriesRDD]].
+   */
+  def fromInternalOrderedRDD(
+    orderedRdd: OrderedRDD[Long, InternalRow],
+    schema: StructType
+  ): TimeSeriesRDD = {
+    val sc = orderedRdd.sparkContext
+    val sqlContext = SQLContext.getOrCreate(sc)
+    val df = DFConverter.toDataFrame(sqlContext, schema, orderedRdd)
+
+    require(orderedRdd.partitions(0).index == 0, "Partition index should start with zero.")
+    // the rdd parameter is not used
+    val deps = new OneToOneDependency(null)
+    val partInfo = PartitionInfo(orderedRdd.rangeSplits, Seq(deps))
+
+    new TimeSeriesRDDImpl(df, Option(partInfo))
+  }
+
+  /**
+   * Creates a [[TimeSeriesRDD]] from a [[DataFrame]] and partition info.
+   *
+   * @param dataFrame   A dataframe.
+   * @param partInfo    Partition info.
+   * @return a [[TimeSeriesRDD]].
+   */
+  private[flint] def fromDfWithPartInfo(
+    dataFrame: DataFrame,
+    partInfo: Option[PartitionInfo]
+  ): TimeSeriesRDD = new TimeSeriesRDDImpl(dataFrame, partInfo)
 
   // A function taking any row as input and just return `Seq[Any]()`.
   private[flint] val emptyKeyFn: InternalRow => Seq[Any] = {
@@ -1112,20 +1082,24 @@ trait TimeSeriesRDD extends Serializable {
   def shift(window: ShiftTimeWindow): TimeSeriesRDD
 }
 
+private[timeseries] case class PartitionInfo(
+  private[flint] val splits: Seq[RangeSplit[Long]],
+  private[flint] val deps: Seq[Dependency[_]]
+) {}
+
 class TimeSeriesRDDImpl private[timeseries] (
   val dataFrame: DataFrame,
-  val ranges: Seq[CloseOpen[Long]]
+  val partInfo: Option[PartitionInfo]
 ) extends TimeSeriesRDD {
 
   override val schema: StructType = dataFrame.schema
 
-  private[flint] override lazy val orderedRdd = TimeSeriesRDD.dfToOrderedRdd(dataFrame, ranges, requireCopy = true)
+  private[flint] override lazy val orderedRdd = toOrderedRdd(requireCopy = true)
 
   // you can't store references to row objects from `unsafeOrderedRdd`, or use rdd.collect() without making
   // safe copies of rows. The current implementation might use the same memory buffer to process all rows
   // per partition, so the referenced bytes might be overwritten by the next row.
-  private[timeseries] lazy val unsafeOrderedRdd =
-    TimeSeriesRDD.dfToOrderedRdd(dataFrame, ranges, requireCopy = false)
+  private[timeseries] lazy val unsafeOrderedRdd = toOrderedRdd(requireCopy = false)
 
   private[flint] def safeGetAsAny(cols: Seq[String]): InternalRow => Seq[Any] =
     TimeSeriesRDD.safeGetAsAny(schema, cols)
@@ -1202,7 +1176,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     val remainingColumns = schema.fields.map(_.name).filterNot(name => columnSet.contains(name))
     val newDf = dataFrame.select(remainingColumns.head, remainingColumns.tail: _*)
 
-    TimeSeriesRDD.fromDfWithRanges(newDf, ranges)
+    TimeSeriesRDD.fromDfWithPartInfo(newDf, partInfo)
   }
 
   def renameColumns(fromTo: (String, String)*): TimeSeriesRDD = {
@@ -1450,5 +1424,21 @@ class TimeSeriesRDDImpl private[timeseries] (
     }
 
     TimeSeriesRDD.fromInternalOrderedRDD(newRdd, schema)
+  }
+
+  private[this] def toOrderedRdd(requireCopy: Boolean): OrderedRDD[Long, InternalRow] = {
+    val internalRows = dataFrame.queryExecution.toRdd
+    val pairRdd = internalRows.mapPartitions { rows =>
+      val converter = TimeSeriesRDD.getInternalRowConverter(schema, requireCopy)
+      rows.map(converter)
+    }
+
+    if (partInfo.isDefined) {
+      OrderedRDD.fromRDD(pairRdd, partInfo.get.deps, partInfo.get.splits)
+    } else {
+      val keyRdd = dataFrame.select(TimeSeriesRDD.timeColumnName).map(_.getAs[Long](TimeSeriesRDD.timeColumnName))
+
+      OrderedRDD.fromRDD(pairRdd, KeyPartitioningType(isSorted = false, isNormalized = false), keyRdd)
+    }
   }
 }
