@@ -93,12 +93,15 @@ object OrderedRDD {
 /**
  * An RDD extension that represents an ordered dataset.
  *
- * The rows of an [[OrderedRDD]] are key-value tuples (K, V) and they have been sorted by the ordering of K. It associates a
- * [[CloseOpen]] range [b, e) to each partition such that all keys of rows in the partition are bounded by it.
+ * The rows of an [[OrderedRDD]] are key-value tuples (K, V) and they have been sorted by the ordering of K.
+ * It associates a [[CloseOpen]] range [b, e) to each partition such that all keys of rows in the partition
+ * are bounded by it.
  *
- * The following are the invariants of [[OrderedRDD]]: (1) partition range is close-open range [b, e), where b is the first key,
- * e might NOT be the first key of the next partition; (2) a key cannot appear in more than one partition; (3) a partition must be
- * non-empty.
+ * The following are the invariants of [[OrderedRDD]]:
+ *   - partition range is close-open range [b, e), where b is the first key and e might NOT be the first key
+ *     of the next partition;
+ *   - a key cannot appear in more than one partition;
+ *   - a partition must be non-empty.
  */
 class OrderedRDD[K: ClassTag, V: ClassTag](
   @transient val sc: SparkContext,
@@ -199,8 +202,8 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * Can increase or decrease the level of parallelism in this [[OrderedRDD]]. Internally, this uses
    * a shuffle to redistribute data if it tries to increase the numPartitions.
    *
-   * If you are decreasing the number of partitions in this [[OrderedRDD]], consider using [[OrderedRDD]]'s coalesce method,
-   * which can avoid performing a shuffle.
+   * If you are decreasing the number of partitions in this [[OrderedRDD]], consider using
+   * [[OrderedRDD]]'s coalesce method, which can avoid performing a shuffle.
    *
    * @param numPartitions The expected number of partitions.
    * @return a new [[OrderedRDD]] that has exactly `numPartitions` partitions.
@@ -215,8 +218,8 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
   /**
    * Return a new [[OrderedRDD]] that is reduced to numPartitions partitions.
    *
-   * @param numPartitions The number of target partitions which must be positive and less then the number of partitions of
-   *                      this [[OrderedRDD]].
+   * @param numPartitions The number of target partitions which must be positive and less then the number of
+   *                      partitions of this [[OrderedRDD]].
    * @return a new [[OrderedRDD]] with partitions.length == numPartitions
    */
   def coalesce(numPartitions: Int): OrderedRDD[K, V] = {
@@ -383,8 +386,8 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
   ): Map[SK, V2] = Summarize(self, summarizer, windowFn, skFn)
 
   /**
-   * Similar to [[org.apache.spark.rdd.RDD.zipWithIndex]], it zips values of this [[OrderedRDD]] with its element indices.
-   * The ordering of this [[OrderedRDD]] will be preserved.
+   * Similar to [[org.apache.spark.rdd.RDD.zipWithIndex]], it zips values of this [[OrderedRDD]] with
+   * its element indices. The ordering of this [[OrderedRDD]] will be preserved.
    *
    * @return a new [[OrderedRDD]] by zipping its element indices to all values of this [[OrderedRDD]].
    */
@@ -421,7 +424,8 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
   /**
    * Similar to [[org.apache.spark.rdd.RDD.flatMap]], but the ordering of this [[OrderedRDD]] will be preserved.
    *
-   * @return a new [[OrderedRDD]] by applying a function to all values of this [[OrderedRDD]] and then flattening the results.
+   * @return a new [[OrderedRDD]] by applying a function to all values of this [[OrderedRDD]] and then
+   *         flattening the results.
    */
   def flatMapValues[V2: ClassTag](fn: (K, V) => TraversableOnce[V2]): OrderedRDD[K, V2] =
     new OrderedRDD(sc, rangeSplits, Seq(new OneToOneDependency(this)))(
@@ -454,8 +458,8 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
   /**
    * Group by the primary keys.
    *
-   * If a function mapping from rows to their secondary keys is provided, it will return an [[OrderedRDD]] whose rows are further
-   * partitioned into subgroups by their secondary keys.
+   * If a function mapping from rows to their secondary keys is provided, it will return an [[OrderedRDD]]
+   * whose rows are further partitioned into subgroups by their secondary keys.
    *
    * @param skFn A function that extracts a secondary key from a row.
    * @return an [[OrderedRDD]] of grouped rows with the same key. The ordering of rows in each group is preserved.
@@ -472,9 +476,9 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    *
    * @param intervalizer   A sequence of sorted keys where two sequential keys are treated as an interval.
    * @param beginInclusive A flag to determine how to treat keys that fall exactly on the
-   *                       ticks. If it is true, keys that are at the exact beginning of an interval will be included and
-   *                       keys that fall on the exact end will be excluded, as represented by the interval [begin, end).
-   *                       Otherwise, it is (begin, end].
+   *                       ticks. If it is true, keys that are at the exact beginning of an interval will be
+   *                       included and keys that fall on the exact end will be excluded, as represented by
+   *                       the interval [begin, end). Otherwise, it is (begin, end].
    * @return An [[OrderedRDD]] whose keys are intervalized and the original keys are kept in the
    *         values as (K, V)s.
    */
@@ -485,12 +489,12 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * Intervalize an this [[OrderedRDD]] by mapping its keys to the begin or the end of an interval
    * where they fall into. The intervals are defined by the given intervalizer.
    *
-   * @param intervalizer   An [[org.apache.spark.rdd.RDD RDD]] of sorted keys where two sequential keys are treated as an
-   *                       interval.
+   * @param intervalizer   An [[org.apache.spark.rdd.RDD RDD]] of sorted keys where two sequential keys are
+   *                       treated as an interval.
    * @param beginInclusive A flag to determine how to treat keys that fall exactly on the
-   *                       ticks. If it is true, keys that are at the exact beginning of an interval will be included and
-   *                       keys that fall on the exact end will be excluded, as represented by the interval [begin, end).
-   *                       Otherwise, it is (begin, end].
+   *                       ticks. If it is true, keys that are at the exact beginning of an interval will be
+   *                       included and keys that fall on the exact end will be excluded, as represented by
+   *                       the interval [begin, end). Otherwise, it is (begin, end].
    * @return an [[OrderedRDD]] whose keys are intervalized and the original keys are kept in the values as (K, V)s.
    */
   def intervalize[V1](intervalizer: OrderedRDD[K, V1], beginInclusive: Boolean): OrderedRDD[K, (K, V)] =
@@ -521,4 +525,5 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
       (p, tc) => iterator(p, tc).map { case (k, v) => (fn(k), v) }
     )
   }
+
 }

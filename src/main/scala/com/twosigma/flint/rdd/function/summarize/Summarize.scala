@@ -60,40 +60,6 @@ protected[flint] object Summarize {
   }
 
   /**
-   * Apply an [[OverlappableSummarizer]] to each partition of an [[org.apache.spark.rdd.RDD]] where a row contains a
-   * flag indicating if it should be treated as overlapped or not.
-   *
-   * @param rdd        An [[org.apache.spark.rdd.RDD]] whose partitions are expected to be summarized
-   * @param summarizer The [[OverlappableSummarizer]] that is expected to apply.
-   * @param skFn       A function that extracts keys from rows such that the summarizer will be applied per key level.
-   * @return an array of tuples where left(s) are partition indices and right(s) are the intermediate
-   *         summarized results each of which is obtained by applying the summarizer only to the
-   *         corresponding partition.
-   * @note because the type of rdd, it seems to be not obvious how to unify this function with the previous one.
-   */
-  def summarizePartition[K, SK, V, U, V2](
-    rdd: RDD[(K, (V, Boolean))],
-    summarizer: OverlappableSummarizer[V, U, V2],
-    skFn: V => SK
-  ): Array[(Int, Map[SK, U])] = {
-    rdd.mapPartitionsWithIndex {
-      case (idx, iter) =>
-        // Initialize the initial state.
-        val uPerSK = mutable.HashMap.empty[SK, U]
-        while (iter.hasNext) {
-          val (_, v) = iter.next()
-          val sk = skFn(v._1)
-          val previousU = uPerSK.getOrElse(sk, summarizer.zero())
-          uPerSK += sk -> summarizer.add(previousU, v)
-        }
-        // Make it immutable to return.
-        Array((idx, uPerSK)).iterator
-    }.collect.map {
-      case (idx, m) => (idx, collection.immutable.Map(m.toSeq: _*))
-    }
-  }
-
-  /**
    * Merge the intermediate summarized results from different partitions by applying a summarizer's merge operator.
    * The merging is applied in the order of partitions' indices.
    *
@@ -178,7 +144,26 @@ protected[flint] object Summarize {
     skFn: V => SK
   ): Map[SK, V2] = {
     val overlappedRdd = OverlappedOrderedRDD(rdd, windowFn).zipOverlapped() // (K, (V, Boolean))
-    val intermediates = summarizePartition(overlappedRdd, summarizer, skFn)
-    merge(summarizer, intermediates, skFn)
+    val partiallySummarized: RDD[Map[SK, U]] = overlappedRdd.map(_._2).mapPartitions {
+      iter =>
+        // Initialize the initial state.
+        val uPerSK = mutable.HashMap.empty[SK, U]
+        while (iter.hasNext) {
+          val v = iter.next()
+          val sk = skFn(v._1)
+          val previousU = uPerSK.getOrElse(sk, summarizer.zero())
+          uPerSK += sk -> summarizer.add(previousU, v)
+        }
+        Iterator(uPerSK)
+    }.map { m => Map[SK, U](m.toSeq: _*) } // Make it immutable to return.
+
+    val mergeOp = (u1: Map[SK, U], u2: Map[SK, U]) => (u1 ++ u2).map {
+      case (sk, _) =>
+        (sk, summarizer.merge(u1.getOrElse(sk, summarizer.zero()), u2.getOrElse(sk, summarizer.zero())))
+    }
+
+    TreeReduce(partiallySummarized)(mergeOp).map {
+      case (sk, v) => (sk, summarizer.render(v))
+    }
   }
 }
