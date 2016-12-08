@@ -17,16 +17,14 @@
 package com.twosigma.flint.timeseries
 
 import java.nio.charset.Charset
-import com.twosigma.flint.rdd.Conversion
-import com.twosigma.flint.timeseries.row.Schema
-import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, SQLContext }
+import java.sql.Timestamp
+
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{ DataFrame, SQLContext }
 import org.apache.spark.sql.types._
 
 import scala.concurrent.duration._
 import java.util.concurrent.TimeUnit
-
-import org.apache.spark.sql.catalyst.expressions.GenericRow
 
 /**
  * Parse a CSV file into a [[TimeSeriesRDD]].
@@ -48,7 +46,7 @@ import org.apache.spark.sql.catalyst.expressions.GenericRow
  * }}}
  */
 object CSV {
-
+  // scalastyle:off parameter.number
   /**
    * Parse a CSV file into a [[TimeSeriesRDD]].
    *
@@ -112,7 +110,7 @@ object CSV {
     keepOriginTimeColumn: Boolean = false,
     codec: String = null
   ): TimeSeriesRDD = {
-
+    // scalastyle:on parameter.number
     val reader = sqlContext.read.format("com.databricks.spark.csv")
       .option("header", header.toString)
       .option("delimiter", delimiter.toString)
@@ -151,48 +149,33 @@ object CSV {
       s"The row schema does not have a column named $timeColumnName"
     )
 
-    val renamedTimeColumnName = s"${timeColumnName}_"
-    df = df.withColumnRenamed(timeColumnName, renamedTimeColumnName)
+    val timeColumnType = df.schema(timeColumnName).dataType
+    val timeColumnUnit = if (timeColumnType == DataTypes.TimestampType) { MILLISECONDS } else { timeUnit }
 
-    val timeColumnIndex = df.schema.fieldIndex(renamedTimeColumnName)
+    if (keepOriginTimeColumn) {
+      val renamedTimeColumnName = s"${timeColumnName}_"
+      df = df.withColumn(renamedTimeColumnName, df(timeColumnName))
+    }
 
-    // TODO: the logic below duplicates TimeSeriesRDD.fromDF(). We should add a time column to the
-    // dataframe (this can be done using UDF + DataFrame.withColumn), and call TimeSeriesRDD.fromDF(df).
-    val newSchema = Schema.prependTimeAndKey(df.schema, Seq.empty)
-    val convertToCatalyst = CatalystTypeConvertersWrapper.toCatalystRowConverter(newSchema)
-    val rdd = df.schema.fields(timeColumnIndex).dataType match {
-      case DataTypes.TimestampType =>
-        df.rdd.map { r =>
-          // `getTime` returns milliseconds since January 1, 1970, 00:00:00 GMT
-          val t = TimeUnit.NANOSECONDS.convert(r.getTimestamp(timeColumnIndex).getTime, TimeUnit.MILLISECONDS)
-          (t, convertToCatalyst(new GenericRow(t +: r.toSeq.toArray)))
-        }
+    val dfConverted = convertTimeToLong(df, timeColumnName)
+    TimeSeriesRDD.fromDF(dfConverted)(isSorted = sorted, timeColumnUnit, timeColumn = timeColumnName)
+  }
+
+  private[this] def convertTimeToLong(dataFrame: DataFrame, timeColumnName: String): DataFrame = {
+    val dataType = dataFrame.schema(timeColumnName).dataType
+
+    val intToLong = udf[Long, Int](_.toLong)
+    val timestampToLong = udf[Long, Timestamp](_.getTime)
+
+    dataType match {
       case DataTypes.LongType =>
-        // The time unit is specified by the parameter `timeUnit`
-        df.rdd.map { r =>
-          val t = TimeUnit.NANOSECONDS.convert(r.getLong(timeColumnIndex), timeUnit)
-          (t, convertToCatalyst(new GenericRow(t +: r.toSeq.toArray)))
-        }
+        dataFrame
       case DataTypes.IntegerType =>
-        df.rdd.map { r =>
-          // The time unit is specified by the parameter `timeUnit`
-          val t = TimeUnit.NANOSECONDS.convert(r.getInt(timeColumnIndex).toLong, timeUnit)
-          (t, convertToCatalyst(new GenericRow(t +: r.toSeq.toArray)))
-        }
-      case _ => sys.error("The CSV file doesn't seem to include a `time` column.")
-    }
+        dataFrame.withColumn(timeColumnName, intToLong(dataFrame(timeColumnName)))
+      case DataTypes.TimestampType =>
+        dataFrame.withColumn(timeColumnName, timestampToLong(dataFrame(timeColumnName)))
 
-    var timeSeriesRdd: TimeSeriesRDD = TimeSeriesRDD.fromInternalOrderedRDD(
-      if (sorted) {
-        Conversion.fromSortedRDD(rdd)
-      } else {
-        Conversion.fromUnsortedRDD(rdd)
-      },
-      newSchema
-    )
-    if (!keepOriginTimeColumn) {
-      timeSeriesRdd = timeSeriesRdd.deleteColumns(renamedTimeColumnName)
+      case _ => sys.error(s"Columns of ${dataType.typeName} type are not supported as a `time` column.")
     }
-    timeSeriesRdd
   }
 }
