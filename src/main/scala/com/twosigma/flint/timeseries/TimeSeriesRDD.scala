@@ -269,9 +269,16 @@ object TimeSeriesRDD {
     requireSchema(df.schema)
 
     val convertedDf = convertDfTimestamps(dataFrame, timeUnit)
-    val sortedDf = if (isSorted) convertedDf else convertedDf.sort(timeColumnName)
+    // we want to keep time column first, but no code should rely on that
+    val timeFirstDf = if (convertedDf.schema.fieldIndex(timeColumnName) == 0) {
+      convertedDf
+    } else {
+      val nonTimeColumns = convertedDf.schema.fieldNames.filterNot(_ == TimeSeriesRDD.timeColumnName)
+      convertedDf.select(timeColumnName, nonTimeColumns: _*)
+    }
 
-    fromDfWithPartInfo(sortedDf, None)
+    val sortedDf = if (isSorted) { timeFirstDf } else { timeFirstDf.sort(timeColumnName) }
+    fromSortedDfWithPartInfo(sortedDf, None)
   }
 
   @PythonApi
@@ -288,7 +295,7 @@ object TimeSeriesRDD {
     val convertedDf = convertDfTimestamps(df, timeUnit)
 
     val partitionInfo = PartitionInfo(rangeSplits, deps)
-    TimeSeriesRDD.fromDfWithPartInfo(convertedDf, Some(partitionInfo))
+    TimeSeriesRDD.fromSortedDfWithPartInfo(convertedDf, Some(partitionInfo))
   }
 
   /**
@@ -341,9 +348,7 @@ object TimeSeriesRDD {
     )
   }
 
-  /*
-      Two functions below are factory methods. Only they call TimeSeriesRDDImpl constructor directly.
-  */
+  // Two functions below are factory methods. Only they call TimeSeriesRDDImpl constructor directly.
 
   /**
    * Convert an [[OrderedRDD]] with internal rows to a [[TimeSeriesRDD]].
@@ -369,13 +374,13 @@ object TimeSeriesRDD {
   }
 
   /**
-   * Creates a [[TimeSeriesRDD]] from a [[DataFrame]] and partition info.
+   * Creates a [[TimeSeriesRDD]] from a sorted [[DataFrame]] and partition info.
    *
-   * @param dataFrame   A dataframe.
+   * @param dataFrame   A sorted dataframe.
    * @param partInfo    Partition info.
    * @return a [[TimeSeriesRDD]].
    */
-  private[flint] def fromDfWithPartInfo(
+  private[flint] def fromSortedDfWithPartInfo(
     dataFrame: DataFrame,
     partInfo: Option[PartitionInfo]
   ): TimeSeriesRDD = new TimeSeriesRDDImpl(dataFrame, partInfo)
@@ -1087,6 +1092,11 @@ private[timeseries] case class PartitionInfo(
   private[flint] val deps: Seq[Dependency[_]]
 ) {}
 
+/**
+ * The implementation uses two assumptions:
+ *     - dataFrame is sorted by time;
+ *     - if partInfo is defined - then it should correctly represent dataFrame partitioning.
+ */
 class TimeSeriesRDDImpl private[timeseries] (
   val dataFrame: DataFrame,
   val partInfo: Option[PartitionInfo]
@@ -1176,7 +1186,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     val remainingColumns = schema.fields.map(_.name).filterNot(name => columnSet.contains(name))
     val newDf = dataFrame.select(remainingColumns.head, remainingColumns.tail: _*)
 
-    TimeSeriesRDD.fromDfWithPartInfo(newDf, partInfo)
+    TimeSeriesRDD.fromSortedDfWithPartInfo(newDf, partInfo)
   }
 
   def renameColumns(fromTo: (String, String)*): TimeSeriesRDD = {
@@ -1438,7 +1448,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     } else {
       val keyRdd = dataFrame.select(TimeSeriesRDD.timeColumnName).map(_.getAs[Long](TimeSeriesRDD.timeColumnName))
 
-      OrderedRDD.fromRDD(pairRdd, KeyPartitioningType(isSorted = false, isNormalized = false), keyRdd)
+      OrderedRDD.fromRDD(pairRdd, KeyPartitioningType(isSorted = true, isNormalized = false), keyRdd)
     }
   }
 }
