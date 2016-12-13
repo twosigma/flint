@@ -1036,7 +1036,7 @@ trait TimeSeriesRDD extends Serializable {
   def lookForwardClock(shiftAmount: String): TimeSeriesRDD
 
   /**
-   * Casts numeric columns to a different numeric type (e.g. DoubleType to IntegerType).
+   * Casts columns to a different data type (e.g. from StringType to IntegerType).
    *
    * @param columns A sequence of tuples specifying a column name and a data type to cast the column to.
    * @return a [[TimeSeriesRDD]] with adjusted schema and values.
@@ -1047,7 +1047,7 @@ trait TimeSeriesRDD extends Serializable {
    * val resultTimeSeriesRdd = timeSeriesRdd.cast("price" -> IntegerType)
    * }}}
    */
-  def cast(columns: (String, NumericType)*): TimeSeriesRDD
+  def cast(columns: (String, DataType)*): TimeSeriesRDD
 
   /**
    * Changes the timestamp of each row by specifying a function that computes new timestamps.
@@ -1173,25 +1173,35 @@ class TimeSeriesRDDImpl private[timeseries] (
       (t: Long, r: InternalRow) => !fn(toExternalRow(r))
     }, schema)
 
-  def keepColumns(columns: String*): TimeSeriesRDD = {
-    // TODO: implement DF-based version
-    val (select, newSchema) = InternalRowUtils.select(schema, Schema.prependTimeIfMissing(columns))
-    TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.mapValues { (_, row) => select(row) }, newSchema)
+  def keepColumns(columns: String*): TimeSeriesRDD = withUnshuffledDataFrame {
+    val nonTimeColumns = columns.filterNot(_ == TimeSeriesRDD.timeColumnName)
+
+    dataFrame.select(TimeSeriesRDD.timeColumnName, nonTimeColumns: _*)
   }
 
-  def deleteColumns(columns: String*): TimeSeriesRDD = {
+  def deleteColumns(columns: String*): TimeSeriesRDD = withUnshuffledDataFrame {
     require(!columns.contains(TimeSeriesRDD.timeColumnName), "You can't delete the time column!")
 
     val columnSet = columns.toSet
     val remainingColumns = schema.fields.map(_.name).filterNot(name => columnSet.contains(name))
-    val newDf = dataFrame.select(remainingColumns.head, remainingColumns.tail: _*)
-
-    TimeSeriesRDD.fromSortedDfWithPartInfo(newDf, partInfo)
+    dataFrame.select(remainingColumns.head, remainingColumns.tail: _*)
   }
 
-  def renameColumns(fromTo: (String, String)*): TimeSeriesRDD = {
-    // TODO: implement DF-based renameColumns()
-    TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd, Schema.rename(this.schema, fromTo))
+  def renameColumns(fromTo: (String, String)*): TimeSeriesRDD = withUnshuffledDataFrame {
+    val fromToMap = fromTo.toMap
+    require(!fromToMap.contains(TimeSeriesRDD.timeColumnName), "You can't rename the time column!")
+    require(fromToMap.size == fromTo.size, "Repeating column names are not allowed!")
+
+    val newColumns = dataFrame.schema.fieldNames.map {
+      columnName =>
+        if (fromToMap.contains(columnName)) {
+          dataFrame.col(columnName).as(fromToMap(columnName))
+        } else {
+          dataFrame.col(columnName)
+        }
+    }
+
+    dataFrame.select(newColumns: _*)
   }
 
   def addColumns(columns: ((String, DataType), Row => Any)*): TimeSeriesRDD = {
@@ -1403,13 +1413,20 @@ class TimeSeriesRDDImpl private[timeseries] (
 
   def lookForwardClock(shiftAmount: String): TimeSeriesRDD = shift(Windows.futureAbsoluteTime(shiftAmount))
 
-  def cast(updates: (String, NumericType)*): TimeSeriesRDD = {
-    val (castRow, newSchema) = InternalRowUtils.cast(schema, updates: _*)
-    if (schema == newSchema) {
-      this
-    } else {
-      TimeSeriesRDD.fromInternalOrderedRDD(unsafeOrderedRdd.mapValues{ case (_, row) => castRow(row) }, newSchema)
+  def cast(updates: (String, DataType)*): TimeSeriesRDD = withUnshuffledDataFrame {
+    val columnsToCastMap = updates.toMap
+    require(!columnsToCastMap.contains(TimeSeriesRDD.timeColumnName), "You can't cast the time column!")
+
+    val newColumns = dataFrame.schema.fieldNames.map {
+      columnName =>
+        if (columnsToCastMap.contains(columnName)) {
+          dataFrame.col(columnName).cast(columnsToCastMap(columnName))
+        } else {
+          dataFrame.col(columnName)
+        }
     }
+
+    dataFrame.select(newColumns: _*)
   }
 
   @Experimental
@@ -1451,4 +1468,8 @@ class TimeSeriesRDDImpl private[timeseries] (
       OrderedRDD.fromRDD(pairRdd, KeyPartitioningType(isSorted = true, isNormalized = false), keyRdd)
     }
   }
+
+  // this method reuses partition information of the current TSRDD
+  @inline private def withUnshuffledDataFrame(dataFrame: => DataFrame): TimeSeriesRDD =
+    new TimeSeriesRDDImpl(dataFrame, partInfo)
 }

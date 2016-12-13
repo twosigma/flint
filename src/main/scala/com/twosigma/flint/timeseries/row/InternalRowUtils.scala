@@ -227,55 +227,6 @@ private[timeseries] object InternalRowUtils {
     (fn, schema)
   }
 
-  /**
-   * Build a new schema and a function to cast rows.
-   *
-   * @param schema current schema.
-   * @param updates A sequence of tuples specifying a column name and a data type to cast the column to.
-   * @return a function that should be applied to every row, and new schema.
-   */
-  def cast(schema: StructType, updates: (String, NumericType)*): (InternalRow => InternalRow, StructType) = {
-    val newSchema = Schema.cast(schema, updates: _*)
-    val nameToIndex = schema.fieldNames.zipWithIndex.toMap
-    val indexedUpdates = updates.map {
-      case (name, dataType) => (nameToIndex(name), dataType)
-    }
-
-    val fn = {
-      (row: InternalRow) =>
-        val rowUpdates = indexedUpdates.map {
-          case (index, newDataType) =>
-            val value = getNumericValue(row, index, schema.fields(index).dataType.asInstanceOf[NumericType])
-            val newValue = castNumericValue(value, newDataType)
-            (index, newValue)
-        }
-
-        update(row, schema, rowUpdates: _*)
-    }
-
-    (fn, newSchema)
-  }
-
-  @inline
-  private final def castNumericValue(value: Number, newType: NumericType): Number = newType match {
-    case ByteType => value.byteValue()
-    case DoubleType => value.doubleValue()
-    case FloatType => value.floatValue()
-    case IntegerType => value.intValue()
-    case LongType => value.longValue()
-    case ShortType => value.shortValue()
-  }
-
-  @inline
-  private final def getNumericValue(row: InternalRow, ordinal: Int, dataType: NumericType): Number = dataType match {
-    case ByteType => row.getByte(ordinal)
-    case DoubleType => row.getDouble(ordinal)
-    case FloatType => row.getFloat(ordinal)
-    case IntegerType => row.getInt(ordinal)
-    case LongType => row.getLong(ordinal)
-    case ShortType => row.getShort(ordinal)
-  }
-
   // Update values with given indices, and returns a new object
   def update(iRow: InternalRow, schema: StructType, updates: (Int, Any)*): InternalRow = {
     val values = Array(iRow.toSeq(schema): _*)
