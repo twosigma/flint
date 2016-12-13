@@ -443,8 +443,25 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
 
     var result = volTSRdd.keepColumns("id")
     assert(result.collect().deep == expectedData.map(_._2).deep)
-    result = volTSRdd.keepColumns("time", "id")
+
+    // should select the time column first
+    result = volTSRdd.keepColumns("id", "time")
     assert(result.collect().deep == expectedData.map(_._2).deep)
+  }
+
+  it should "`renameColumns` correctly" in {
+    intercept[IllegalArgumentException] {
+      volTSRdd.renameColumns("time" -> "time2").count()
+    }
+
+    intercept[IllegalArgumentException] {
+      volTSRdd.renameColumns("id" -> "newid", "id" -> "anotherid").count()
+    }
+
+    val renamedTSRdd = volTSRdd.renameColumns("id" -> "id2")
+    val expectedSchema = Schema("time" -> LongType, "id2" -> IntegerType, "volume" -> LongType)
+
+    assert(renamedTSRdd.schema == expectedSchema)
   }
 
   it should "`deleteColumns` correctly" in {
@@ -494,7 +511,9 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "cast columns correctly" in {
-    val resultTSRdd = forecastTSRdd.cast("id" -> ShortType, "forecast" -> IntegerType)
+
+    // casting columns shouldn't change the original order
+    val resultTSRdd = forecastTSRdd.cast("forecast" -> IntegerType, "id" -> ShortType)
     assertResult(
       Schema.of("time" -> LongType, "id" -> ShortType, "forecast" -> IntegerType),
       "Verify schema"
@@ -506,9 +525,9 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
     assertResult(-1, "Casting -1.5 to integer")(result(2).get(2))
   }
 
-  it should "return the same RDD if there's nothing to cast" in {
+  it should "return the same schema if there's nothing to cast" in {
     val resultTSRdd = forecastTSRdd.cast("id" -> IntegerType)
-    assert(forecastTSRdd eq resultTSRdd)
+    assert(forecastTSRdd.schema == resultTSRdd.schema)
   }
 
   it should "set time and return an ordered rdd" in {
