@@ -35,8 +35,8 @@ object TestHelper {
     row.getInt(1) > 5
   }
 
-  def copy(tuple: (Long, InternalRow)): (Long, InternalRow) = {
-    (tuple._1, tuple._2.copy)
+  def copy(ts: Long, iRow: InternalRow): InternalRow = {
+    iRow.copy
   }
 
   def shift(ts: Long): Long = ts - 100
@@ -140,22 +140,23 @@ class UnsafeOrderedRDDSpec extends FlatSpec with SharedSparkContext {
     SpecUtils.withResource("/timeseries/csv/Price.csv") { source =>
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source, sorted = true)
       val impl = timeseriesRdd.asInstanceOf[TimeSeriesRDDImpl]
+      assert(impl.orderedRdd.count() == impl.unsafeOrderedRdd.count())
 
       // explicitly making a copy to catch issues even if orderedRdd is broken
-      val safeCopy = impl.orderedRdd.mapOrdered(TestHelper.copy)
+      val safeCopy = impl.orderedRdd.mapValues(TestHelper.copy)
 
       val unsafeFiltered = impl.unsafeOrderedRdd.filterOrdered(TestHelper.filter)
       val safeFiltered = safeCopy.filterOrdered(TestHelper.filter)
       // collect() can't be used with UnsafeRow
-      assert(unsafeFiltered.mapOrdered(TestHelper.copy).collect().deep == safeFiltered.collect().deep)
+      assert(unsafeFiltered.mapValues(TestHelper.copy).collect().deep == safeFiltered.collect().deep)
 
       val unsafeShifted = impl.unsafeOrderedRdd.shift(TestHelper.shift)
       val safeShifted = safeCopy.shift(TestHelper.shift)
-      assert(unsafeShifted.mapOrdered(TestHelper.copy).collect().deep == safeShifted.collect().deep)
+      assert(unsafeShifted.mapValues(TestHelper.copy).collect().deep == safeShifted.collect().deep)
 
       val unsafeMappeed = impl.unsafeOrderedRdd.mapOrdered(TestHelper.map)
       val safeMappeed = safeCopy.mapOrdered(TestHelper.map)
-      assert(unsafeMappeed.mapOrdered(TestHelper.copy).collect().deep == safeMappeed.collect().deep)
+      assert(unsafeMappeed.mapValues(TestHelper.copy).collect().deep == safeMappeed.collect().deep)
     }
   }
 
