@@ -26,8 +26,8 @@ import com.twosigma.flint.timeseries.time.TimeFormat
 import com.twosigma.flint.timeseries.window.{ ShiftTimeWindow, TimeWindow, Window }
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{ Dependency, OneToOneDependency, SparkContext }
-import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DFConverter, DataFrame, Row, SQLContext }
+import org.apache.spark.{ Dependency, SparkContext }
+import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DataFrame, Row, SQLContext }
 import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ERow }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.functions._
@@ -87,28 +87,6 @@ object TimeSeriesRDD {
         val updatedRow = new GenericRow(values)
 
         (t, toInternalRow(updatedRow))
-    }
-  }
-
-  /**
-   * Similar to getRowConverter(), but used to convert a [[DataFrame]] into a [[TimeSeriesRDD]]
-   *
-   * @param schema          The schema of the input rows.
-   * @param requireCopy     Whether to require new row objects or reuse the existing ones.
-   * @return                a function to convert [[InternalRow]] into a tuple.
-   * @note                  if `requireNewCopy` is true then the function makes an extra copy of the row value.
-   *                        Otherwise it makes no copies of the row.
-   */
-  private[timeseries] def getInternalRowConverter(
-    schema: StructType,
-    requireCopy: Boolean
-  ): InternalRow => (Long, InternalRow) = {
-    val timeColumnIndex = schema.fieldIndex(timeColumnName)
-
-    if (requireCopy) {
-      (internalRow: InternalRow) => (internalRow.getLong(timeColumnIndex), internalRow.copy())
-    } else {
-      (internalRow: InternalRow) => (internalRow.getLong(timeColumnIndex), internalRow)
     }
   }
 
@@ -361,16 +339,9 @@ object TimeSeriesRDD {
     orderedRdd: OrderedRDD[Long, InternalRow],
     schema: StructType
   ): TimeSeriesRDD = {
-    val sc = orderedRdd.sparkContext
-    val sqlContext = SQLContext.getOrCreate(sc)
-    val df = DFConverter.toDataFrame(sqlContext, schema, orderedRdd)
+    val dataStore = TimeSeriesStore(orderedRdd, schema)
 
-    require(orderedRdd.partitions(0).index == 0, "Partition index should start with zero.")
-    // the rdd parameter is not used
-    val deps = new OneToOneDependency(null)
-    val partInfo = PartitionInfo(orderedRdd.rangeSplits, Seq(deps))
-
-    new TimeSeriesRDDImpl(df, Option(partInfo))
+    new TimeSeriesRDDImpl(dataStore)
   }
 
   /**
@@ -383,8 +354,11 @@ object TimeSeriesRDD {
   private[flint] def fromSortedDfWithPartInfo(
     dataFrame: DataFrame,
     partInfo: Option[PartitionInfo]
-  ): TimeSeriesRDD = new TimeSeriesRDDImpl(dataFrame, partInfo)
+  ): TimeSeriesRDD = {
+    val dataStore = TimeSeriesStore(dataFrame, partInfo)
 
+    new TimeSeriesRDDImpl(dataStore)
+  }
   // A function taking any row as input and just return `Seq[Any]()`.
   private[flint] val emptyKeyFn: InternalRow => Seq[Any] = {
     _: InternalRow => Seq[Any]()
@@ -1087,29 +1061,23 @@ trait TimeSeriesRDD extends Serializable {
   def shift(window: ShiftTimeWindow): TimeSeriesRDD
 }
 
-private[timeseries] case class PartitionInfo(
-  private[flint] val splits: Seq[RangeSplit[Long]],
-  private[flint] val deps: Seq[Dependency[_]]
-) {}
-
 /**
  * The implementation uses two assumptions:
  *     - dataFrame is sorted by time;
  *     - if partInfo is defined - then it should correctly represent dataFrame partitioning.
  */
 class TimeSeriesRDDImpl private[timeseries] (
-  val dataFrame: DataFrame,
-  val partInfo: Option[PartitionInfo]
+  val dataStore: TimeSeriesStore
 ) extends TimeSeriesRDD {
 
-  override val schema: StructType = dataFrame.schema
+  override val schema: StructType = dataStore.schema
 
-  private[flint] override lazy val orderedRdd = toOrderedRdd(requireCopy = true)
+  private[flint] override lazy val orderedRdd = dataStore.orderedRdd
 
   // you can't store references to row objects from `unsafeOrderedRdd`, or use rdd.collect() without making
   // safe copies of rows. The current implementation might use the same memory buffer to process all rows
   // per partition, so the referenced bytes might be overwritten by the next row.
-  private[timeseries] lazy val unsafeOrderedRdd = toOrderedRdd(requireCopy = false)
+  private[timeseries] lazy val unsafeOrderedRdd = dataStore.unsafeOrderedRdd
 
   private[flint] def safeGetAsAny(cols: Seq[String]): InternalRow => Seq[Any] =
     TimeSeriesRDD.safeGetAsAny(schema, cols)
@@ -1131,30 +1099,30 @@ class TimeSeriesRDDImpl private[timeseries] (
    */
   private val toExternalRow: InternalRow => ERow = CatalystTypeConvertersWrapper.toScalaRowConverter(schema)
 
-  override val rdd: RDD[Row] = dataFrame.rdd
+  override val rdd: RDD[Row] = dataStore.rdd
 
-  override val toDF: DataFrame = dataFrame
+  override val toDF: DataFrame = dataStore.dataFrame
 
-  def count(): Long = dataFrame.count()
+  def count(): Long = dataStore.dataFrame.count()
 
-  def first(): Row = dataFrame.first()
+  def first(): Row = dataStore.dataFrame.first()
 
-  def collect(): Array[Row] = dataFrame.collect()
+  def collect(): Array[Row] = dataStore.dataFrame.collect()
 
   def cache(): TimeSeriesRDD = {
-    dataFrame.cache(); this
+    dataStore.cache(); this
   }
 
   def persist(): TimeSeriesRDD = {
-    dataFrame.persist(); this
+    dataStore.persist(); this
   }
 
   def persist(newLevel: StorageLevel): TimeSeriesRDD = {
-    dataFrame.persist(newLevel); this
+    dataStore.persist(newLevel); this
   }
 
   def unpersist(blocking: Boolean = true): TimeSeriesRDD = {
-    dataFrame.unpersist(blocking); this
+    dataStore.unpersist(blocking); this
   }
 
   def repartition(numPartitions: Int): TimeSeriesRDD =
@@ -1176,7 +1144,7 @@ class TimeSeriesRDDImpl private[timeseries] (
   def keepColumns(columns: String*): TimeSeriesRDD = withUnshuffledDataFrame {
     val nonTimeColumns = columns.filterNot(_ == TimeSeriesRDD.timeColumnName)
 
-    dataFrame.select(TimeSeriesRDD.timeColumnName, nonTimeColumns: _*)
+    dataStore.dataFrame.select(TimeSeriesRDD.timeColumnName, nonTimeColumns: _*)
   }
 
   def deleteColumns(columns: String*): TimeSeriesRDD = withUnshuffledDataFrame {
@@ -1184,7 +1152,7 @@ class TimeSeriesRDDImpl private[timeseries] (
 
     val columnSet = columns.toSet
     val remainingColumns = schema.fields.map(_.name).filterNot(name => columnSet.contains(name))
-    dataFrame.select(remainingColumns.head, remainingColumns.tail: _*)
+    dataStore.dataFrame.select(remainingColumns.head, remainingColumns.tail: _*)
   }
 
   def renameColumns(fromTo: (String, String)*): TimeSeriesRDD = withUnshuffledDataFrame {
@@ -1192,16 +1160,16 @@ class TimeSeriesRDDImpl private[timeseries] (
     require(!fromToMap.contains(TimeSeriesRDD.timeColumnName), "You can't rename the time column!")
     require(fromToMap.size == fromTo.size, "Repeating column names are not allowed!")
 
-    val newColumns = dataFrame.schema.fieldNames.map {
+    val newColumns = dataStore.dataFrame.schema.fieldNames.map {
       columnName =>
         if (fromToMap.contains(columnName)) {
-          dataFrame.col(columnName).as(fromToMap(columnName))
+          dataStore.dataFrame.col(columnName).as(fromToMap(columnName))
         } else {
-          dataFrame.col(columnName)
+          dataStore.dataFrame.col(columnName)
         }
     }
 
-    dataFrame.select(newColumns: _*)
+    dataStore.dataFrame.select(newColumns: _*)
   }
 
   def addColumns(columns: ((String, DataType), Row => Any)*): TimeSeriesRDD = {
@@ -1417,16 +1385,16 @@ class TimeSeriesRDDImpl private[timeseries] (
     val columnsToCastMap = updates.toMap
     require(!columnsToCastMap.contains(TimeSeriesRDD.timeColumnName), "You can't cast the time column!")
 
-    val newColumns = dataFrame.schema.fieldNames.map {
+    val newColumns = dataStore.dataFrame.schema.fieldNames.map {
       columnName =>
         if (columnsToCastMap.contains(columnName)) {
-          dataFrame.col(columnName).cast(columnsToCastMap(columnName))
+          dataStore.dataFrame.col(columnName).cast(columnsToCastMap(columnName))
         } else {
-          dataFrame.col(columnName)
+          dataStore.dataFrame.col(columnName)
         }
     }
 
-    dataFrame.select(newColumns: _*)
+    dataStore.dataFrame.select(newColumns: _*)
   }
 
   @Experimental
@@ -1453,23 +1421,9 @@ class TimeSeriesRDDImpl private[timeseries] (
     TimeSeriesRDD.fromInternalOrderedRDD(newRdd, schema)
   }
 
-  private[this] def toOrderedRdd(requireCopy: Boolean): OrderedRDD[Long, InternalRow] = {
-    val internalRows = dataFrame.queryExecution.toRdd
-    val pairRdd = internalRows.mapPartitions { rows =>
-      val converter = TimeSeriesRDD.getInternalRowConverter(schema, requireCopy)
-      rows.map(converter)
-    }
-
-    if (partInfo.isDefined) {
-      OrderedRDD.fromRDD(pairRdd, partInfo.get.deps, partInfo.get.splits)
-    } else {
-      val keyRdd = dataFrame.select(TimeSeriesRDD.timeColumnName).map(_.getAs[Long](TimeSeriesRDD.timeColumnName))
-
-      OrderedRDD.fromRDD(pairRdd, KeyPartitioningType(isSorted = true, isNormalized = false), keyRdd)
-    }
-  }
-
   // this method reuses partition information of the current TSRDD
-  @inline private def withUnshuffledDataFrame(dataFrame: => DataFrame): TimeSeriesRDD =
-    new TimeSeriesRDDImpl(dataFrame, partInfo)
+  @inline private def withUnshuffledDataFrame(dataFrame: => DataFrame): TimeSeriesRDD = {
+    val newDataStore = TimeSeriesStore(dataFrame, dataStore.partInfo)
+    new TimeSeriesRDDImpl(newDataStore)
+  }
 }
