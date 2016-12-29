@@ -110,6 +110,12 @@ def windows(flint):
     return windows
 
 
+@pytest.fixture(scope='module')
+def clocks(flint):
+    from ts.flint import clocks
+    return clocks
+
+
 @pytest.yield_fixture(scope='module')
 def sc(launcher, pyspark):
     with test_support.suppress_instrumentation:
@@ -879,6 +885,13 @@ def test_read_dataframe_begin_end(sqlContext, flintContext, tests_utils):
     df2 = df.filter(df.time >= begin_nanos).filter(df.time < end_nanos)
 
     assert(df.count() == df2.count())
+
+
+def test_uniform_clocks(sqlContext, clocks):
+    df = clocks.uniform(sqlContext, '1d', '0s', '2016-11-07', '2016-11-17')
+    assert(df.count() == 10)
+    # the last timestamp should be 16 Nov 2016 00:00:00 GMT
+    assert(df.collect()[-1]['time'] == 1479254400000000000)
 
 
 def test_na_preserve_order(sqlContext, flintContext):
