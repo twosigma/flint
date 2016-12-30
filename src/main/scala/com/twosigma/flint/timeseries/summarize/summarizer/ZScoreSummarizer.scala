@@ -18,13 +18,15 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ ZScoreState, ZScoreSummarizer => ZSSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ SummarizerFactory, Summarizer }
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 case class ZScoreSummarizerFactory(column: String, excludeCurrentObservation: Boolean) extends SummarizerFactory {
   override def apply(inputSchema: StructType): ZScoreSummarizer =
     ZScoreSummarizer(inputSchema, prefixOpt, column, excludeCurrentObservation)
+
+  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(column))
 }
 
 case class ZScoreSummarizer(

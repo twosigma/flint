@@ -17,15 +17,18 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.SummarizerFactory
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, SummarizerFactory }
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types.{ DoubleType, StructType }
+
 import scala.math.sqrt
 
 case class StandardDeviationSummarizerFactory(column: String, applyBesselCorrection: Boolean = true)
   extends SummarizerFactory {
   override def apply(inputSchema: StructType): StandardDeviationSummarizer =
     new StandardDeviationSummarizer(inputSchema, prefixOpt, column, applyBesselCorrection)
+
+  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(column))
 }
 
 class StandardDeviationSummarizer(

@@ -17,13 +17,15 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.SummarizerFactory
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, SummarizerFactory }
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types.{ DoubleType, StructType }
 
 case class CovarianceSummarizerFactory(columnX: String, columnY: String) extends SummarizerFactory {
   override def apply(inputSchema: StructType): CovarianceSummarizer =
     new CovarianceSummarizer(inputSchema, prefixOpt, columnX, columnY)
+
+  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(columnX, columnY))
 }
 
 class CovarianceSummarizer(

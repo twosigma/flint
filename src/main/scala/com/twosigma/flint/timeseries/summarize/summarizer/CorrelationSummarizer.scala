@@ -18,13 +18,15 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ CorrelationOutput, CorrelationState, MultiCorrelationOutput, MultiCorrelationState, CorrelationSummarizer => CorrelationSum, MultiCorrelationSummarizer => MultiCorrelationSum }
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ SummarizerFactory, Summarizer, anyToDouble }
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, anyToDouble }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 case class CorrelationSummarizerFactory(columnX: String, columnY: String) extends SummarizerFactory {
   override def apply(inputSchema: StructType): CorrelationSummarizer =
     new CorrelationSummarizer(inputSchema, prefixOpt, columnX, columnY)
+
+  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(columnX, columnY))
 }
 
 abstract class AbstractCorrelationSummarizer(
@@ -91,6 +93,8 @@ case class MultiCorrelationSummarizerFactory(
       val pairIndexes = for (i <- columns.indices; j <- columns.length until cols) yield (i, j)
       MultiCorrelationSummarizer(inputSchema, prefixOpt, columns ++ otherColumns, pairIndexes)
   }
+
+  override def requiredColumns(): ColumnList = ColumnList.Sequence(columns ++ others.getOrElse(Array[String]()))
 }
 
 /**
