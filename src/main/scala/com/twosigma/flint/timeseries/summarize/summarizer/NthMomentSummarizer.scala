@@ -18,13 +18,15 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ NthMomentState, NthMomentSummarizer => NMSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ SummarizerFactory, Summarizer, anyToDouble }
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, anyToDouble }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 case class NthMomentSummarizerFactory(column: String, moment: Int) extends SummarizerFactory {
   override def apply(inputSchema: StructType): NthMomentSummarizer =
     NthMomentSummarizer(inputSchema, prefixOpt, column, moment)
+
+  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(column))
 }
 
 case class NthMomentSummarizer(

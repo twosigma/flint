@@ -17,12 +17,14 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.SummarizerFactory
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, SummarizerFactory }
 import org.apache.spark.sql.types._
 
 case class MeanSummarizerFactory(column: String) extends SummarizerFactory {
   override def apply(inputSchema: StructType): MeanSummarizer =
     new MeanSummarizer(inputSchema, prefixOpt, column)
+
+  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(column))
 }
 
 class MeanSummarizer(

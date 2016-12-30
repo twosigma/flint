@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import com.twosigma.flint.annotation.PythonApi
 import com.twosigma.flint.rdd.{ Conversion, KeyPartitioningType, OrderedRDD, RangeSplit }
 import com.twosigma.flint.timeseries.row.{ InternalRowUtils, Schema }
-import com.twosigma.flint.timeseries.summarize.{ OverlappableSummarizer, OverlappableSummarizerFactory, SummarizerFactory }
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, OverlappableSummarizer, OverlappableSummarizerFactory, SummarizerFactory }
 import com.twosigma.flint.timeseries.time.TimeFormat
 import com.twosigma.flint.timeseries.window.{ ShiftTimeWindow, TimeWindow, Window }
 import org.apache.spark.annotation.Experimental
@@ -375,6 +375,33 @@ object TimeSeriesRDD {
     } else {
       getAsAny(schema, cols)
     }
+
+  private[timeseries] def prependTimeAndKey(t: Long, inputRow: InternalRow, inputSchema: StructType,
+    outputRow: InternalRow, outputSchema: StructType, key: Seq[String]): InternalRow =
+    InternalRowUtils.prepend(outputRow, outputSchema, t +: key.map {
+      fieldName =>
+        val fieldIndex = inputSchema.fieldIndex(fieldName)
+        inputRow.get(fieldIndex, inputSchema.fields(fieldIndex).dataType)
+    }: _*)
+
+  // this function is used to select only the columns that are required by an operation
+  private[timeseries] def pruneColumns(
+    input: TimeSeriesRDD,
+    requiredColumns: ColumnList,
+    keys: Seq[String]
+  ): TimeSeriesRDD = requiredColumns match {
+    case ColumnList.All => input
+    case ColumnList.Sequence(columnSeq) =>
+      val columns = input.schema.fieldNames.toSet
+      val neededColumns = Seq(TimeSeriesRDD.timeColumnName) ++ columnSeq ++ keys
+      neededColumns.foreach(column => require(columns.contains(column), s"Column $column doesn't exist."))
+
+      if (neededColumns.toSet.size == input.schema.size) {
+        input
+      } else {
+        input.keepColumns(neededColumns.distinct: _*)
+      }
+  }
 }
 
 trait TimeSeriesRDD extends Serializable {
@@ -1082,14 +1109,6 @@ class TimeSeriesRDDImpl private[timeseries] (
   private[flint] def safeGetAsAny(cols: Seq[String]): InternalRow => Seq[Any] =
     TimeSeriesRDD.safeGetAsAny(schema, cols)
 
-  private def prependTimeAndKey(t: Long, inputRow: InternalRow, outputRow: InternalRow,
-    outputSchema: StructType, key: Seq[String]): InternalRow =
-    InternalRowUtils.prepend(outputRow, outputSchema, t +: key.map {
-      fieldName =>
-        val fieldIndex = schema.fieldIndex(fieldName)
-        inputRow.get(fieldIndex, schema.fields(fieldIndex).dataType)
-    }: _*)
-
   /**
    * Values converter for this rdd.
    *
@@ -1289,10 +1308,11 @@ class TimeSeriesRDDImpl private[timeseries] (
   }
 
   def summarizeCycles(summarizer: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {
-    val sum = summarizer(schema)
-    val groupByRdd = orderedRdd.groupByKey(safeGetAsAny(key))
+    val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns(), key)
+    val sum = summarizer(pruned.schema)
+    val groupByRdd = pruned.orderedRdd.groupByKey(safeGetAsAny(key))
 
-    val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(schema(_)))
+    val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)))
 
     val newRdd: OrderedRDD[Long, InternalRow] = groupByRdd.collectOrdered{
       case (t: Long, rows: Array[InternalRow]) if !rows.isEmpty =>
@@ -1300,7 +1320,7 @@ class TimeSeriesRDDImpl private[timeseries] (
           case (state, r) => sum.add(state, r)
         }
         val row = sum.render(result)
-        prependTimeAndKey(t, rows.head, row, sum.outputSchema, key)
+        TimeSeriesRDD.prependTimeAndKey(t, rows.head, pruned.schema, row, sum.outputSchema, key)
     }
     TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
   }
@@ -1311,12 +1331,13 @@ class TimeSeriesRDDImpl private[timeseries] (
     key: Seq[String] = Seq.empty,
     beginInclusive: Boolean = true
   ): TimeSeriesRDD = {
-    val sum = summarizer(schema)
-    val intervalized = orderedRdd.intervalize(clock.orderedRdd, beginInclusive).mapValues {
+    val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns(), key)
+    val sum = summarizer(pruned.schema)
+    val intervalized = pruned.orderedRdd.intervalize(clock.orderedRdd, beginInclusive).mapValues {
       case (_, v) => v._2
     }
     val grouped = intervalized.groupByKey(safeGetAsAny(key))
-    val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(schema(_)))
+    val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)))
 
     TimeSeriesRDD.fromInternalOrderedRDD(
       grouped.collectOrdered {
@@ -1326,7 +1347,7 @@ class TimeSeriesRDDImpl private[timeseries] (
             case (state, row) => sum.add(state, row)
           }
           val iRow = sum.render(result)
-          prependTimeAndKey(t, rows.head, iRow, sum.outputSchema, key)
+          TimeSeriesRDD.prependTimeAndKey(t, rows.head, pruned.schema, iRow, sum.outputSchema, key)
       },
       newSchema
     )
@@ -1352,19 +1373,22 @@ class TimeSeriesRDDImpl private[timeseries] (
   }
 
   def summarize(summarizerFactory: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {
-    val summarizer = summarizerFactory(schema)
+    val pruned = TimeSeriesRDD.pruneColumns(this, summarizerFactory.requiredColumns(), key)
+    val summarizer = summarizerFactory(pruned.schema)
+    val keyGetter = TimeSeriesRDD.safeGetAsAny(pruned.schema, key)
+
     val summarized = summarizerFactory match {
       case factory: OverlappableSummarizerFactory =>
-        orderedRdd.summarize(factory(schema).asInstanceOf[OverlappableSummarizer], factory.window.of, safeGetAsAny(key))
+        pruned.orderedRdd.summarize(summarizer.asInstanceOf[OverlappableSummarizer], factory.window.of, keyGetter)
       case _ =>
-        orderedRdd.summarize(summarizer, safeGetAsAny(key))
+        pruned.orderedRdd.summarize(summarizer, keyGetter)
     }
     val rows = summarized.map {
       case (keyValues, row) => InternalRowUtils.prepend(row, summarizer.outputSchema, (0L +: keyValues): _*)
     }
 
-    val newSchema = Schema.prependTimeAndKey(summarizer.outputSchema, key.map(schema(_)))
-    TimeSeriesRDD.fromSeq(orderedRdd.sc, rows.toSeq, newSchema, true, 1)
+    val newSchema = Schema.prependTimeAndKey(summarizer.outputSchema, key.map(pruned.schema(_)))
+    TimeSeriesRDD.fromSeq(pruned.orderedRdd.sc, rows.toSeq, newSchema, true, 1)
   }
 
   def addSummaryColumns(summarizer: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {

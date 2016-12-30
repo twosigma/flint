@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.summarize.{ OverlappableSummarizerFactory, Summarizer, SummarizerFactory }
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, OverlappableSummarizerFactory, Summarizer, SummarizerFactory }
 import com.twosigma.flint.timeseries.row.{ DuplicateColumnsException, Schema }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
@@ -81,4 +81,7 @@ case class CompositeSummarizerFactory(factory1: SummarizerFactory, factory2: Sum
         )
     }
   }
+
+  override def requiredColumns(): ColumnList =
+    ColumnList.union(factory1.requiredColumns(), factory2.requiredColumns())
 }

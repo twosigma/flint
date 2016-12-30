@@ -18,12 +18,14 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.ExtremesSummarizer
 import com.twosigma.flint.timeseries.summarize.summarizer.ExtremeSummarizerType.ExtremeType
-import com.twosigma.flint.timeseries.summarize.{ Summarizer, SummarizerFactory, toClassTag, toOrdering }
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, toClassTag, toOrdering }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
+
 import scala.collection.mutable.PriorityQueue
 import com.twosigma.flint.timeseries.row.Schema
-import scala.reflect.{ ClassTag }
+
+import scala.reflect.ClassTag
 
 object ExtremeSummarizerType extends Enumeration {
   type ExtremeType = Value
@@ -41,6 +43,8 @@ case class ExtremeSummarizerFactory(val column: String, val extremeType: Extreme
     }
     ExtremeSummarizer(inputSchema, prefixOpt, column, ctag, order, extremeType.toString())
   }
+
+  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(column))
 }
 
 case class ExtremeSummarizer[E](

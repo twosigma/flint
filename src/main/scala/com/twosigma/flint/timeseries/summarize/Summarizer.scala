@@ -78,6 +78,14 @@ trait SummarizerFactory {
    * @return a summarizer with the given input schema.
    */
   def apply(inputSchema: StructType): Summarizer
+
+  /**
+   * Return a [[ColumnList]] that can be used to optimize computations.
+   *
+   * @return [[ColumnList.All]] if the summarizer needs all columns,
+   *         or [[ColumnList.Sequence]] of column names used by the summarizer.
+   */
+  def requiredColumns(): ColumnList
 }
 
 trait Summarizer extends OSummarizer[InternalRow, Any, InternalRow] with InputOutputSchema {

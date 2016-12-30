@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ OLSRegressionOutput, OLSRegressionState, RegressionRow, OLSRegressionSummarizer => RegressionSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ SummarizerFactory, Summarizer, anyToDouble }
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, anyToDouble }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.GenericArrayData
 import org.apache.spark.sql.types._
@@ -66,6 +66,11 @@ case class OLSRegressionSummarizerFactory(
       Option(weightColumn),
       shouldIntercept
     )
+
+  override def requiredColumns(): ColumnList = {
+    val weightSeq = if (Option(weightColumn).isEmpty) Seq() else Seq(weightColumn)
+    ColumnList.Sequence(Seq(yColumn) ++ xColumns ++ weightSeq)
+  }
 }
 
 case class OLSRegressionSummarizer(

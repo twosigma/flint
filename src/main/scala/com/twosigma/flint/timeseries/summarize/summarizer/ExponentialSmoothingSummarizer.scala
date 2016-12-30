@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.summarize.{ Summarizer, SummarizerFactory, anyToDouble }
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, anyToDouble }
 import org.apache.spark.sql.types._
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ ExponentialSmoothingOutput, ExponentialSmoothingState, SmoothingRow, ExponentialSmoothingSummarizer => ESSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
@@ -49,6 +49,8 @@ case class ExponentialSmoothingSummarizerFactory(
       primingPeriods,
       timestampsToPeriods
     )
+
+  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(xColumn, timeColumn))
 }
 
 case class ExponentialSmoothingSummarizer(

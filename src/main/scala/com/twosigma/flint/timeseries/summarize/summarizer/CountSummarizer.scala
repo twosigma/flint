@@ -18,12 +18,14 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ LeftSubtractableSummarizer, SummarizerFactory }
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, LeftSubtractableSummarizer, SummarizerFactory }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 case class CountSummarizerFactory() extends SummarizerFactory {
   override def apply(inputSchema: StructType): CountSummarizer = CountSummarizer(inputSchema, prefixOpt)
+
+  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq())
 }
 
 case class CountSummarizer(
