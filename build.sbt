@@ -86,7 +86,7 @@ lazy val versions = new {
   val commons_csv = "1.2"
   val joda_time = "2.9.4"
   val httpclient = "4.3.2" // Note that newer versions need to be configured differently
-  val spark = "1.6.1"
+  val spark = "1.6.3"
   val scalatest = "2.2.4"
   val scala_logging = "2.1.2"
 }
