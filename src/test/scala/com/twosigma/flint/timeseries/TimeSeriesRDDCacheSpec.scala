@@ -38,12 +38,17 @@ class TimeSeriesRDDCacheSpec extends FlatSpec with SharedSparkContext with Timeo
           row.getAs[Double]("price") + 1.0
       })
 
+      // run a dummy addColumns() to initialize TSRDD's internal state
+      slowTimeSeriesRdd.addColumns("foo_column" -> DoubleType -> { _ => 1.0 })
+
       slowTimeSeriesRdd.cache()
       assert(slowTimeSeriesRdd.count() == 12)
 
-      // this test succeeds only if the rdd is correctly cached
+      // this test succeeds only if all representations are correctly cached
       failAfter(Span(1, Second)) {
-        assert(slowTimeSeriesRdd.collect().length == 12)
+        assert(slowTimeSeriesRdd.toDF.collect().length == 12)
+        assert(slowTimeSeriesRdd.orderedRdd.count() == 12)
+        assert(slowTimeSeriesRdd.asInstanceOf[TimeSeriesRDDImpl].unsafeOrderedRdd.count == 12)
       }
     }
   }

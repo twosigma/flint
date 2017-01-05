@@ -389,18 +389,18 @@ trait TimeSeriesRDD extends Serializable {
   /**
    * An [[org.apache.spark.rdd.RDD RDD]] representation of this [[TimeSeriesRDD]].
    */
-  val rdd: RDD[Row]
+  def rdd: RDD[Row]
 
   /**
    * An [[com.twosigma.flint.rdd.OrderedRDD]] representation of this [[TimeSeriesRDD]]. Used to efficiently
    * perform join-like operations.
    */
-  private[flint] val orderedRdd: OrderedRDD[Long, InternalRow]
+  private[flint] def orderedRdd: OrderedRDD[Long, InternalRow]
 
   /**
    * Convert the this [[TimeSeriesRDD]] to a [[org.apache.spark.sql.DataFrame]].
    */
-  val toDF: DataFrame
+  def toDF: DataFrame
 
   /**
    * @return the number of rows.
@@ -1072,12 +1072,12 @@ class TimeSeriesRDDImpl private[timeseries] (
 
   override val schema: StructType = dataStore.schema
 
-  private[flint] override lazy val orderedRdd = dataStore.orderedRdd
+  private[flint] override def orderedRdd = dataStore.orderedRdd
 
   // you can't store references to row objects from `unsafeOrderedRdd`, or use rdd.collect() without making
   // safe copies of rows. The current implementation might use the same memory buffer to process all rows
   // per partition, so the referenced bytes might be overwritten by the next row.
-  private[timeseries] lazy val unsafeOrderedRdd = dataStore.unsafeOrderedRdd
+  private[timeseries] def unsafeOrderedRdd = dataStore.unsafeOrderedRdd
 
   private[flint] def safeGetAsAny(cols: Seq[String]): InternalRow => Seq[Any] =
     TimeSeriesRDD.safeGetAsAny(schema, cols)
@@ -1099,9 +1099,9 @@ class TimeSeriesRDDImpl private[timeseries] (
    */
   private val toExternalRow: InternalRow => ERow = CatalystTypeConvertersWrapper.toScalaRowConverter(schema)
 
-  override val rdd: RDD[Row] = dataStore.rdd
+  override def rdd: RDD[Row] = dataStore.rdd
 
-  override val toDF: DataFrame = dataStore.dataFrame
+  override def toDF: DataFrame = dataStore.dataFrame
 
   def count(): Long = dataStore.dataFrame.count()
 
