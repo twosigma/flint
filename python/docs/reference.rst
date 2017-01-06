@@ -5,6 +5,16 @@
 ts.flint
 --------
 
+FlintContext
+````````````
+.. currentmodule:: ts.flint
+
+.. autoclass:: ts.flint.FlintContext
+   :members: read
+
+.. autoclass:: ts.flint.readwriter.TSDataFrameReader
+   :members:
+
 TimeSeriesDataFrame
 ```````````````````
 
@@ -17,27 +27,27 @@ TimeSeriesDataFrame
 
    .. method:: cache()
 
-      Same as |pyspark_sql_DataFrame_cache|_
+      Same as :meth:`pyspark.sql.DataFrame.cache`
 
    .. method:: collect()
 
-      Same as |pyspark_sql_DataFrame_collect|_
+      Same as :meth:`pyspark.sql.DataFrame.collect`
 
    .. method:: drop(col)
 
-      Same as |pyspark_sql_DataFrame_drop|_
+      Same as :meth:`pyspark.sql.DataFrame.drop`
 
    .. method:: dropna(col)
 
-      Same as |pyspark_sql_DataFrame_dropna|_
+      Same as :meth:`pyspark.sql.DataFrame.dropna`
 
    .. method:: filter(col)
 
-      Same as |pyspark_sql_DataFrame_filter|_
+      Same as :meth:`pyspark.sql.DataFrame.filter`
 
    .. method:: persist(storageLevel)
 
-      Same as |pyspark_sql_DataFrame_persist|_
+      Same as :meth:`pyspark.sql.DataFrame.persist`
 
    .. method:: select(*cols)
 
@@ -60,15 +70,16 @@ TimeSeriesDataFrame
 
    .. method:: unpersist(blocking)
 
-      Same as |pyspark_sql_DataFrame_unpersist|_
+      Same as :meth:`pyspark.sql.DataFrame.unpersist`
 
    .. method:: withColumn(colName, col)
 
       Adds a column or replaces the existing column that has the same
-      name. This method invokes |pyspark_sql_DataFrame_withColumn|_,
-      but only allows |pyspark_sql_Column|_ expressions that preserve
+      name. This method invokes
+      :meth:`pyspark.sql.DataFrame.withColumn`, but only allows
+      :class:`pyspark.sql.Column` expressions that preserve
       order. Currently, only a subset of column expressions under
-      |pyspark_sql_functions|_ are supported.
+      :mod:`pyspark.sql.functions` are supported.
 
       Supported expressions:
 
@@ -91,7 +102,7 @@ TimeSeriesDataFrame
           ...             when(price.closePrice > price.openPrice, 0).otherwise(1))
 
       If these column expressions don't do the thing you want, you can
-      use |pyspark_sql_functions_udf|_ (user defined function, or
+      use :meth:`pyspark.sql.functions.udf` (user defined function, or
       UDF).
 
       .. note::
@@ -116,13 +127,13 @@ TimeSeriesDataFrame
       :param colName: name of the new column
       :type colName: str
       :param col: column expression to compute values in the new column
-      :type col: |pyspark_sql_Column|_
+      :type col: :class:`pyspark.sql.Column`
       :returns: a new :class:`TimeSeriesDataFrame` with the new column
       :rtype: :class:`TimeSeriesDataFrame`
 
    .. method:: withColumnRenamed(existing, new)
 
-      Same as |pyspark_sql_DataFrame_withColumnRenamed|_
+      Same as :meth:`pyspark.sql.DataFrame.withColumnRenamed`
 
    **Time-series specific members:**
 
@@ -142,4 +153,12 @@ Windows
 .. currentmodule:: ts.flint.windows
 
 .. automodule:: ts.flint.windows
+   :members:
+
+Clocks
+``````
+
+.. currentmodule:: ts.flint.clocks
+
+.. automodule:: ts.flint.clocks
    :members:
