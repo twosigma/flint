@@ -15,12 +15,11 @@ requirements:
   run:
     - pandas
     - python
-    - ts-elastic
 
 test:
   imports:
     - ts.flint
 
 about:
-  home: https://gitlab.twosigma.com/analytics/flint
+  home: https://www.github.com/twosigma/flint
   summary: Distributed time-series analysis on Spark

@@ -72,11 +72,11 @@ class TSDataFrameReader(object):
                   time_column=DEFAULT_TIME_COLUMN,
                   unit=DEFAULT_UNIT):
         """Creates a :class:`TimeSeriesDataFrame` from an existing
-        |pyspark_sql_DataFrame|_. The |pyspark_sql_DataFrame|_ must be
+        :class:`pyspark.sql.DataFrame`. The :class:`pyspark.sql.DataFrame` must be
         sorted on time column, otherwise user must specify
         is_sorted=False.
 
-        :param pyspark.sql.DataFrame df: the |pyspark_sql_DataFrame|_
+        :param pyspark.sql.DataFrame df: the :class:`pyspark.sql.DataFrame`
             to convert
         :param bool is_sorted: Default True. Whether the input data is
             already sorted (if already sorted, the conversion will be

@@ -23,13 +23,11 @@ setup(
     setup_requires=[
     ],
     install_requires=[
-        'ts-elastic',
     ],
     tests_require=[
         'coverage',
         'numpy',
         'pandas',
-        'ts-spark',
     ],
     test_suite='tests',
     version=versioneer.get_version(),

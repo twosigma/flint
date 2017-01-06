@@ -31,7 +31,6 @@ from . import summarizers
 
 __all__ = ['TimeSeriesDataFrame']
 
-# Check [HTAQ-280] (https://jira.twosigma.com:10101/jira/browse/HTAQ-280)
 _ORDER_PRESERVING_METHODS = [
     "cache",
     "drop",
@@ -53,11 +52,11 @@ _ORDER_PRESERVING_METHODS = [
 TimeSeriesRDDPartInfo = collections.namedtuple('TimeSeriesRDDPartInfo', ['jdeps', 'jrange_splits'])
 
 class TimeSeriesDataFrame(pyspark.sql.DataFrame):
-    '''A |pyspark_sql_DataFrame|_ backed by time-ordered rows, with
+    '''A :class:`pyspark.sql.DataFrame` backed by time-ordered rows, with
     additional time-series functionality.
 
     A :class:`TimeSeriesDataFrame` supports a subset of
-    |pyspark_sql_DataFrame|_ operations: :meth:`cache`, :meth:`count`,
+    :class:`pyspark.sql.DataFrame` operations: :meth:`cache`, :meth:`count`,
     :meth:`drop`, :meth:`dropna`, :meth:`filter`, :meth:`persist`,
     :meth:`select`, :meth:`unpersist`, :meth:`withColumn`,
     :meth:`withColumnRenamed`
@@ -93,7 +92,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
           Entry point for reading data in to a
           :class:`TimeSeriesDataFrame`.
 
-       Class |pyspark_sql_DataFrame|_
+       Class :class:`pyspark.sql.DataFrame`
           A :class:`TimeSeriesDataFrame` also has most of the
           functionality of a normal PySpark DataFrame.
 
@@ -350,7 +349,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         function.
 
         The columns specified need a name, a
-        |pyspark_sql_types_DataType|_, and a function to apply.  The
+        :class:`pyspark.sql.types.DataType`, and a function to apply.  The
         function should accept a ``list`` of rows and return a
         ``dict`` from row to computed value.
 
@@ -370,7 +369,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             >>> df = active_price.addColumnsForCycle(columns)
 
         :param columns: a ``dict`` mapping each column name to a pair
-            of |pyspark_sql_types_DataType|_ and the function to
+            of :class:`pyspark.sql.types.DataType` and the function to
             compute that column, i.e. ``(pyspark.sql.types.DataType,
             callable)``
         :type columns: dict
