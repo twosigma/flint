@@ -374,7 +374,7 @@ def weighted_mean(value_column, weight_column):
     :type weight_column: str
 
     '''
-    return SummarizerFactory('weightedMean', value_column, weight_column)
+    return SummarizerFactory('weightedMeanTest', value_column, weight_column)
 
 
 def zscore(column, in_sample):
