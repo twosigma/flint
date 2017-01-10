@@ -747,6 +747,15 @@ def test_summary_mean(pyspark, summarizers, tests_utils, price, forecast):
     result = joined.summarize(summarizers.mean("price")).toPandas()
     pdt.assert_frame_equal(result, expected_pdf)
 
+def test_summary_weighted_mean(pyspark, summarizers, tests_utils, price, vol):
+    expected_pdf = make_pdf([
+        (0, 4.166667, 1.547494, 8.237545, 12,)
+        ], ["time", "price_volume_weightedMean", "price_volume_weightedStandardDeviation", "price_volume_weightedTStat", "price_volume_observationCount"])
+    joined = price.leftJoin(vol, key="tid")
+    result = joined.summarize(summarizers.weighted_mean("price", "volume")).toPandas()
+
+    pdt.assert_frame_equal(result, expected_pdf)
+
 def test_summary_min(pyspark, summarizers, tests_utils, forecast):
     expected_pdf = make_pdf([
         (0, -9.6,)
