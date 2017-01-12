@@ -1182,9 +1182,9 @@ class TimeSeriesRDDImpl private[timeseries] (
     val newColumns = dataStore.dataFrame.schema.fieldNames.map {
       columnName =>
         if (fromToMap.contains(columnName)) {
-          dataStore.dataFrame.col(columnName).as(fromToMap(columnName))
+          dataStore.dataFrame.col(s"`$columnName`").as(fromToMap(columnName))
         } else {
-          dataStore.dataFrame.col(columnName)
+          dataStore.dataFrame.col(s"`$columnName`")
         }
     }
 

@@ -461,6 +461,12 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
     val expectedSchema = Schema("time" -> LongType, "tid2" -> IntegerType, "volume" -> LongType)
 
     assert(renamedTSRdd.schema == expectedSchema)
+
+    val renamedWithDecimal = volTSRdd.renameColumns("volume" -> "volume0.01")
+    val expectedSchemaWithDecimal = Schema("time" -> LongType, "tid" -> IntegerType, "volume0.01" -> LongType)
+    assert(renamedWithDecimal.schema == expectedSchemaWithDecimal)
+    val renamedWithoutDecimal = renamedWithDecimal.renameColumns("volume0.01" -> "volume")
+    assert(renamedWithoutDecimal.schema == volSchema)
   }
 
   it should "`deleteColumns` correctly" in {
