@@ -50,10 +50,12 @@ private[timeseries] object TimeSeriesStore {
         rows.map(converter)
       }
 
-      val keyRdd = dataFrame.select(TimeSeriesRDD.timeColumnName).map(_.getAs[Long](TimeSeriesRDD.timeColumnName))
-
+      // Ideally, we may use dataFrame.select("time").queryExecution.toRdd to build the `keyRdd`.
+      // This may allow us push down column pruning and thus reduce IO. However, there is no guarantee that
+      // DataFrame.sort("time").select("time") preserves partitioning as DataFrame.sort("time").
+      val timeColumnIndex = schema.fieldIndex(TimeSeriesRDD.timeColumnName)
+      val keyRdd = internalRows.mapPartitions { rows => rows.map(_.getLong(timeColumnIndex)) }
       val orderedRdd = OrderedRDD.fromRDD(pairRdd, KeyPartitioningType(isSorted = true, isNormalized = false), keyRdd)
-
       TimeSeriesStore(orderedRdd, schema)
     }
 
