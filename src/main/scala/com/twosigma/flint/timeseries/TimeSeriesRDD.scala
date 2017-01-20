@@ -354,11 +354,8 @@ object TimeSeriesRDD {
   private[flint] def fromSortedDfWithPartInfo(
     dataFrame: DataFrame,
     partInfo: Option[PartitionInfo]
-  ): TimeSeriesRDD = {
-    val dataStore = TimeSeriesStore(dataFrame, partInfo)
+  ): TimeSeriesRDD = new TimeSeriesRDDImpl(TimeSeriesStore(dataFrame, partInfo))
 
-    new TimeSeriesRDDImpl(dataStore)
-  }
   // A function taking any row as input and just return `Seq[Any]()`.
   private[flint] val emptyKeyFn: InternalRow => Seq[Any] = {
     _: InternalRow => Seq[Any]()
