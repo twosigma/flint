@@ -1435,7 +1435,14 @@ class TimeSeriesRDDImpl private[timeseries] (
   def shift(window: ShiftTimeWindow): TimeSeriesRDD = {
     val timeIndex = schema.fieldIndex(TimeSeriesRDD.timeColumnName)
 
-    val newRdd = unsafeOrderedRdd.shift(window.shift).mapValues {
+    // Note: Don't change this to unsafeOrderedRdd, it might cause data corruption and there is no test for this now
+    //
+    // table.select("col1").distinct().show()
+    // table = table.shiftTime("1day")
+    // table = table.withColumn('col3', udf(...)(table.col2))
+    // table.select("col1").distinct().show()
+    // The first and second show has different results, "col1" seems to be corrupted
+    val newRdd = orderedRdd.shift(window.shift).mapValues {
       case (t, iRow) => InternalRowUtils.update(iRow, schema, timeIndex -> t)
     }
 
