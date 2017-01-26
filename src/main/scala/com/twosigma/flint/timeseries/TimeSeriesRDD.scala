@@ -1192,7 +1192,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     val (add, newSchema) = InternalRowUtils.addOrUpdate(schema, columns.map(_._1))
 
     TimeSeriesRDD.fromInternalOrderedRDD(
-      unsafeOrderedRdd.mapValues {
+      orderedRdd.mapValues {
         (_, row) =>
           val extRow = toExternalRow(row)
           add(row, columns.map {
@@ -1422,7 +1422,7 @@ class TimeSeriesRDDImpl private[timeseries] (
   def setTime(fn: Row => Long, window: String): TimeSeriesRDD = {
     if (window == null) {
       val timeIndex = schema.fieldIndex(TimeSeriesRDD.timeColumnName)
-      TimeSeriesRDD.fromInternalOrderedRDD(unsafeOrderedRdd.mapOrdered {
+      TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.mapOrdered {
         case (t: Long, r: InternalRow) =>
           val timeStamp = fn(toExternalRow(r))
           (timeStamp, InternalRowUtils.update(r, schema, timeIndex -> timeStamp))
