@@ -118,7 +118,6 @@ lazy val flint = project
   .settings(compilationSettings)
   .settings(dependencySettings)
   .settings(parallelExecution in Test := false)
-  .settings(coverageEnabled := true)
   .settings(apiMappings ++= DocumentationMapping.mapJarToDocURL(
     (managedClasspath in (Compile, doc)).value,
     Seq(
