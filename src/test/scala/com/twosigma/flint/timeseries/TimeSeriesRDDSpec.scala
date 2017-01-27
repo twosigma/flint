@@ -464,7 +464,7 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
     assert(renamedTSRdd.schema == expectedSchema)
 
     val renamedWithDecimal = volTSRdd.renameColumns("volume" -> "volume0.01")
-    val expectedSchemaWithDecimal = Schema("time" -> LongType, "tid" -> IntegerType, "volume0.01" -> LongType)
+    val expectedSchemaWithDecimal = Schema("time" -> LongType, "id" -> IntegerType, "volume0.01" -> LongType)
     assert(renamedWithDecimal.schema == expectedSchemaWithDecimal)
     val renamedWithoutDecimal = renamedWithDecimal.renameColumns("volume0.01" -> "volume")
     assert(renamedWithoutDecimal.schema == volSchema)
