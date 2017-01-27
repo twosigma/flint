@@ -170,4 +170,10 @@ private[timeseries] object Schema {
 
     StructType(updatedFields)
   }
+
+  def append(schema: StructType, columns: (String, DataType)*): StructType = {
+    StructType(schema.fields ++ columns.map{
+      case (columnName, dataType) => StructField(columnName, dataType)
+    })
+  }
 }

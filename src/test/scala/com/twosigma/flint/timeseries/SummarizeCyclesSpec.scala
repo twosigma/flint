@@ -26,6 +26,11 @@ class SummarizeCyclesSpec extends FlatSpec with SharedSparkContext {
   private val defaultPartitionParallelism: Int = 5
 
   private val resourceDir: String = "/timeseries/summarizecycles"
+  private val volumeSchema = Schema("tid" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
+  private val volume2Schema = volumeSchema
+  private val volumeWithGroupSchema = Schema(
+    "tid" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType
+  )
 
   private def from(filename: String, schema: StructType): TimeSeriesRDD =
     SpecUtils.withResource(s"$resourceDir/$filename") { source =>
@@ -39,7 +44,7 @@ class SummarizeCyclesSpec extends FlatSpec with SharedSparkContext {
     }
 
   "SummarizeCycles" should "pass `SummarizeSingleColumn` test." in {
-    val volumeTSRdd = from("Volume.csv", Schema("tid" -> IntegerType, "volume" -> LongType))
+    val volumeTSRdd = from("Volume.csv", volumeSchema)
     val resultTSRdd = from("SummarizeSingleColumn.results", Schema("volume_sum" -> DoubleType))
     val summarizedVolumeTSRdd = volumeTSRdd.summarizeCycles(Summarizers.sum("volume"))
 
@@ -47,8 +52,11 @@ class SummarizeCyclesSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "pass `SummarizeSingleColumnPerKey` test, i.e. with additional a single key." in {
-    val volumeTSRdd = from("Volume2.csv", Schema("tid" -> IntegerType, "volume" -> LongType))
-    val resultTSRdd = from("SummarizeSingleColumnPerKey.results", Schema("tid" -> IntegerType, "volume_sum" -> DoubleType))
+    val volumeTSRdd = from("Volume2.csv", volume2Schema)
+    val resultTSRdd = from(
+      "SummarizeSingleColumnPerKey.results",
+      Schema("tid" -> IntegerType, "volume_sum" -> DoubleType)
+    )
     val summarizedVolumeTSRdd = volumeTSRdd.summarizeCycles(Summarizers.sum("volume"), Seq("tid"))
 
     // TODO: we should do this instead of the following 3 asserts
@@ -63,10 +71,7 @@ class SummarizeCyclesSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "pass `SummarizeSingleColumnPerSeqOfKeys` test, i.e. with additional a sequence of keys." in {
-    val volumeTSRdd = from(
-      "VolumeWithIndustryGroup.csv",
-      Schema("tid" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
-    )
+    val volumeTSRdd = from("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
     val resultTSRdd = from(
       "SummarizeSingleColumnPerSeqOfKeys.results",
       Schema("tid" -> IntegerType, "group" -> IntegerType, "volume_sum" -> DoubleType)

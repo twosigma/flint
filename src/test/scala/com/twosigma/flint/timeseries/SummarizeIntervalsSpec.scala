@@ -39,7 +39,10 @@ class SummarizeIntervalsSpec extends FlatSpec with SharedSparkContext {
     }
 
   "SummarizeInterval" should "pass `SummarizeSingleColumn` test." in {
-    val volumeTSRdd = from("Volume.csv", Schema("tid" -> IntegerType, "volume" -> LongType))
+    val volumeTSRdd = from(
+      "Volume.csv",
+      Schema("tid" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
+    )
     val clockTSRdd = from("Clock.csv", Schema())
     val resultTSRdd = from("SummarizeSingleColumn.results", Schema("volume_sum" -> DoubleType))
     val summarizedVolumeTSRdd = volumeTSRdd.summarizeIntervals(clockTSRdd, Summarizers.sum("volume"))
@@ -48,9 +51,15 @@ class SummarizeIntervalsSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "pass `SummarizeSingleColumnPerKey` test, i.e. with additional a single key." in {
-    val volumeTSRdd = from("Volume.csv", Schema("tid" -> IntegerType, "volume" -> LongType))
+    val volumeTSRdd = from(
+      "Volume.csv",
+      Schema("tid" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
+    )
     val clockTSRdd = from("Clock.csv", Schema())
-    val resultTSRdd = from("SummarizeSingleColumnPerKey.results", Schema("tid" -> IntegerType, "volume_sum" -> DoubleType))
+    val resultTSRdd = from(
+      "SummarizeSingleColumnPerKey.results",
+      Schema("tid" -> IntegerType, "volume_sum" -> DoubleType)
+    )
     val summarizedVolumeTSRdd = volumeTSRdd.summarizeIntervals(clockTSRdd, Summarizers.sum("volume"), Seq("tid"))
 
     // TODO: we should do this instead of the following 3 asserts
@@ -61,19 +70,34 @@ class SummarizeIntervalsSpec extends FlatSpec with SharedSparkContext {
       resultTSRdd.keepRows(_.getAs[Int]("tid") == 7).collect().deep)
     assert(summarizedVolumeTSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep ==
       resultTSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep)
+
+    val result2TSRdd = from(
+      "SummarizeV2PerKey.results",
+      Schema("tid" -> IntegerType, "v2_sum" -> DoubleType)
+    )
+    val summarizedV2TSRdd = volumeTSRdd.summarizeIntervals(clockTSRdd, Summarizers.sum("v2"), Seq("tid"))
+    assert(summarizedV2TSRdd.keepRows(_.getAs[Int]("tid") == 3).collect().deep ==
+      result2TSRdd.keepRows(_.getAs[Int]("tid") == 3).collect().deep)
+    assert(summarizedV2TSRdd.keepRows(_.getAs[Int]("tid") == 7).collect().deep ==
+      result2TSRdd.keepRows(_.getAs[Int]("tid") == 7).collect().deep)
+    assert(summarizedV2TSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep ==
+      result2TSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep)
   }
 
   it should "pass `SummarizeSingleColumnPerSeqOfKeys` test, i.e. with additional a sequence of keys." in {
     val volumeTSRdd = from(
       "VolumeWithIndustryGroup.csv",
-      Schema("tid" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
+      Schema("tid" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
     )
     val clockTSRdd = from("Clock.csv", Schema())
     val resultTSRdd = from(
       "SummarizeSingleColumnPerSeqOfKeys.results",
       Schema("tid" -> IntegerType, "group" -> IntegerType, "volume_sum" -> DoubleType)
     )
-    val summarizedVolumeTSRdd = volumeTSRdd.summarizeIntervals(clockTSRdd, Summarizers.sum("volume"), Seq("tid", "group"))
+    val summarizedVolumeTSRdd = volumeTSRdd.summarizeIntervals(
+      clockTSRdd,
+      Summarizers.sum("volume"), Seq("tid", "group")
+    )
 
     // TODO: we should do this instead of the following 3 asserts
     // assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)

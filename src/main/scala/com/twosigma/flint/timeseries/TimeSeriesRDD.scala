@@ -411,6 +411,14 @@ trait TimeSeriesRDD extends Serializable {
   val schema: StructType
 
   /**
+   * Get a key function from a list of column names.
+   */
+  // TODO: This should return a object that is associated with this TimeSeriesRDD, this can
+  //       help us catch bugs where we are passing key function to the wrong OrderedRDD
+  private[flint] def safeGetAsAny(cols: Seq[String]): InternalRow => Seq[Any] =
+    TimeSeriesRDD.safeGetAsAny(schema, cols)
+
+  /**
    * An [[org.apache.spark.rdd.RDD RDD]] representation of this [[TimeSeriesRDD]].
    */
   def rdd: RDD[Row]
@@ -1103,9 +1111,6 @@ class TimeSeriesRDDImpl private[timeseries] (
   // per partition, so the referenced bytes might be overwritten by the next row.
   private[timeseries] def unsafeOrderedRdd = dataStore.unsafeOrderedRdd
 
-  private[flint] def safeGetAsAny(cols: Seq[String]): InternalRow => Seq[Any] =
-    TimeSeriesRDD.safeGetAsAny(schema, cols)
-
   /**
    * Values converter for this rdd.
    *
@@ -1257,7 +1262,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     val toleranceNum = Duration(tolerance).toNanos
     val toleranceFn = (t: Long) => t - toleranceNum
     val joinedRdd = orderedRdd.leftJoin(
-      right.orderedRdd, toleranceFn, safeGetAsAny(key), TimeSeriesRDD.safeGetAsAny(right.schema, key)
+      right.orderedRdd, toleranceFn, safeGetAsAny(key), right.safeGetAsAny(key)
     )
 
     val (concat, newSchema) = InternalRowUtils.concat(
@@ -1287,7 +1292,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     val toleranceFn = (t: Long) => t + toleranceNum
     val joinedRdd = orderedRdd.futureLeftJoin(
       right.orderedRdd, toleranceFn, safeGetAsAny(key),
-      TimeSeriesRDD.safeGetAsAny(right.schema, key), strictForward = strictLookahead
+      right.safeGetAsAny(key), strictForward = strictLookahead
     )
 
     val (concat, newSchema) = InternalRowUtils.concat(
@@ -1307,7 +1312,7 @@ class TimeSeriesRDDImpl private[timeseries] (
   def summarizeCycles(summarizer: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {
     val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns(), key)
     val sum = summarizer(pruned.schema)
-    val groupByRdd = pruned.orderedRdd.groupByKey(safeGetAsAny(key))
+    val groupByRdd = pruned.orderedRdd.groupByKey(pruned.safeGetAsAny(key))
 
     val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)))
 
@@ -1333,7 +1338,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     val intervalized = pruned.orderedRdd.intervalize(clock.orderedRdd, beginInclusive).mapValues {
       case (_, v) => v._2
     }
-    val grouped = intervalized.groupByKey(safeGetAsAny(key))
+    val grouped = intervalized.groupByKey(pruned.safeGetAsAny(key))
     val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)))
 
     TimeSeriesRDD.fromInternalOrderedRDD(
@@ -1372,7 +1377,7 @@ class TimeSeriesRDDImpl private[timeseries] (
   def summarize(summarizerFactory: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {
     val pruned = TimeSeriesRDD.pruneColumns(this, summarizerFactory.requiredColumns(), key)
     val summarizer = summarizerFactory(pruned.schema)
-    val keyGetter = TimeSeriesRDD.safeGetAsAny(pruned.schema, key)
+    val keyGetter = pruned.safeGetAsAny(key)
 
     val summarized = summarizerFactory match {
       case factory: OverlappableSummarizerFactory =>

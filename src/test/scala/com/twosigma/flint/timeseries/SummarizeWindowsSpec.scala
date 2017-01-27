@@ -27,6 +27,11 @@ class SummarizeWindowsSpec extends FlatSpec with SharedSparkContext {
 
   private val resourceDir: String = "/timeseries/summarizewindows"
 
+  private val volumeSchema = Schema("tid" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
+  private val volumeWithGroupSchema = Schema(
+    "tid" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType
+  )
+
   private def from(filename: String, schema: StructType): TimeSeriesRDD =
     SpecUtils.withResource(s"$resourceDir/$filename") { source =>
       CSV.from(
@@ -39,21 +44,22 @@ class SummarizeWindowsSpec extends FlatSpec with SharedSparkContext {
     }
 
   "SummarizeWindows" should "pass `SummarizeSingleColumn` test." in {
-    val volumeTSRdd = from("Volume.csv", Schema("tid" -> IntegerType, "volume" -> LongType))
+    val volumeTSRdd = from("Volume.csv", volumeSchema)
     val resultsTSRdd = from(
       "SummarizeSingleColumn.results",
-      Schema("tid" -> IntegerType, "volume" -> LongType, "volume_sum" -> DoubleType)
+      Schema.append(volumeSchema, "volume_sum" -> DoubleType)
     )
+
     val summarizedTSRdd = volumeTSRdd.summarizeWindows(Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"))
     assert(summarizedTSRdd.schema == resultsTSRdd.schema)
     assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
   }
 
   it should "pass `SummarizeSingleColumnPerKey` test." in {
-    val volumeTSRdd = from("Volume.csv", Schema("tid" -> IntegerType, "volume" -> LongType))
+    val volumeTSRdd = from("Volume.csv", volumeSchema)
     val resultsTSRdd = from(
       "SummarizeSingleColumnPerKey.results",
-      Schema("tid" -> IntegerType, "volume" -> LongType, "volume_sum" -> DoubleType)
+      Schema.append(volumeSchema, "volume_sum" -> DoubleType)
     )
     val summarizedTSRdd = volumeTSRdd.summarizeWindows(
       Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"), Seq("tid")
@@ -63,13 +69,10 @@ class SummarizeWindowsSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "pass `SummarizeSingleColumnPerSeqOfKeys` test." in {
-    val volumeTSRdd = from(
-      "VolumeWithIndustryGroup.csv",
-      Schema("tid" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
-    )
+    val volumeTSRdd = from("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
     val resultsTSRdd = from(
       "SummarizeSingleColumnPerSeqOfKeys.results",
-      Schema("tid" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "volume_sum" -> DoubleType)
+      Schema.append(volumeWithGroupSchema, "volume_sum" -> DoubleType)
     )
     val summarizedTSRdd = volumeTSRdd.summarizeWindows(
       Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"), Seq("tid", "group")
