@@ -1,5 +1,5 @@
 /*
- *  Copyright 2015-2016 TWO SIGMA OPEN SOURCE, LLC
+ *  Copyright 2015-2017 TWO SIGMA OPEN SOURCE, LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -44,4 +44,3 @@ object LagWindow {
 
   def count(count: Int, maxLookBack: Long = Long.MaxValue): LagWindow = CountLagWindow(count, maxLookBack)
 }
-

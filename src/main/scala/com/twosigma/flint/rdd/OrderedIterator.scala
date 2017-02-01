@@ -1,5 +1,5 @@
 /*
- *  Copyright 2015-2016 TWO SIGMA OPEN SOURCE, LLC
+ *  Copyright 2015-2017 TWO SIGMA OPEN SOURCE, LLC
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -60,4 +60,3 @@ protected[flint] object OrderedIterator {
   def apply[T, K: Ordering: ClassTag](iterator: Iterator[T], key: (T) => K): OrderedIterator[T, K] =
     new OrderedIterator(iterator, key)
 }
-
