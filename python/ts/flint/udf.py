@@ -1,5 +1,5 @@
 #
-#  Copyright 2015 TWO SIGMA OPEN SOURCE, LLC
+#  Copyright 2015-2017 TWO SIGMA OPEN SOURCE, LLC
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -21,5 +21,3 @@ def udf(return_type):
     def _udf(fn):
         return pyspark.sql.functions.udf(fn, return_type)
     return _udf
-
-
