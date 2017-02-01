@@ -28,10 +28,10 @@ class TSDataFrameReader(object):
     DEFAULT_TIME_COLUMN = "time"
     DEFAULT_UNIT = "ns"
 
-    def __init__(self, tsContext):
-        self._tsContext = tsContext
-        self._sc = self._tsContext._sc
-        self._sqlContext = self._tsContext._sqlContext
+    def __init__(self, flintContext):
+        self._flintContext = flintContext
+        self._sc = self._flintContext._sc
+        self._sqlContext = self._flintContext._sqlContext
         self._jpkg = java.Packages(self._sc)
 
     def pandas(self, df, *,
@@ -56,7 +56,7 @@ class TSDataFrameReader(object):
         from .dataframe import TimeSeriesDataFrame
 
         return TimeSeriesDataFrame._from_pandas(
-            df, self._tsContext._sqlContext,
+            df, self._flintContext._sqlContext,
             time_column=time_column,
             is_sorted=is_sorted,
             unit=unit)

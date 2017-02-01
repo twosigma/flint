@@ -530,7 +530,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         Example:
 
-            >>> clock = tsContext.read.uri("tsdata:/clock/ts/trading-interval/US/30", begin, end)
+            >>> clock = flintContext.read.uri("tsdata:/clock/ts/trading-interval/US/30", begin, end)
             >>> intervalized = price.groupByInterval(clock)
 
         :param clock: A dataframe used to determine the intervals
@@ -575,7 +575,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         Example:
 
             >>> # count the number of rows in each interval
-            >>> clock = tsContext.read.uri("tsdata:/clock/ts/trading-interval/US/30", begin, end)
+            >>> clock = flintContext.read.uri("tsdata:/clock/ts/trading-interval/US/30", begin, end)
             >>> counts = df.summarizeIntervals(clock, summarizers.count())
 
         :param clock: A dataframe used to determine the intervals
