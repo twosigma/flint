@@ -3,8 +3,8 @@ Flint Python Cookbook
 ==========================
 
 This page is a grab-bag of useful code snippets for Flint Python.
-We assume you've already read :doc:`ts-spark:getting-started` and can run Flint
-code in a Python process or Jupyter Notebook.
+We assume you can run Flint code in a Python process or Jupyter
+Notebook.
 
 :download:`Download the python notebook
 <Flint Python Cookbook.ipynb>` to try code out without
