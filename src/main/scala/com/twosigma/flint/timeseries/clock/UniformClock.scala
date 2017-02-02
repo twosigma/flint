@@ -33,10 +33,10 @@ object UniformClock {
   def apply(
     sc: SparkContext,
     frequency: String,
-    offset: String = "0s",
-    beginDateTime: String = "1990-01-01",
-    endDateTime: String = "2030-01-01",
-    timeZone: String = "UTC"
+    offset: String,
+    beginDateTime: String,
+    endDateTime: String,
+    timeZone: String
   ): TimeSeriesRDD = {
     val tz = DateTimeZone.forID(timeZone)
     val beginNanos = TimeFormat.parseNano(beginDateTime, tz)

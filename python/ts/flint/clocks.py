@@ -19,15 +19,19 @@ from . import utils
 from .dataframe import TimeSeriesDataFrame
 
 @metrics.recorder.instrument(all_args=True)
-def uniform(sql_ctx, frequency, offset = "0s", begin_date_time = "1990-01-01", end_date_time = "2030-01-01", time_zone = "UTC"):
+def uniform(sql_ctx, frequency,
+            offset = "0s",
+            begin_date_time = "1900-01-01",
+            end_date_time = "2100-01-01",
+            time_zone = "UTC"):
     """ Returns an evenly sampled clock :class:`TimeSeriesDataFrame` which has only a "time" column.
 
     :param sql_ctx: pyspark.sql.SQLContext
     :param frequency: the time interval between rows, e.g "1s", "2m", "3d" etc.
     :param offset: the time to offset this clock from the begin time. Defaults to "0s".
         Note that specifying an offset greater than the frequency is the same as specifying (offset % frequency).
-    :param begin_date_time: the begin date time of this clock. Defaults to "1990-01-01".
-    :param end_date_time: the end date time of this clock. Defaults to "2030-01-01".
+    :param begin_date_time: the begin date time of this clock. Defaults to "1900-01-01".
+    :param end_date_time: the end date time of this clock. Defaults to "2100-01-01".
     :param time_zone: the time zone which will be used to parse `begin_date_time` and `end_date_time` when time
         zone information is not included in the date time string. Defaults to "UTC".
     :returns: a new :class:`TimeSeriesDataFrame`

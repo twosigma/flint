@@ -47,7 +47,7 @@ class ClockSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "generate clock ticks in TimeSeriesRDD correctly" in {
-    val clockTSRdd: TimeSeriesRDD = UniformClock(sc, "5h", "0d", "20010101", "20010201")
+    val clockTSRdd: TimeSeriesRDD = Clocks.uniform(sc, "5h", "0d", "20010101", "20010201")
     assert(clockTSRdd.schema == Schema())
     val clockStream = UniformClock(
       TimeFormat.parseNano("20010101"),
@@ -60,20 +60,20 @@ class ClockSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "generate clock ticks with offset in TimeSeriesRDD correctly" in {
-    val clockTSRdd1: TimeSeriesRDD = UniformClock(sc, "1d", "8h", "20010101", "20010201")
-    val clockTSRdd2: TimeSeriesRDD = UniformClock(sc, "1d", "0h", "20010101 08:00", "20010201")
+    val clockTSRdd1: TimeSeriesRDD = Clocks.uniform(sc, "1d", "8h", "20010101", "20010201")
+    val clockTSRdd2: TimeSeriesRDD = Clocks.uniform(sc, "1d", "0h", "20010101 08:00", "20010201")
     assert(clockTSRdd1.collect().deep == clockTSRdd2.collect().deep)
   }
 
   it should "generate clock ticks with offset & time zone in TimeSeriesRDD correctly" in {
-    val clockTSRdd1: TimeSeriesRDD = UniformClock(sc, "1d", "8h", "20010101", "20010201", "UTC")
-    val clockTSRdd2: TimeSeriesRDD = UniformClock(sc, "1d", "0h", "20010101 08:00 +0000", "20010201 00:00 +0000", "MST")
+    val clockTSRdd1: TimeSeriesRDD = Clocks.uniform(sc, "1d", "8h", "20010101", "20010201", "UTC")
+    val clockTSRdd2: TimeSeriesRDD = Clocks.uniform(sc, "1d", "0h", "20010101 08:00 +0000", "20010201 00:00 +0000", "MST")
     assert(clockTSRdd1.collect().deep == clockTSRdd2.collect().deep)
   }
 
   it should "generate clock ticks with default in TimeSeriesRDD correctly" in {
-    val clockTSRdd1: TimeSeriesRDD = UniformClock(sc, "1d", "0h", "19900101", "20300101", "UTC")
-    val clockTSRdd2: TimeSeriesRDD = UniformClock(sc, "1d")
+    val clockTSRdd1: TimeSeriesRDD = Clocks.uniform(sc, "1d", "0h", "19000101", "21000101", "UTC")
+    val clockTSRdd2: TimeSeriesRDD = Clocks.uniform(sc, "1d")
     assert(clockTSRdd1.collect().deep == clockTSRdd2.collect().deep)
   }
 }

@@ -27,8 +27,8 @@ object Clocks {
    * @param frequency     The time between rows, e.g "1s", "2m", "3d" etc.
    * @param offset        The time to offset this clock from the begin time. Defaults to "0s". Note that specifying an
    *                      offset greater than the frequency is the same as specifying (offset % frequency).
-   * @param beginDateTime A date time specifies the begin of this clock. Default "1990-01-01".
-   * @param endDateTime   A date time specifies the end of this clock. Default "2030-01-01". It is inclusive when the
+   * @param beginDateTime A date time specifies the begin of this clock. Default "1900-01-01".
+   * @param endDateTime   A date time specifies the end of this clock. Default "2100-01-01". It is inclusive when the
    *                      last tick is at the end of this clock.
    * @param timeZone      The time zone which will be used to parse the `beginDateTime` and `endDateTime` when time
    *                      zone information is not included in the date time string. Default "UTC".
@@ -38,8 +38,8 @@ object Clocks {
     sc: SparkContext,
     frequency: String,
     offset: String = "0s",
-    beginDateTime: String = "1990-01-01",
-    endDateTime: String = "2030-01-01",
+    beginDateTime: String = "1900-01-01",
+    endDateTime: String = "2100-01-01",
     timeZone: String = "UTC"
   ): TimeSeriesRDD = {
     UniformClock(sc, frequency, offset, beginDateTime, endDateTime, timeZone)

@@ -30,7 +30,7 @@ class QuantileSummarizerSpec extends FlatSpec with SharedSparkContext {
   "QuantileSummarizer" should "compute `quantile` correctly" in {
     val clockTSRdd = UniformClock(
       sc,
-      frequency = "1d", offset = "0d", beginDateTime = "1970-01-01", endDateTime = "1980-01-01"
+      frequency = "1d", offset = "0d", beginDateTime = "1970-01-01", endDateTime = "1980-01-01", timeZone = "UTC"
     )
     val p = (1 to 100).map(_ / 100.0)
     val results = clockTSRdd.summarize(Summarizers.quantile("time", p)).first()
