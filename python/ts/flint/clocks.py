@@ -14,11 +14,9 @@
 #  limitations under the License.
 #
 
-from . import metrics
 from . import utils
 from .dataframe import TimeSeriesDataFrame
 
-@metrics.recorder.instrument(all_args=True)
 def uniform(sql_ctx, frequency,
             offset = "0s",
             begin_date_time = "1900-01-01",
