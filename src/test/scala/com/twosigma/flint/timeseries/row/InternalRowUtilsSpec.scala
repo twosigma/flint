@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries.row
 
 import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, Row }
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{ GenericMutableRow, GenericRow, UnsafeProjection }
+import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, GenericRow, UnsafeProjection }
 import org.apache.spark.sql.types.{ ArrayType, DataType, DoubleType, LongType, StringType, StructField, StructType }
 import org.apache.spark.unsafe.types.UTF8String
 import org.scalatest.FlatSpec
@@ -48,7 +48,7 @@ class InternalRowUtilsSpec extends FlatSpec with TableDrivenPropertyChecks {
     },
     (row: Row, schema: StructType) => {
       val internalRow = CatalystTypeConvertersWrapper.toCatalystRowConverter(schema)(row)
-      new GenericMutableRow(internalRow.toSeq(schema).toArray)
+      new GenericInternalRow(internalRow.toSeq(schema).toArray)
     }
   )
 

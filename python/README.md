@@ -7,31 +7,22 @@ for PySpark.
 Building
 ----------------------
 
-To build flint jar:
+You can build flint by running:
 
-    sbt assembly
+    make dist
 
-To build flint python egg:
-
-    python setup.py bdist_egg
-
-
-Building Documentation
-----------------------
-
-Docs live in `docs/` and can be built with `setup.py`:
-
-    python setup.py build_sphinx
-    (cd build/sphinx/html; python -m http.server 8080)
-
+This will create a jar under target/scala-2.11/flint-assembly-0.2.0-SNAPSHOT.jar
 
 Running with PySpark
 --------------------
 
 You can use ts-flint with PySpark by:
 
-spark-submit --jars target/scala-2.11/flint-assembly-0.3.1-SNAPSHOT.jar --py-files python/dist/ts_flint.egg ...
+    pyspark --jars /path/to/flint-assembly-0.2.0-SNAPSHOT.jar --py-files /path/to/flint-assembly-0.2.0-SNAPSHOT.jar
 
+or
+
+    spark-submit --jars /path/to/flint-assembly-0.2.0-SNAPSHOT.jar --py-files /path/to/flint-assembly-0.2.0-SNAPSHOT.jar myapp.py
 
 Bugs
 ----

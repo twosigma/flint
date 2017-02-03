@@ -50,7 +50,7 @@ lazy val formattingPreferences = {
 }
 
 lazy val compilationSettings = scalariformSettings ++ Seq(
-  version := "0.3.1-SNAPSHOT",
+  version := "0.2.0-SNAPSHOT",
   organization := "com.twosigma",
   scalaVersion := "2.11.8",
   assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false),
@@ -79,16 +79,13 @@ lazy val compilationSettings = scalariformSettings ++ Seq(
 )
 
 lazy val versions = new {
-  val avro = "1.7.7"
   val play_json = "2.3.10"
-  val spark_csv = "1.4.0"
   val commons_math = "3.5"
-  val commons_csv = "1.2"
   val joda_time = "2.9.4"
   val httpclient = "4.3.2" // Note that newer versions need to be configured differently
-  val spark = "1.6.3"
+  val spark = sys.props.getOrElse("spark.version", default = "2.1.0")
   val scalatest = "2.2.4"
-  val scala_logging = "2.1.2"
+  val grizzled_slf4j = "1.3.0"
 }
 
 lazy val lazyDependencies = new {
@@ -98,14 +95,11 @@ lazy val lazyDependencies = new {
 }
 
 lazy val dependencySettings = libraryDependencies ++= Seq(
-  "com.databricks" %% "spark-csv" % versions.spark_csv,
-  "com.typesafe.scala-logging" %% "scala-logging-slf4j" % versions.scala_logging,
   "com.typesafe.play" %% "play-json" % versions.play_json,
-  "org.apache.avro" % "avro" % versions.avro,
   "org.apache.commons" % "commons-math3" % versions.commons_math,
-  "org.apache.commons" % "commons-csv" % versions.commons_csv,
   "joda-time" % "joda-time" % versions.joda_time,
   "org.apache.httpcomponents" % "httpclient" % versions.httpclient,
+  "org.clapper" %% "grizzled-slf4j" % versions.grizzled_slf4j,
   lazyDependencies.sparkCore,
   lazyDependencies.sparkML,
   lazyDependencies.sparkSQL,

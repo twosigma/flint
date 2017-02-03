@@ -70,7 +70,7 @@ class ExponentialSmoothingSummarizerSpec extends FlatSpec with SharedSparkContex
 
   "ExponentialSmoothingSummarizer" should "smooth sin correctly" in {
     def getSinRDDWithTID(tid: Int, constant: Double = 1.0): TimeSeriesRDD = {
-      var rdd = Clocks.uniform(sc, "1d")
+      var rdd = Clocks.uniform(sc, "1d", beginDateTime = "1960-01-01", endDateTime = "2030-01-01")
       rdd = rdd.addColumns("value" -> DoubleType -> { (row: Row) => constant })
       rdd = rdd.addColumns("tid" -> IntegerType -> { (row: Row) => tid })
       rdd.addColumns("expected" -> DoubleType -> { (row: Row) => constant })
