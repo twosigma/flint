@@ -17,19 +17,23 @@
 package com.twosigma.flint.hadoop
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.spark.{ Logging, SparkContext }
+import org.apache.spark.SparkContext
 
 import com.twosigma.flint.rdd.Range
+import grizzled.slf4j.Logger
 
-object Hadoop extends Logging {
+object Hadoop {
+
+  val logger = Logger(Hadoop.getClass)
+
   def fileSplits[K1, V1, K: Ordering](
     sc: SparkContext,
     file: String,
     ifConf: InputFormatConf[K1, V1] // TODO consider just straight up making this (K, K) as we CAN get it, it's just a pain.
   )(parseKey: (ifConf.KExtract#Extracted, ifConf.VExtract#Extracted) => K): Map[Int, (Range[K], WriSer[ifConf.Split])] = {
     val splits = ifConf.makeSplits(new Configuration())
-    logInfo(s"Total number of splits: ${splits.size}")
-    splits.foreach { s => logDebug(s.get.toString) }
+    logger.info(s"Total number of splits: ${splits.size}")
+    splits.foreach { s => logger.debug(s.get.toString) }
     // TODO implement the version which does the more rigorous thing, at least for splits that
     // support it
     val m = getSplitTimes(sc, ifConf)(parseKey, splits)
@@ -64,7 +68,7 @@ object Hadoop extends Logging {
     val recordReader = inputFormat.createRecordReader(split, tac)
     recordReader.initialize(split, tac)
 
-    logInfo(s"Beginning to read lines from split: $split")
+    logger.info(s"Beginning to read lines from split: $split")
     new Iterator[(ifConf.KExtract#Extracted, ifConf.VExtract#Extracted)] {
       var stillMore = false
       lazy val init = stillMore = recordReader.nextKeyValue()

@@ -18,11 +18,14 @@ package com.twosigma.flint.rdd.function.summarize
 
 import com.twosigma.flint.rdd.OverlappedOrderedRDD
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.LeftSubtractableSummarizer
-import org.apache.spark.{ OneToOneDependency, Logging }
-import com.twosigma.flint.rdd.{ OrderedRDD, Range, CloseClose }
+
+import org.apache.spark.OneToOneDependency
+import com.twosigma.flint.rdd.{ CloseClose, OrderedRDD, Range }
 import scala.reflect.ClassTag
 import scala.collection.mutable
+
 import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
+import grizzled.slf4j.Logger
 
 object SummarizeWindows {
 
@@ -74,7 +77,9 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
   windowFn: K => (K, K),
   summarizer: Summarizer[V, U, V2],
   skFn: V => SK
-)(implicit ord: Ordering[K]) extends Iterator[(K, (V, V2))] with Logging {
+)(implicit ord: Ordering[K]) extends Iterator[(K, (V, V2))] {
+
+  val logger = Logger(this.getClass)
 
   val windows = mutable.Map[SK, Vector[(K, V)]]()
   val summarizerStates = mutable.Map[SK, U]()
@@ -87,14 +92,14 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
 
   lazy val rampUp = {
     val initWindowRange = getWindowRange(coreRange.begin)
-    logDebug(s"Initial window range in rampUp: $initWindowRange")
+    logger.debug(s"Initial window range in rampUp: $initWindowRange")
     if (iter.hasNext) {
-      logDebug(s"rampUp: head: ${iter.head}")
+      logger.debug(s"rampUp: head: ${iter.head}")
     }
     while (iter.hasNext && ord.lt(iter.head._1, coreRange.begin)) {
       val (k, v) = iter.next
       val sk = skFn(v)
-      logDebug(s"rampUp: reading: ($k, $sk, $v)")
+      logger.debug(s"rampUp: reading: ($k, $sk, $v)")
 
       if (initWindowRange.contains(k)) {
         val window = windows.getOrElseUpdate(sk, Vector.empty)
@@ -113,7 +118,7 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
     val (coreK, coreV) = coreRowBuffer.headOption.getOrElse(iter.head)
     val coreSk = skFn(coreV)
     val windowRange = getWindowRange(coreK)
-    logDebug(s"Invoking next() with core row: ($coreK, $coreSk, $coreV) and the window of $coreK: $windowRange")
+    logger.debug(s"Invoking next() with core row: ($coreK, $coreSk, $coreV) and the window of $coreK: $windowRange")
 
     // Drop rows.
     val window = windows.getOrElse(coreSk, Vector.empty)
@@ -149,7 +154,7 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
     }
 
     val dequed = coreRowBuffer.dequeue
-    logDebug(s"Invoking next() deque: $dequed")
+    logger.debug(s"Invoking next() deque: $dequed")
 
     (coreK,
       (

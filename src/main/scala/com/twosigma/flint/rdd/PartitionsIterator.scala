@@ -16,10 +16,14 @@
 
 package com.twosigma.flint.rdd
 
+import grizzled.slf4j.Logger
+
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{ Logging, Partition, TaskContext }
+import org.apache.spark.{ Partition, TaskContext }
 
 protected[flint] object PartitionsIterator {
+  val logger = Logger(PartitionsIterator.getClass)
+
   def apply[T](
     rdd: RDD[T],
     partitions: Seq[Partition],
@@ -43,7 +47,9 @@ protected[flint] class PartitionsIterator[T](
   partitions: Seq[Partition],
   context: TaskContext,
   preservesPartitionsOrdering: Boolean = false // FIXME: This is a band-aid which should be fixed.
-) extends BufferedIterator[T] with Logging {
+) extends BufferedIterator[T] {
+
+  val logger = PartitionsIterator.logger
 
   var _partitions = partitions
   if (!preservesPartitionsOrdering) {
@@ -57,7 +63,7 @@ protected[flint] class PartitionsIterator[T](
   private[this] def nextIter() {
     if (curIdx < _partitions.size) {
       val part = _partitions(curIdx)
-      logInfo(s"Opening iterator for partition: ${part.index}")
+      logger.debug(s"Opening iterator for partition: ${part.index}")
       curIter = rdd.iterator(part, context).buffered
       curPart = part
       curIdx += 1
@@ -69,7 +75,7 @@ protected[flint] class PartitionsIterator[T](
   }
 
   lazy val init = {
-    logInfo(s"Beginning to read partitions: ${_partitions}")
+    logger.debug(s"Beginning to read partitions: ${_partitions}")
     nextIter()
   }
 

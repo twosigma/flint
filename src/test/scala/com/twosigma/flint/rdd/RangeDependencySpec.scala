@@ -24,6 +24,7 @@ class RangeDependencySpec extends FlatSpec {
   // partition 2: [4, 4, 5, ..., 7]
   // partition 3: [7, 8, 8, ..., 12]
   // partition 4: [13, 14, ..., 20]
+
   val headers = Seq(
     OrderedPartitionHeader(OrderedRDDPartition(0), 1, Some(2)),
     OrderedPartitionHeader(OrderedRDDPartition(1), 4, None),
@@ -119,49 +120,12 @@ class RangeDependencySpec extends FlatSpec {
     // [14, +infinity) depends on partitions 4
     val dep = RangeDependency.normalize(headers).toVector
     assert(dep.size == 5)
-    assert(dep(0) == RangeDependency(
-      0,
-      CloseOpen(1, Some(4)),
-      List(
-        OrderedRDDPartition(0)
-      )
-    ))
+    assert(RangeDependency(0, CloseOpen(1, Some(4)), List(Split(0))) == dep(0))
+    assert(RangeDependency(1, CloseOpen(4, Some(5)), List(Split(0), Split(1), Split(2))) == dep(1))
+    assert(RangeDependency(2, CloseOpen(5, Some(8)), List(Split(2), Split(3))) == dep(2))
+    assert(RangeDependency(3, CloseOpen(8, Some(14)), List(Split(3), Split(4))) == dep(3))
+    assert(RangeDependency(4, CloseOpen(14, None), List(Split(4))) == dep(4))
 
-    assert(dep(1) == RangeDependency(
-      1,
-      CloseOpen(4, Some(5)),
-      List(
-        OrderedRDDPartition(0),
-        OrderedRDDPartition(1),
-        OrderedRDDPartition(2)
-      )
-    ))
-
-    assert(dep(2) == RangeDependency(
-      2,
-      CloseOpen(5, Some(8)),
-      List(
-        OrderedRDDPartition(2),
-        OrderedRDDPartition(3)
-      )
-    ))
-
-    assert(dep(3) == RangeDependency(
-      3,
-      CloseOpen(8, Some(14)),
-      List(
-        OrderedRDDPartition(3),
-        OrderedRDDPartition(4)
-      )
-    ))
-
-    assert(dep(4) == RangeDependency(
-      4,
-      CloseOpen(14, None),
-      List(
-        OrderedRDDPartition(4)
-      )
-    ))
   }
 
   it should "return correct range and dependencies when use BasicNormalizationStrategy" in {
@@ -172,40 +136,9 @@ class RangeDependencySpec extends FlatSpec {
     val dep = RangeDependency.normalize(headers, BasicNormalizationStrategy).toVector
 
     assert(dep.size == 4)
-    assert(dep(0) == RangeDependency(
-      0,
-      CloseOpen(1, Some(5)),
-      List(
-        OrderedRDDPartition(0),
-        OrderedRDDPartition(1),
-        OrderedRDDPartition(2)
-      )
-    ))
-
-    assert(dep(1) == RangeDependency(
-      1,
-      CloseOpen(5, Some(8)),
-      List(
-        OrderedRDDPartition(2),
-        OrderedRDDPartition(3)
-      )
-    ))
-
-    assert(dep(2) == RangeDependency(
-      2,
-      CloseOpen(8, Some(14)),
-      List(
-        OrderedRDDPartition(3),
-        OrderedRDDPartition(4)
-      )
-    ))
-
-    assert(dep(3) == RangeDependency(
-      3,
-      CloseOpen(14, None),
-      List(
-        OrderedRDDPartition(4)
-      )
-    ))
+    assert(RangeDependency(0, CloseOpen(1, Some(5)), List(Split(0), Split(1), Split(2))) == dep(0))
+    assert(RangeDependency(1, CloseOpen(5, Some(8)), List(Split(2), Split(3))) == dep(1))
+    assert(RangeDependency(2, CloseOpen(8, Some(14)), List(Split(3), Split(4))) == dep(2))
+    assert(RangeDependency(3, CloseOpen(14, None), List(Split(4))) == dep(3))
   }
 }

@@ -13,17 +13,3 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-
-'''ts.flint contains python bindings for Flint.'''
-
-from .context import FlintContext
-from .dataframe import TimeSeriesDataFrame
-from .udf import udf
-
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
-
-__author__ = 'Li Jin, Leif Walsh'
-__maintainer__ = 'Li Jin, Leif Walsh'
-__email__ = 'ljin@twosigma.com, leif@twosigma.com'

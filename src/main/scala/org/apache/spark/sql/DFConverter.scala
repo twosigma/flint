@@ -29,7 +29,6 @@ object DFConverter {
   def toDataFrame(sqlContext: SQLContext, schema: StructType, rdd: OrderedRDD[Long, InternalRow]): DataFrame = {
     val internalRows = rdd.values
 
-    val logicalPlan = LogicalRDD(schema.toAttributes, internalRows)(sqlContext)
-    DataFrame(sqlContext, logicalPlan)
+    sqlContext.internalCreateDataFrame(internalRows, schema)
   }
 }

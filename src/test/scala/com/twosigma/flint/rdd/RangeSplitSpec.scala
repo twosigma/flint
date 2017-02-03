@@ -16,11 +16,9 @@
 
 package com.twosigma.flint.rdd
 
-import org.apache.spark.Partition
 import org.scalatest.FlatSpec
 
 class RangeSplitSpec extends FlatSpec {
-  case class Split(override val index: Int) extends Partition
 
   val rangeSplits = IndexedSeq(
     RangeSplit(Split(0), CloseOpen(2, Option(3))),

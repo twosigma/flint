@@ -276,27 +276,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         return '{}ns'.format(int(timedelta.total_seconds()*1e9))
 
     @staticmethod
-    def _from_alf(sql_ctx, tsuri, begin, end, *, num_partitions=None, requests_per_partition=None, timeout=None):
-        sc = sql_ctx._sc
-        jpkg = java.Packages(sc)
-        if not num_partitions:
-            num_partitions = sc.defaultParallelism
-        if not requests_per_partition:
-            requests_per_partition = jpkg.alf.defaultAlfRequestsPerPartition()
-        if not timeout:
-            timeout = jpkg.WaiterClient.DEFAULT_TIMEOUT()
-        # This should not be needed but unfornately alf.timeSeriesRDD requires a timeColumn
-        timeColumn = "time"
-        # Convert timeout to millis
-        if isinstance(timeout, pd.Timedelta):
-            timeout = int(timeout.total_seconds() * 1000)
-        tsrdd = jpkg.alf.timeSeriesRDD(utils.jsc(sc), tsuri,
-                                       begin, end, timeColumn,
-                                       num_partitions, requests_per_partition,
-                                       jpkg.alf.defaultWaiterConfig(timeout))
-        return TimeSeriesDataFrame._from_tsrdd(tsrdd, sql_ctx)
-
-    @staticmethod
     def _from_tsrdd(tsrdd, sql_ctx):
         """Returns a :class:`TimeSeriesDataFrame` from a Scala ``TimeSeriesRDD``
 

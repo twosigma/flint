@@ -21,8 +21,6 @@ import org.apache.spark.Partition
 import org.scalatest.FlatSpec
 
 class RangeMergeJoinSpec extends FlatSpec {
-  case class Split(override val index: Int) extends Partition
-
   val thisSplits = IndexedSeq(
     RangeSplit(Split(0), CloseOpen(1, Some(2))),
     RangeSplit(Split(1), CloseOpen(2, Some(3))),
