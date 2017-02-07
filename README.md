@@ -1,6 +1,13 @@
 # Flint: A Time Series Library for Apache Spark
 The ability to analyze time series data at scale is critical for the success of finance and IoT applications based on Spark. Flint is the Two Sigma’s implementation of highly optimized time series operations in Spark. It performs truly parallel and rich analyses on time series data by taking advantage of the natural ordering in time series data to provide locality-based optimizations. Flint is an open source library for Spark based around the `TimeSeriesRDD`, a time series aware data structure, and a collection of time series utility and analysis functions that use `TimeSeriesRDD`s. Unlike `DataFrame` and `Dataset`, Flint’s `TimeSeriesRDD`s can leverage the existing ordering properties of datasets at rest and the fact that almost all data manipulations and analysis over these datasets respect their temporal ordering properties. It differs from other time series efforts in Spark in its ability to efficiently compute across panel data or on large scale high frequency data.
 
+## Requirements
+Spark version: 2.0 and above
+
+Scala version: 2.11.7 and above
+
+Python version: 3.5 and above
+
 ## How to build
 To build this sbt project, one could simply do
 
