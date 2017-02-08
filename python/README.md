@@ -45,6 +45,11 @@ Documentation
 
 The Flint python bindings are documented at https://ts-flint.readthedocs.io/en/latest
 
+Examples
+--------
+
+An example python notebook is available in the examples directory.  To try it out, start a jupyter notebook as described above, and then open [weather.ipynb](examples/weather.ipynb).
+
 Bugs
 ----
 
