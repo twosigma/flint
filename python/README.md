@@ -37,8 +37,8 @@ You can also run ts-flint from within a jupyter notebook.  First, create a virtu
 Then, start pyspark with the following options:
 
     export PYSPARK_DRIVER_PYTHON=jupyter
-    export PYSPARK_DRIVER_PYTHON_OPTS="notebook --NotebookApp.open_browser=False --NotebookApp.ip='$(hostname)' --NotebookApp.port=8888" 
-    bin/pyspark --master=local --jars /path/to/flint-assembly-0.2.0-SNAPSHOT.jar --py-files /path/to/flint-assembly-0.2.0-SNAPSHOT.jar                                                                                                       
+    export PYSPARK_DRIVER_PYTHON_OPTS="notebook --NotebookApp.open_browser=False --NotebookApp.ip='$(hostname)' --NotebookApp.port=8888"
+    bin/pyspark --master=local --jars /path/to/flint-assembly-0.2.0-SNAPSHOT.jar --py-files /path/to/flint-assembly-0.2.0-SNAPSHOT.jar
 
 Documentation
 -------------
