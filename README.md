@@ -1,5 +1,8 @@
 # Flint: A Time Series Library for Apache Spark
-The ability to analyze time series data at scale is critical for the success of finance and IoT applications based on Spark. Flint is the Two Sigma’s implementation of highly optimized time series operations in Spark. It performs truly parallel and rich analyses on time series data by taking advantage of the natural ordering in time series data to provide locality-based optimizations. Flint is an open source library for Spark based around the `TimeSeriesRDD`, a time series aware data structure, and a collection of time series utility and analysis functions that use `TimeSeriesRDD`s. Unlike `DataFrame` and `Dataset`, Flint’s `TimeSeriesRDD`s can leverage the existing ordering properties of datasets at rest and the fact that almost all data manipulations and analysis over these datasets respect their temporal ordering properties. It differs from other time series efforts in Spark in its ability to efficiently compute across panel data or on large scale high frequency data.
+
+The ability to analyze time series data at scale is critical for the success of finance and IoT applications based on Spark. Flint is Two Sigma’s implementation of highly optimized time series operations in Spark. It performs truly parallel and rich analyses on time series data by taking advantage of the natural ordering in time series data to provide locality-based optimizations.
+
+Flint is an open source library for Spark based around the `TimeSeriesRDD`, a time series aware data structure, and a collection of time series utility and analysis functions that use `TimeSeriesRDD`s. Unlike `DataFrame` and `Dataset`, Flint’s `TimeSeriesRDD`s can leverage the existing ordering properties of datasets at rest and the fact that almost all data manipulations and analysis over these datasets respect their temporal ordering properties. It differs from other time series efforts in Spark in its ability to efficiently compute across panel data or on large scale high frequency data.
 
 [![Documentation Status](https://readthedocs.org/projects/ts-flint/badge/?version=latest)](http://ts-flint.readthedocs.io/en/latest/?badge=latest)
 
@@ -19,7 +22,7 @@ sbt assembly
 
 ## Python bindings
 
-The python bindings for Flint, including quickstart guidelines, are documented at [python/README.md](python/README.md).  API documentation is available at https://ts-flint.readthedocs.io/en/latest
+The python bindings for Flint, including quickstart instructions, are documented at [python/README.md](python/README.md).  API documentation is available at https://ts-flint.readthedocs.io/en/latest
 
 ## Getting Started
 
