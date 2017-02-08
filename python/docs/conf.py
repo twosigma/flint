@@ -29,7 +29,8 @@ class Mock(MagicMock):
         return Mock()
 
 # Mock these to avoid import errors when running doc generation on readthedocs.
-MOCK_MODULES = ['py4j', 'pyspark', 'pyspark.sql', 'pyspark.sql.types']
+MOCK_MODULES = ['py4j', 'pyspark', 'pyspark.sql', 'pyspark.sql.types',
+                'pyspark.sql.readwriter']
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # -- General configuration ------------------------------------------------
