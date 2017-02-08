@@ -1,4 +1,3 @@
-python
 setuptools
 coverage
 Sphinx
@@ -8,3 +7,5 @@ numpy
 pandas
 pytest
 pytest-cov
+py4j
+./python
