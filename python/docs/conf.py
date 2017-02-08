@@ -21,6 +21,17 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
+from unittest.mock import MagicMock
+
+class Mock(MagicMock):
+    @classmethod
+    def __getattr__(cls, name):
+        return Mock()
+
+# Mock these to avoid import errors when running doc generation on readthedocs.
+MOCK_MODULES = ['py4j', 'pyspark', 'pyspark.sql', 'pyspark.sql.types']
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
