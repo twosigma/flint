@@ -16,11 +16,12 @@
 
 package com.twosigma.flint.timeseries
 
+import java.util.TimeZone
+
 import com.twosigma.flint.timeseries.row.Schema
 import org.scalatest.FlatSpec
 
 import org.apache.spark.sql.types._
-
 import com.twosigma.flint.SharedSparkContext
 import com.twosigma.flint.SpecUtils
 
@@ -97,8 +98,23 @@ class CSVSpec extends FlatSpec with SharedSparkContext {
         header = true, sorted = false)
       val first = timeseriesRdd.first()
 
-      // 02 Jan 2008 00:00:00 GMT
-      assert(first.getAs[Long]("time") == 1199232000000000000L)
+      val format = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.S")
+      format.setTimeZone(TimeZone.getDefault)
+
+      assert(first.getAs[Long]("time") == format.parse("2008-01-02 00:00:00.000").getTime * 1000000L)
+    }
+  }
+
+  it should "correctly convert SQL TimestampType with specified format" in {
+    SpecUtils.withResource("/timeseries/csv/TimeStampsWithHeader2.csv") { source =>
+      val timeseriesRdd = CSV.from(sqlContext, "file://" + source,
+        header = true, sorted = false, dateFormat = "yyyyMMdd'T'HH:mm:ssZ")
+      val first = timeseriesRdd.first()
+
+      val format = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.S")
+      format.setTimeZone(TimeZone.getTimeZone("UTC"))
+
+      assert(first.getAs[Long]("time") == format.parse("2008-01-02 00:00:00.000").getTime * 1000000L)
     }
   }
 }

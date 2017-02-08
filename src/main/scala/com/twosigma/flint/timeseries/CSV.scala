@@ -80,7 +80,7 @@ object CSV {
    * @param schema                   The schema for the CSV file. If the schema is given, use it otherwise infer the
    *                                 schema from the data itself.
    * @param dateFormat               The pattern string to parse the date time string under the time column.
-   *                                 Defaults to "yyyy-MM-dd'T'HH:mm:ss.SSSZZ". For example, "2016-01-01T12:00:00+00:00"
+   *                                 Defaults to "yyyy-MM-dd HH:mm:ss.SSS". For example, "1970-01-01 00:00:00.000".
    * @param keepOriginTimeColumn     The schema of return [[TimeSeriesRDD]] will always have a column named "time"
    *                                 with LongType. The original time column will not be kept by default.
    * @param codec                    compression codec to use when reading from file. Should be the fully qualified
@@ -107,14 +107,12 @@ object CSV {
     ignoreTrailingWhiteSpace: Boolean = false,
     charset: String = Charset.forName("UTF-8").name(),
     schema: StructType = null,
-    dateFormat: String = null,
+    dateFormat: String = "yyyy-MM-dd HH:mm:ss.S",
     keepOriginTimeColumn: Boolean = false,
     codec: String = null
   ): TimeSeriesRDD = {
     // scalastyle:on parameter.number
-    // TODO: In Spark 2, we should use the following CSV reader instead of databricks one
-    //       "org.apache.spark.sql.execution.datasources.csv.CSVFileFormat"
-    val reader = sqlContext.read.format("com.databricks.spark.csv")
+    val reader = sqlContext.read
       .option("header", header.toString)
       .option("delimiter", delimiter.toString)
       .option("quote", quote.toString)
@@ -125,11 +123,7 @@ object CSV {
       .option("ignoreLeadingWhiteSpace", ignoreLeadingWhiteSpace.toString)
       .option("ignoreTrailingWhiteSpace", ignoreTrailingWhiteSpace.toString)
       .option("charset", charset)
-
-    if (dateFormat != null) {
-      reader.option("dateFormat", dateFormat)
-      reader.option("timestampFormat", dateFormat)
-    }
+      .option("timestampFormat", dateFormat)
 
     // If the schema is given, use it otherwise infer the schema from the data itself.
     if (schema == null) {
@@ -141,7 +135,7 @@ object CSV {
     if (codec != null) {
       reader.option("codec", codec)
     }
-    var df = reader.load(filePath)
+    var df = reader.csv(filePath)
 
     // If there is no header and there is no schema given, it will just use the first column
     // as the `time` column.
