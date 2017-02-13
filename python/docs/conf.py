@@ -26,6 +26,12 @@ from unittest.mock import MagicMock
 class Mock(MagicMock):
     @classmethod
     def __getattr__(cls, name):
+        # The MagicMixin in unittest.mock calls getattr() with
+        # some private member variables during Mock construction,
+        # and if that happens and we trap __getattr__ and
+        # construct a new Mock, this causes an infinite recursion.
+        # This way, for those getattr() calls, we delegate up to
+        # the parent.
         if name.startswith('_mock'):
             return object.__getattribute__(cls, name)
         if name == 'DataFrame':
