@@ -17,7 +17,7 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.SharedSparkContext
-import com.twosigma.flint.timeseries.Summarizers
+import com.twosigma.flint.timeseries.{ Clocks, Summarizers }
 import com.twosigma.flint.timeseries.clock.UniformClock
 import org.apache.commons.math3.stat.descriptive.rank.Percentile
 import org.scalactic.TolerantNumerics
@@ -28,7 +28,7 @@ class QuantileSummarizerSpec extends FlatSpec with SharedSparkContext {
   private implicit val doubleEquality = TolerantNumerics.tolerantDoubleEquality(1.0e-8)
 
   "QuantileSummarizer" should "compute `quantile` correctly" in {
-    val clockTSRdd = UniformClock(
+    val clockTSRdd = Clocks.uniform(
       sc,
       frequency = "1d", offset = "0d", beginDateTime = "1970-01-01", endDateTime = "1980-01-01"
     )
