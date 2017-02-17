@@ -22,8 +22,8 @@ import versioneer
 setup(
     name='ts-flint',
     description='Distributed time-series analysis on Spark',
-    author='Leif Walsh',
-    author_email='leif@twosigma.com',
+    author='Li Jin, Leif Walsh',
+    author_email='ljin@twosigma.com, leif@twosigma.com',
     packages=['ts.flint'],
     setup_requires=[
     ],

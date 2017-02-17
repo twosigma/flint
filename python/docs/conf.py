@@ -66,8 +66,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'ts-flint'
-copyright = '2016, Leif Walsh'
-author = 'Leif Walsh'
+copyright = '2017, Two Sigma Open Source, LLC.'
+author = 'Two Sigma Open Source, LLC.'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -278,7 +278,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     (master_doc, 'ts-flint.tex', 'ts-flint Documentation',
-     'Leif Walsh', 'manual'),
+     'Two Sigma Open Source, LLC.', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
