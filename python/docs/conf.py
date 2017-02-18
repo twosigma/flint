@@ -26,6 +26,8 @@ from unittest.mock import MagicMock
 class Mock(MagicMock):
     @classmethod
     def __getattr__(cls, name):
+        if name.startswith('_mock'):
+            return object.__getattribute__(cls, name)
         return Mock()
 
 # Mock these to avoid import errors when running doc generation on readthedocs.
