@@ -520,6 +520,8 @@ trait TimeSeriesRDD extends Serializable {
 
   /**
    * Returns a [[TimeSeriesRDD]] with the only specified columns. The time column is always kept.
+   * The column names provided should only be names of top-level columns. In particular, trying to specify a subcolumn
+   * of a column of [[StructType]] will result in an exception.
    *
    * @param columns A list of column names which is not necessary to have the "time" column name.
    * @return a [[TimeSeriesRDD]] with the only specified columns.
@@ -1173,7 +1175,12 @@ class TimeSeriesRDDImpl private[timeseries] (
   def keepColumns(columns: String*): TimeSeriesRDD = withUnshuffledDataFrame {
     val nonTimeColumns = columns.filterNot(_ == TimeSeriesRDD.timeColumnName)
 
-    dataStore.dataFrame.select(TimeSeriesRDD.timeColumnName, nonTimeColumns: _*)
+    val newColumns = (TimeSeriesRDD.timeColumnName +: nonTimeColumns).map {
+      // We need to escape the column name to ensure that columns with names like "a.b" are handled well.
+      columnName => dataStore.dataFrame.col(s"`$columnName`")
+    }
+
+    dataStore.dataFrame.select(newColumns: _*)
   }
 
   def deleteColumns(columns: String*): TimeSeriesRDD = withUnshuffledDataFrame {

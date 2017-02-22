@@ -35,6 +35,7 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
   val forecastSchema = Schema("time" -> LongType, "id" -> IntegerType, "forecast" -> DoubleType)
   val forecastSwitchColumnSchema = Schema("time" -> LongType, "forecast" -> DoubleType, "id" -> IntegerType)
   val volSchema = Schema("time" -> LongType, "id" -> IntegerType, "volume" -> LongType)
+  val vol4Schema = Schema("time" -> LongType, "id" -> IntegerType, "volume" -> LongType, "volume.1" -> LongType)
   val clockSchema = Schema("time" -> LongType)
 
   val clockData = Array[(Long, Row)](
@@ -151,6 +152,33 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
     (1250L, new ExternalRow(Array(1250L, 7, 1201L), volSchema))
   )
 
+  val vol4Data = Array[(Long, Row)](
+    (1000L, new ExternalRow(Array(1000L, 7, 100L, 100L), vol4Schema)),
+    (1000L, new ExternalRow(Array(1000L, 7, 101L, 102L), vol4Schema)),
+    (1000L, new ExternalRow(Array(1000L, 3, 200L, 200L), vol4Schema)),
+    (1000L, new ExternalRow(Array(1000L, 3, 201L, 202L), vol4Schema)),
+    (1050L, new ExternalRow(Array(1050L, 3, 300L, 300L), vol4Schema)),
+    (1050L, new ExternalRow(Array(1050L, 3, 301L, 302L), vol4Schema)),
+    (1050L, new ExternalRow(Array(1050L, 7, 400L, 400L), vol4Schema)),
+    (1050L, new ExternalRow(Array(1050L, 7, 401L, 402L), vol4Schema)),
+    (1100L, new ExternalRow(Array(1100L, 3, 500L, 500L), vol4Schema)),
+    (1100L, new ExternalRow(Array(1100L, 7, 600L, 602L), vol4Schema)),
+    (1100L, new ExternalRow(Array(1100L, 3, 501L, 501L), vol4Schema)),
+    (1100L, new ExternalRow(Array(1100L, 7, 601L, 601L), vol4Schema)),
+    (1150L, new ExternalRow(Array(1150L, 3, 700L, 700L), vol4Schema)),
+    (1150L, new ExternalRow(Array(1150L, 7, 800L, 802L), vol4Schema)),
+    (1150L, new ExternalRow(Array(1150L, 3, 701L, 701L), vol4Schema)),
+    (1150L, new ExternalRow(Array(1150L, 7, 801L, 801L), vol4Schema)),
+    (1200L, new ExternalRow(Array(1200L, 3, 900L, 902L), vol4Schema)),
+    (1200L, new ExternalRow(Array(1200L, 7, 1000L, 1000L), vol4Schema)),
+    (1200L, new ExternalRow(Array(1200L, 3, 901L, 901L), vol4Schema)),
+    (1200L, new ExternalRow(Array(1200L, 7, 1001L, 1002L), vol4Schema)),
+    (1250L, new ExternalRow(Array(1250L, 3, 1100L, 1100L), vol4Schema)),
+    (1250L, new ExternalRow(Array(1250L, 7, 1200L, 1202L), vol4Schema)),
+    (1250L, new ExternalRow(Array(1250L, 3, 1101L, 1101L), vol4Schema)),
+    (1250L, new ExternalRow(Array(1250L, 7, 1201L, 1201L), vol4Schema))
+  )
+
   val defaultNumPartitions = 5
 
   var priceTSRdd: TimeSeriesRDD = _
@@ -160,6 +188,7 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
   var clockTSRdd: TimeSeriesRDD = _
   var vol2TSRdd: TimeSeriesRDD = _
   var vol3TSRdd: TimeSeriesRDD = _
+  var vol4TSRdd: TimeSeriesRDD = _
 
   override def beforeAll() {
     super.beforeAll()
@@ -190,6 +219,10 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
     vol3TSRdd = TimeSeriesRDD.fromOrderedRDD(
       OrderedRDD.fromRDD(sc.parallelize(vol3Data, defaultNumPartitions), KeyPartitioningType.Sorted),
       volSchema
+    )
+    vol4TSRdd = TimeSeriesRDD.fromOrderedRDD(
+      OrderedRDD.fromRDD(sc.parallelize(vol4Data, defaultNumPartitions), KeyPartitioningType.Sorted),
+      vol4Schema
     )
   }
 
@@ -420,27 +453,39 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
   }
 
   it should "`keepColumns` correctly" in {
-    val expectedSchema = Schema("id" -> IntegerType)
+    val expectedSchema = Schema("id" -> IntegerType, "volume.1" -> IntegerType)
     val expectedData = Array[(Long, Row)](
-      (1000L, new ExternalRow(Array(1000L, 7), expectedSchema)),
-      (1000L, new ExternalRow(Array(1000L, 3), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 3), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 7), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 3), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 7), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 3), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 7), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 3), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 7), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 3), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 7), expectedSchema))
+      (1000L, new ExternalRow(Array(1000L, 7, 100L), expectedSchema)),
+      (1000L, new ExternalRow(Array(1000L, 7, 102L), expectedSchema)),
+      (1000L, new ExternalRow(Array(1000L, 3, 200L), expectedSchema)),
+      (1000L, new ExternalRow(Array(1000L, 3, 202L), expectedSchema)),
+      (1050L, new ExternalRow(Array(1050L, 3, 300L), expectedSchema)),
+      (1050L, new ExternalRow(Array(1050L, 3, 302L), expectedSchema)),
+      (1050L, new ExternalRow(Array(1050L, 7, 400L), expectedSchema)),
+      (1050L, new ExternalRow(Array(1050L, 7, 402L), expectedSchema)),
+      (1100L, new ExternalRow(Array(1100L, 3, 500L), expectedSchema)),
+      (1100L, new ExternalRow(Array(1100L, 7, 602L), expectedSchema)),
+      (1100L, new ExternalRow(Array(1100L, 3, 501L), expectedSchema)),
+      (1100L, new ExternalRow(Array(1100L, 7, 601L), expectedSchema)),
+      (1150L, new ExternalRow(Array(1150L, 3, 700L), expectedSchema)),
+      (1150L, new ExternalRow(Array(1150L, 7, 802L), expectedSchema)),
+      (1150L, new ExternalRow(Array(1150L, 3, 701L), expectedSchema)),
+      (1150L, new ExternalRow(Array(1150L, 7, 801L), expectedSchema)),
+      (1200L, new ExternalRow(Array(1200L, 3, 902L), expectedSchema)),
+      (1200L, new ExternalRow(Array(1200L, 7, 1000L), expectedSchema)),
+      (1200L, new ExternalRow(Array(1200L, 3, 901L), expectedSchema)),
+      (1200L, new ExternalRow(Array(1200L, 7, 1002L), expectedSchema)),
+      (1250L, new ExternalRow(Array(1250L, 3, 1100L), expectedSchema)),
+      (1250L, new ExternalRow(Array(1250L, 7, 1202L), expectedSchema)),
+      (1250L, new ExternalRow(Array(1250L, 3, 1101L), expectedSchema)),
+      (1250L, new ExternalRow(Array(1250L, 7, 1201L), expectedSchema))
     )
 
-    var result = volTSRdd.keepColumns("id")
+    var result = vol4TSRdd.keepColumns("id", "volume.1")
     assert(result.collect().deep == expectedData.map(_._2).deep)
 
     // should select the time column first
-    result = volTSRdd.keepColumns("id", "time")
+    result = vol4TSRdd.keepColumns("id", "volume.1", "time")
     assert(result.collect().deep == expectedData.map(_._2).deep)
   }
 
