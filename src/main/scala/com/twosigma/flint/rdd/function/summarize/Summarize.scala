@@ -93,25 +93,26 @@ protected[flint] object Summarize {
    * summarizer to all its previous rows and the the current row in order.
    *
    * For a summarizer s, let us define
-   * - 0 = s.zero()
-   * - u + a = s.add(u, a)
-   * - u1 ++ u1 = s.merge(u1, u2)
+   *   - 0 = s.zero()
+   *   - u + a = s.add(u, a)
+   *   - u1 ++ u1 = s.merge(u1, u2)
    *
    * Note that for any sequence of values  (a[1], a[2], ..., a[n]), (a'[1], a'[2], ..., a'[m]),
    * by the definition of [[Summarizer]] if
-   * - u1 = 0 + a[1] + ... + a[n]
-   * - u2 = 0 + a'[1] + ... + a'[m]
+   *   - u1 = 0 + a[1] + ... + a[n]
+   *   - u2 = 0 + a'[1] + ... + a'[m]
+   *
    * then
-   * u1 + u2 = 0 + a[1] + ... + a[n] + a'[1] + ... + a'[m]
+   *   u1 + u2 = 0 + a[1] + ... + a[n] + a'[1] + ... + a'[m]
    *
    * This implies that we could have a two-pass algorithm where the first pass is to apply the
    * summarizer per partition; and the second pass is to calculate the summary for every rows
    * [[https://www.cs.cmu.edu/~guyb/papers/Ble93.pdf]].
    *
-   * @param rdd        An [[OrderedRDD]] of tuples (K, V).
-   * @param summarizer A [[Summarizer]] that is expected to apply.
-   * @param skFn       A function specifies that if the summarization is per secondary key then the
-   *                   secondary key is defined by this function.
+   * @param rdd        An [[OrderedRDD]] of tuples (K, V)
+   * @param summarizer A [[Summarizer]] expected to apply
+   * @param skFn       A function that extracts the secondary keys from V such that the summarizer will be
+   *                   applied per secondary key level in the order of K.
    * @return the summarized results.
    */
   def apply[K: Ordering, SK, V, U, V2](
@@ -124,17 +125,17 @@ protected[flint] object Summarize {
   }
 
   /**
-   * Apply an [[OverlappableSummarizer]] to each partition of an [[OrderedRDD]].
+   * Apply an [[OverlappableSummarizer]] to an [[OrderedRDD]].
    *
-   * @param rdd        An [[OrderedRDD]] of tuples (K, V).
-   * @param summarizer An [[OverlappableSummarizer]] that is expected to apply.
-   * @param windowFn   A function specifies the overlap, i.e. for a partition of `rdd` with range [b, e), it will
-   *                   expand to include all rows within range [b1, e1) where b1 is the left window boundary of b,
-   *                   and e1 is the right window boundary of e. Then the summarizer will be applied to each
-   *                   expanded partition where each row includes a flag to indicates whether a row is overlapped or
-   *                   not.
-   * @param skFn       A function that extracts keys from rows such that the summarizer will be applied per
-   *                   key level.
+   * @param rdd        An [[OrderedRDD]] of tuples (K, V)
+   * @param summarizer An [[OverlappableSummarizer]] expected to apply
+   * @param windowFn   A function expected to expand the range of a partition.
+   *                   Consider a partition of `rdd` with a range [b, e). The function expands
+   *                   the range to [b1, e1) where b1 is the left windowFn(b) and e1 is the right
+   *                   of windowFn(e). The `summarizer` will be applied to an expanded partition
+   *                   that includes all rows failing into [b1, e1).
+   * @param skFn       A function that extracts the secondary keys from V such that the summarizer will be
+   *                   applied per secondary key level in the order of K.
    * @return the summarized results.
    */
   def apply[K: ClassTag: Ordering, SK, V: ClassTag, U, V2](
@@ -143,7 +144,8 @@ protected[flint] object Summarize {
     windowFn: K => (K, K),
     skFn: V => SK
   ): Map[SK, V2] = {
-    val overlappedRdd = OverlappedOrderedRDD(rdd, windowFn).zipOverlapped() // (K, (V, Boolean))
+    // Basically, an RDD of (K, (V, Boolean)) where the boolean flag indicates whether a row is overlapped.
+    val overlappedRdd = OverlappedOrderedRDD(rdd, windowFn).zipOverlapped()
     val partiallySummarized: RDD[Map[SK, U]] = overlappedRdd.map(_._2).mapPartitions {
       iter =>
         // Initialize the initial state.
@@ -166,4 +168,5 @@ protected[flint] object Summarize {
       case (sk, v) => (sk, summarizer.render(v))
     }
   }
+
 }

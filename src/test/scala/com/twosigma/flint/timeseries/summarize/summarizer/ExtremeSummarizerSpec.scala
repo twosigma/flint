@@ -76,17 +76,17 @@ class ExtremeSummarizerSpec extends FlatSpec with SharedSparkContext {
     test[Double](DoubleType, { _: Row => rand.nextDouble() }, Summarizers.max _, math.max, "x", "x_max")
   }
 
-  "MaxSummarizer" should "compute long max correctly" in {
+  it should "compute long max correctly" in {
     val rand = new Random()
     test[Long](LongType, { _: Row => rand.nextLong() }, Summarizers.max _, math.max, "x", "x_max")
   }
 
-  "MaxSummarizer" should "compute float max correctly" in {
+  it should "compute float max correctly" in {
     val rand = new Random()
     test[Float](FloatType, { _: Row => rand.nextFloat() }, Summarizers.max _, math.max, "x", "x_max")
   }
 
-  "MaxSummarizer" should "compute int max correctly" in {
+  it should "compute int max correctly" in {
     val rand = new Random()
     test[Int](IntegerType, { _: Row => rand.nextInt() }, Summarizers.max _, math.max, "x", "x_max")
   }
@@ -96,17 +96,17 @@ class ExtremeSummarizerSpec extends FlatSpec with SharedSparkContext {
     test[Double](DoubleType, { _: Row => rand.nextDouble() }, Summarizers.min _, math.min, "x", "x_min")
   }
 
-  "MinSummarizer" should "compute long min correctly" in {
+  it should "compute long min correctly" in {
     val rand = new Random()
     test[Long](LongType, { _: Row => rand.nextLong() }, Summarizers.min _, math.min, "x", "x_min")
   }
 
-  "MinSummarizer" should "compute float min correctly" in {
+  it should "compute float min correctly" in {
     val rand = new Random()
     test[Float](FloatType, { _: Row => rand.nextFloat() }, Summarizers.min _, math.min, "x", "x_min")
   }
 
-  "MinSummarizer" should "compute int min correctly" in {
+  it should "compute int min correctly" in {
     val rand = new Random()
     test[Int](IntegerType, { _: Row => rand.nextInt() }, Summarizers.min _, math.min, "x", "x_min")
   }

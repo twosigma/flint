@@ -31,8 +31,8 @@ trait InputOutputSchema {
   val inputSchema: StructType
 
   /**
-   * The schema of output rows. The output schema will be exactly this `schema` if `alias` is `None`. Otherwise, it will be
-   * prepend the alias.
+   * The schema of output rows. The output schema will be exactly this `schema` if `alias` is `None`.
+   * Otherwise, it will be prepend the alias.
    */
   val schema: StructType
 

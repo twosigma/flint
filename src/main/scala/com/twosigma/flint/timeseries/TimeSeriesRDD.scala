@@ -295,11 +295,12 @@ object TimeSeriesRDD {
    * val tsRdd = TimeSeriesRDD.fromParquet(
    *   sqlContext,
    *   path = "hdfs://foo/bar/"
-   * )(isSorted = true,
+   * )(
+   *   isSorted = true,
    *   timeUnit = scala.concurrent.duration.MILLISECONDS,
    *   columns = Seq("time", "id", "price"),  // By default, null for all columns
-   *   begin = "20100101",                     // By default, null for no boundary at begin
-   *   end = "20150101"                        // By default, null for no boundary at end
+   *   begin = "20100101",                    // By default, null for no boundary at begin
+   *   end = "20150101"                       // By default, null for no boundary at end
    * )
    * }}}
    */
