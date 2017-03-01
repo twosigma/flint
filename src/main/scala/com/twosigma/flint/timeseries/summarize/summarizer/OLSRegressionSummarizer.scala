@@ -22,6 +22,7 @@ import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, Summari
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.GenericArrayData
 import org.apache.spark.sql.types._
+import org.apache.spark.unsafe.types.UTF8String
 
 object OLSRegressionSummarizer {
   val samplesColumn: String = "samples"
@@ -34,6 +35,8 @@ object OLSRegressionSummarizer {
   val rColumn: String = "r"
   val tStatOfInterceptColumn: String = "tStat_intercept"
   val tStatOfBetaColumn: String = "tStat_beta"
+  val conditionColumn: String = "cond"
+  val constantsColumn: String = "const_columns"
 
   val outputSchema = Schema.of(
     samplesColumn -> LongType,
@@ -45,7 +48,9 @@ object OLSRegressionSummarizer {
     rSquaredColumn -> DoubleType,
     rColumn -> DoubleType,
     tStatOfInterceptColumn -> DoubleType,
-    tStatOfBetaColumn -> ArrayType(DoubleType)
+    tStatOfBetaColumn -> ArrayType(DoubleType),
+    conditionColumn -> DoubleType,
+    constantsColumn -> ArrayType(StringType)
   )
 }
 
@@ -53,7 +58,8 @@ case class OLSRegressionSummarizerFactory(
   yColumn: String,
   xColumns: Array[String],
   weightColumn: String,
-  shouldIntercept: Boolean
+  shouldIntercept: Boolean,
+  shouldIgnoreConstants: Boolean
 ) extends SummarizerFactory {
   type K = Long
 
@@ -64,7 +70,8 @@ case class OLSRegressionSummarizerFactory(
       yColumn,
       xColumns,
       Option(weightColumn),
-      shouldIntercept
+      shouldIntercept,
+      shouldIgnoreConstants
     )
 
   override def requiredColumns(): ColumnList = {
@@ -79,7 +86,8 @@ case class OLSRegressionSummarizer(
   yColumn: String,
   xColumns: Array[String],
   weightColumn: Option[String],
-  shouldIntercept: Boolean
+  shouldIntercept: Boolean,
+  shouldIgnoreConstants: Boolean
 ) extends Summarizer {
 
   private val dimensionOfX = xColumns.length
@@ -96,7 +104,8 @@ case class OLSRegressionSummarizer(
   override type U = OLSRegressionState
   override type V = OLSRegressionOutput
 
-  override val summarizer = new RegressionSummarizer(dimensionOfX, shouldIntercept, isWeighted)
+  override val summarizer =
+    new RegressionSummarizer(dimensionOfX, shouldIntercept, isWeighted, shouldIgnoreConstants)
 
   override def toT(r: InternalRow): RegressionRow = RegressionRow(
     time = 0L,
@@ -107,8 +116,8 @@ case class OLSRegressionSummarizer(
 
   override val schema = OLSRegressionSummarizer.outputSchema
 
-  override def fromV(o: OLSRegressionOutput): InternalRow = {
-    InternalRow.fromSeq(Array[Any](
+  override def fromV(o: OLSRegressionOutput): InternalRow = InternalRow.fromSeq(
+    Array[Any](
       o.count,
       new GenericArrayData(o.beta),
       o.intercept,
@@ -118,7 +127,9 @@ case class OLSRegressionSummarizer(
       o.rSquared,
       o.r,
       o.tStatOfIntercept,
-      new GenericArrayData(o.tStatOfBeta)
-    ))
-  }
+      new GenericArrayData(o.tStatOfBeta),
+      o.cond,
+      new GenericArrayData(o.constantsCoordinates.map(i => UTF8String.fromString(xColumns(i))))
+    )
+  )
 }

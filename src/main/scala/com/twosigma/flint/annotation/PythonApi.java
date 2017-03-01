@@ -16,4 +16,8 @@
 
 package com.twosigma.flint.annotation;
 
-public @interface PythonApi {}
+public @interface PythonApi {
+    String message() default "";
+
+    String until() default "";
+}

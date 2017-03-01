@@ -39,7 +39,7 @@ case class QuantileSummarizer(p: Array[Double]) extends Summarizer[Double, Array
   override def merge(u1: ArrayBuffer[Double], u2: ArrayBuffer[Double]): ArrayBuffer[Double] = u1 ++ u2
 
   override def render(u: ArrayBuffer[Double]): Array[Double] = {
-    // using R-7 to be conssistant with Pandas. See https://en.wikipedia.org/wiki/Quantile
+    // Using R-7 to be consistent with Pandas. See https://en.wikipedia.org/wiki/Quantile
     val percentileEstimator = new Percentile().withEstimationType(Percentile.EstimationType.R_7)
     percentileEstimator.setData(u.toArray)
     // Convert scale from (0.0, 1.0] to (0.0, 100.0]

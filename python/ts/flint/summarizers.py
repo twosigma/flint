@@ -152,10 +152,29 @@ def covariance(x_column, y_column):
     return SummarizerFactory('covariance', x_column, y_column)
 
 
-def linear_regression(y_column, x_columns, weight_column=None, *, use_intercept=True):
+def linear_regression(y_column, x_columns, weight_column=None, *, use_intercept=True, ignore_constants=False):
     '''Computes a weighted multiple linear regression of the values in
     several columns against values in another column, using values
     from yet another column as the weights.
+
+    .. note:: Constant columns
+        When there is at least one constant variable in x_columns with intercept = True or
+        there are multiple constant variables in x_columns, a regression will
+        fail unless ignore_constants is True.
+
+        When ignore_constants is True, the scalar fields of regression result are the same as
+        if the constant variables are not included in x_columns.
+        The output beta, tStat, stdErr still have the same dimension as
+        x_columns. Entries corresponding to constant variables
+        will have 0.0 for beta and stdErr; and NaN for tStat.
+
+        When ignore_constants is False and x_columns includes constant variables,
+        the regression will output NaN for all regression
+        result.
+
+        If there are multiple constant variables in x_columns and the user
+        wants to include a constant variable, it is recommended to set
+        both of ignore_constant and use_intercept to be True.
 
     **Adds columns:**
 
@@ -190,6 +209,12 @@ def linear_regression(y_column, x_columns, weight_column=None, *, use_intercept=
     tStat_intercept (*float*)
         The t-stat of the intercept.
 
+    cond (*float*)
+        The condition number of Gramian matrix, i.e. X^TX.
+
+    const_columns (*list* of *string*)
+        The list of variables in x_columns that are constants.
+
     :param y_column: Name of the column containing the dependent
         variable.
     :type y_column: str
@@ -200,10 +225,14 @@ def linear_regression(y_column, x_columns, weight_column=None, *, use_intercept=
         the observations.
     :type weight_column: str
     :param use_intercept: Whether the regression should consider an
-        intercept term.
+        intercept term. (default: True)
     :type use_intercept: bool
+    :param ignore_constants: Whether the regression should ignore
+        independent variables, defined by x_columns, that are constants.
+        See constant columns above. (default: False)
+    :type ignore_constants: bool
     '''
-    return SummarizerFactory('OLSRegression', y_column, x_columns, weight_column, use_intercept)
+    return SummarizerFactory('OLSRegression', y_column, x_columns, weight_column, use_intercept, ignore_constants)
 
 
 def max(column):

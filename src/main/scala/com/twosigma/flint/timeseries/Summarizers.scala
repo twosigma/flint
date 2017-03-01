@@ -16,6 +16,7 @@
 
 package com.twosigma.flint.timeseries
 
+import com.twosigma.flint.annotation.PythonApi
 import com.twosigma.flint.timeseries.summarize.SummarizerFactory
 import com.twosigma.flint.timeseries.summarize.summarizer._
 import org.apache.spark.sql.types._
@@ -183,20 +184,34 @@ object Summarizers {
    *
    * The output schema is:
    *   - "samples": [[LongType]], the number of samples.
-   *   - "beta": [[ArrayType]], the beta without the intercept component.
+   *   - "beta": [[ArrayType]] of [[DoubleType]], the beta without the intercept component.
    *   - "intercept": [[DoubleType]], the intercept.
    *   - "hasIntercept": [[BooleanType]], if it has intercept.
    *   - "stdErr_intercept": [[DoubleType]], the standard error of intercept.
-   *   - "stdErr_beta": [[ArrayType]], the standard error of beta.
+   *   - "stdErr_beta": [[ArrayType]] of [[DoubleType]], the standard error of beta.
    *   - "rSquared": [[DoubleType]], the r-squared statistics.
    *   - "r": [[DoubleType]], the squared root of r-squared statistics.
    *   - "tStat_intercept": [[DoubleType]], the t-stats of intercept.
-   *   - "tStat_beta": [[ArrayType]], the t-stats of beta.
+   *   - "tStat_beta": [[ArrayType]] of [[DoubleType]], the t-stats of beta.
+   *   - "cond": [[DoubleType]], the condition number Gramian matrix, i.e. X^TX.
+   *   - "const_columns": [[ArrayType]] of [[StringType], the list of variables in `xColumns` that are constants.
    *
-   * @param yColumn         Name of column containing the dependent variable.
-   * @param xColumns        List of column names containing the independent variables.
-   * @param weightColumn    Name of column containing weights.
-   * @param shouldIntercept Whether the regression should consider an intercept term. Default is true.
+   *
+   * @param yColumn               Name of column containing the dependent variable.
+   * @param xColumns              List of column names containing the independent variables.
+   * @param weightColumn          Name of column containing weights.
+   * @param shouldIntercept       Whether the regression should consider an intercept term. Default is true.
+   * @param shouldIgnoreConstants Whether the regression should ignore independent variables, defined by `xColumns`,
+   *                              that are constants. When it is true, the scalar fields
+   *                              of regression result are the same as if the constant variables are not
+   *                              included in `xColumns`. The output beta, tStat, stdErr still have the same
+   *                              dimension as `xColumns`. However, entries corresponding to constant variables
+   *                              will have 0.0 for beta and stdErr; and Double.NaN for tStat.
+   *                              When it is false and if `xColumns` includes constant variables, the regression
+   *                             will output Double.NaN for all regression result. Note that if there are
+   *                              multiple constant variables in `xColumns` and the user wants to include a
+   *                              constant variable, it is recommended to set both `shouldIgnoreConstants`
+   *                              and `shouldIntercept` to be true. Default false.
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate beta, intercept, stdErr,
    *         t-stats, and r etc.
    */
@@ -204,14 +219,29 @@ object Summarizers {
     yColumn: String,
     xColumns: Seq[String],
     weightColumn: String = null,
-    shouldIntercept: Boolean = true
-  ): SummarizerFactory =
-    OLSRegressionSummarizerFactory(
-      yColumn,
-      xColumns.toArray,
-      weightColumn,
-      shouldIntercept
-    )
+    shouldIntercept: Boolean = true,
+    shouldIgnoreConstants: Boolean = false
+  ): SummarizerFactory = OLSRegressionSummarizerFactory(
+    yColumn,
+    xColumns.toArray,
+    weightColumn,
+    shouldIntercept,
+    shouldIgnoreConstants
+  )
+
+  @PythonApi(until = "0.2.1")
+  private def OLSRegression(
+    yColumn: String,
+    xColumns: Seq[String],
+    weightColumn: String,
+    shouldIntercept: Boolean
+  ): SummarizerFactory = OLSRegression(
+    yColumn = yColumn,
+    xColumns = xColumns,
+    weightColumn,
+    shouldIntercept = shouldIntercept,
+    shouldIgnoreConstants = false
+  )
 
   /**
    * Return a list of quantiles for a given list of quantile probabilities.
