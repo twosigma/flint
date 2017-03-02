@@ -16,15 +16,13 @@
 
 package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.SharedSparkContext
 import com.twosigma.flint.timeseries.clock.UniformClock
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.time.TimeFormat
-import org.scalatest.FlatSpec
 
 import scala.concurrent.duration.Duration
 
-class ClockSpec extends FlatSpec with SharedSparkContext {
+class ClockSpec extends TimeSeriesSuite {
 
   "Clock" should "generate clock ticks correctly" in {
     var clock = UniformClock(1000L, 2000L, 300L, 0L).toArray
@@ -66,11 +64,10 @@ class ClockSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "generate clock ticks with offset & time zone in TimeSeriesRDD correctly" in {
-    val clockTSRdd1: TimeSeriesRDD = Clocks.uniform(sc, "1d", "8h", "20010101", "20010201", "UTC")
-    val clockTSRdd2: TimeSeriesRDD = Clocks.uniform(
-      sc,
-      "1d", "0h", "20010101 08:00 +0000", "20010201 00:00 +0000", "MST"
-    )
+    val clockTSRdd1: TimeSeriesRDD =
+      Clocks.uniform(sc, "1d", "8h", "20010101", "20010201", "UTC")
+    val clockTSRdd2: TimeSeriesRDD =
+      Clocks.uniform(sc, "1d", "0h", "20010101 08:00 +0000", "20010201 00:00 +0000", "MST")
     assert(clockTSRdd1.collect().deep == clockTSRdd2.collect().deep)
   }
 

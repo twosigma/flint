@@ -17,31 +17,16 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.types.{ DoubleType, IntegerType, LongType, StringType, StructType }
-import org.scalatest.FlatSpec
+import org.apache.spark.sql.types._
 
-class AddColumnsForCycleSpec extends FlatSpec with SharedSparkContext {
+class AddColumnsForCycleSpec extends TimeSeriesSuite {
 
-  private val defaultPartitionParallelism: Int = 5
-
-  private val resourceDir: String = "/timeseries/addcolumnsforcycle"
-
-  private def from(filename: String, schema: StructType): TimeSeriesRDD =
-    SpecUtils.withResource(s"$resourceDir/$filename") { source =>
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = true,
-        sorted = true,
-        schema = schema
-      ).repartition(defaultPartitionParallelism)
-    }
+  override val defaultResourceDir: String = "/timeseries/addcolumnsforcycle"
 
   "AddColumnsForCycle" should "pass `AddAdjustedPrice` test" in {
-    val priceTSRdd = from("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val resultTSRdd = from(
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val resultTSRdd = fromCSV(
       "AddAdjustedPrice.results",
       Schema("id" -> IntegerType, "price" -> DoubleType, "adjustedPrice" -> DoubleType)
     )
@@ -57,8 +42,8 @@ class AddColumnsForCycleSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "support non-primitive types" in {
-    val priceTSRdd = from("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val resultTSRdd = from(
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val resultTSRdd = fromCSV(
       "AddAdjustedPrice.results",
       Schema("id" -> IntegerType, "price" -> DoubleType, "adjustedPrice" -> StringType)
     )
@@ -74,8 +59,8 @@ class AddColumnsForCycleSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "pass `AddTotalVolumePerKey` test, i.e. with additional a single key. " in {
-    val volumeTSRdd = from("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
-    val resultTSRdd = from(
+    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+    val resultTSRdd = fromCSV(
       "AddTotalVolumePerKey.results",
       Schema("id" -> IntegerType, "volume" -> LongType, "totalVolume" -> LongType)
     )
@@ -101,11 +86,11 @@ class AddColumnsForCycleSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "pass `AddTotalVolumePerSeqOfKeys` test, i.e. with additional a sequence of keys." in {
-    val volumeTSRdd = from(
+    val volumeTSRdd = fromCSV(
       "VolumeWithIndustryGroup.csv",
       Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
     )
-    val resultTSRdd = from(
+    val resultTSRdd = fromCSV(
       "AddTotalVolumePerSeqOfKeys.results",
       Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "totalVolume" -> LongType)
     )

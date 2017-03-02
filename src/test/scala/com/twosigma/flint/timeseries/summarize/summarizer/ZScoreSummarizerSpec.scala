@@ -17,35 +17,17 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import com.twosigma.flint.timeseries.{ Summarizers, CSV, TimeSeriesRDD }
+import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
-import org.apache.spark.sql.types.{ IntegerType, DoubleType, StructType }
-import org.scalactic.TolerantNumerics
-import org.scalatest.FlatSpec
+import org.apache.spark.sql.types.{ IntegerType, DoubleType }
 
-class ZScoreSummarizerSpec extends FlatSpec with SharedSparkContext {
+class ZScoreSummarizerSpec extends TimeSeriesSuite {
 
-  private implicit val doubleEquality = TolerantNumerics.tolerantDoubleEquality(1.0e-8)
-
-  private val defaultPartitionParallelism: Int = 5
-
-  private val resourceDir: String = "/timeseries/summarize/summarizer/zscoresummarizer"
-
-  private def from(filename: String, schema: StructType): TimeSeriesRDD =
-    SpecUtils.withResource(s"$resourceDir/$filename") { source =>
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = true,
-        sorted = true,
-        schema = schema
-      ).repartition(defaultPartitionParallelism)
-    }
+  override val defaultResourceDir: String = "/timeseries/summarize/summarizer/zscoresummarizer"
 
   "ZScoreSummarizer" should "compute in-sample `zScore` correctly" in {
-    val priceTSRdd = from("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
     val expectedSchema = Schema("price_zScore" -> DoubleType)
     val expectedResults = Array[Row](new GenericRowWithSchema(Array(0L, 1.5254255396193801), expectedSchema))
     val results = priceTSRdd.summarize(Summarizers.zScore("price", true))
@@ -54,7 +36,7 @@ class ZScoreSummarizerSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "compute out-of-sample `zScore` correctly" in {
-    val priceTSRdd = from("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
     val expectedSchema = Schema("price_zScore" -> DoubleType)
     val expectedResults = Array[Row](new GenericRowWithSchema(Array(0L, 1.8090680674665818), expectedSchema))
     val results = priceTSRdd.summarize(Summarizers.zScore("price", false))

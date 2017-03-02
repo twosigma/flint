@@ -16,39 +16,24 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
-import com.twosigma.flint.timeseries.{ Summarizers, CSV, TimeSeriesRDD }
+import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers }
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.DoubleType
-import org.scalactic.TolerantNumerics
-import org.scalatest.FlatSpec
 
 import scala.collection.mutable
 import scala.util.Random
 
-class OLSRegressionSummarizerSpec extends FlatSpec with SharedSparkContext {
+class OLSRegressionSummarizerSpec extends TimeSeriesSuite {
 
-  val defaultPartitionParallelism: Int = 10
+  override val defaultPartitionParallelism: Int = 10
 
-  val resourceDir = "/timeseries/summarize/summarizer/olsregressionsummarizer"
+  override val defaultResourceDir = "/timeseries/summarize/summarizer/olsregressionsummarizer"
 
-  private def from(filename: String): TimeSeriesRDD = SpecUtils.withResource(s"$resourceDir/${filename}") { source =>
-    CSV.from(
-      sqlContext,
-      s"file://$source",
-      header = true,
-      dateFormat = "yyyyMMdd",
-      codec = "gzip",
-      sorted = true
-    ).repartition(defaultPartitionParallelism)
-  }
-
-  implicit val doubleEquality = TolerantNumerics.tolerantDoubleEquality(1.0E-8)
-
-  private def assertEquals(a: Array[Double], b: Array[Double]): Unit = assert(a.corresponds(b)(_ === _))
+  private val dateFormat = "yyyyMMdd"
 
   "OLSRegressionSummarizer" should "regression with or without intercept correctly " in {
-    val tsRdd = from("data.csv")
+    val tsRdd = fromCSV("data.csv", dateFormat = dateFormat)
     val count = tsRdd.count()
     var result = tsRdd.summarize(Summarizers.OLSRegression("y", Seq("x1", "x2"), "w", true)).first()
     assert(result.getAs[Double](OLSRegressionSummarizer.interceptColumn) === 3.117181999992637)
@@ -96,7 +81,7 @@ class OLSRegressionSummarizerSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "return NaN beta for singular matrix" in {
-    val tsRdd = from("data.csv").addColumns("x3" -> DoubleType -> { _ => 0.0 })
+    val tsRdd = fromCSV("data.csv", dateFormat = dateFormat).addColumns("x3" -> DoubleType -> { _ => 0.0 })
     val result = tsRdd.summarize(Summarizers.OLSRegression("y", Seq("x3"), "w", shouldIntercept = false)).first()
     assert(
       result.getAs[mutable.WrappedArray[Double]](OLSRegressionSummarizer.betaColumn)(0).isNaN
@@ -112,11 +97,12 @@ class OLSRegressionSummarizerSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "not return beta as NaN for a column that is almost const" in {
-    // Randomly picks 5 number from "x2"
-    val randomSamplesOfX2 = Random.shuffle(from("data.csv").collect().map(_.getAs[Double]("x2")).toList).take(5)
+    // Randomly picks 5 number fromCSV "x2"
+    val randomSamplesOfX2 =
+      Random.shuffle(fromCSV("data.csv", dateFormat = dateFormat).collect().map(_.getAs[Double]("x2")).toList).take(5)
     randomSamplesOfX2.foreach {
       x2 =>
-        val tsRdd = from("data.csv").addColumns(
+        val tsRdd = fromCSV("data.csv", dateFormat = dateFormat).addColumns(
           "x3" -> DoubleType -> {
             r: Row => if (r.getAs[Double]("x2") == x2) 1.0 else 0.0
           }
@@ -133,7 +119,7 @@ class OLSRegressionSummarizerSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "ignore const column(s) with intercept" in {
-    val tsRdd = from("data.csv").addColumns("x3" -> DoubleType -> { _ => 2.0 })
+    val tsRdd = fromCSV("data.csv", dateFormat = dateFormat).addColumns("x3" -> DoubleType -> { _ => 2.0 })
     val result1 = tsRdd.summarize(
       Summarizers.OLSRegression(
         "y", Seq("x1", "x2"), "w", shouldIntercept = true, shouldIgnoreConstants = false
@@ -183,7 +169,7 @@ class OLSRegressionSummarizerSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "ignore const column(s) without intercept" in {
-    val tsRdd = from("data.csv").addColumns("x3" -> DoubleType -> { _ => 2.0 })
+    val tsRdd = fromCSV("data.csv", dateFormat = dateFormat).addColumns("x3" -> DoubleType -> { _ => 2.0 })
     val result1 = tsRdd.summarize(
       Summarizers.OLSRegression(
         "y", Seq("x1", "x2"), "w", shouldIntercept = false, shouldIgnoreConstants = false

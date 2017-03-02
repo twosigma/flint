@@ -18,12 +18,10 @@ package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.rdd.OrderedRDD
 import com.twosigma.flint.timeseries.row.{ InternalRowUtils, Schema }
-import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
 import org.apache.spark.sql.CatalystTypeConvertersWrapper
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
-import org.apache.spark.sql.types.{ DoubleType, IntegerType, LongType, StructType }
-import org.scalatest.FlatSpec
+import org.apache.spark.sql.types.{ DoubleType, IntegerType, LongType }
 
 import scala.collection.mutable
 
@@ -47,22 +45,9 @@ object TestHelper {
   }
 }
 
-class UnsafeOrderedRDDSpec extends FlatSpec with SharedSparkContext {
+class UnsafeOrderedRDDSpec extends TimeSeriesSuite {
 
-  private val defaultPartitionParallelism: Int = 5
-
-  private val resourceDir: String = "/timeseries/leftjoin"
-
-  private def from(filename: String, schema: StructType): TimeSeriesRDD =
-    SpecUtils.withResource(s"$resourceDir/$filename") { source =>
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = true,
-        sorted = true,
-        schema = schema
-      ).repartition(defaultPartitionParallelism)
-    }
+  override val defaultResourceDir: String = "/timeseries/leftjoin"
 
   private def compareRowReferences(rdd: OrderedRDD[Long, InternalRow]) = {
     val cmp = rdd.mapPartitionsWithIndexOrdered {
@@ -106,7 +91,7 @@ class UnsafeOrderedRDDSpec extends FlatSpec with SharedSparkContext {
   }
 
   "UnsafeOrderedRDDSpec" should "allow referencing timeseriesRdd.orderedRdd rows" in {
-    SpecUtils.withResource("/timeseries/csv/Price.csv") { source =>
+    withResource("/timeseries/csv/Price.csv") { source =>
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source, sorted = true)
       val impl = timeseriesRdd.asInstanceOf[TimeSeriesRDDImpl]
 
@@ -119,9 +104,9 @@ class UnsafeOrderedRDDSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "return correct data frames" in {
-    val priceTSRdd = from("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val volumeTSRdd = from("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
-    val resultsTSRdd = from(
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+    val resultsTSRdd = fromCSV(
       "JoinOnTime.results",
       Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
     )
@@ -137,7 +122,7 @@ class UnsafeOrderedRDDSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "support multiple iterations" in {
-    SpecUtils.withResource("/timeseries/csv/Price.csv") { source =>
+    withResource("/timeseries/csv/Price.csv") { source =>
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source, sorted = true)
       val impl = timeseriesRdd.asInstanceOf[TimeSeriesRDDImpl]
       assert(impl.orderedRdd.count() == impl.unsafeOrderedRdd.count())
@@ -161,7 +146,7 @@ class UnsafeOrderedRDDSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "collect rows correctly" in {
-    SpecUtils.withResource("/timeseries/csv/Price.csv") { source =>
+    withResource("/timeseries/csv/Price.csv") { source =>
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source, sorted = true)
       val impl = timeseriesRdd.asInstanceOf[TimeSeriesRDDImpl]
 
@@ -175,7 +160,7 @@ class UnsafeOrderedRDDSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "reuse row buffer object in unsafeOrderedRdd.mapPartitionsWithIndexOrdered" in {
-    SpecUtils.withResource("/timeseries/csv/Price.csv") { source =>
+    withResource("/timeseries/csv/Price.csv") { source =>
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source, sorted = true)
       val impl = timeseriesRdd.asInstanceOf[TimeSeriesRDDImpl]
 

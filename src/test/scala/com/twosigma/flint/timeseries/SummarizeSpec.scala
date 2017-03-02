@@ -17,31 +17,16 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
-import org.apache.spark.sql.types.{ LongType, IntegerType, DoubleType, StructType }
-import org.scalatest.FlatSpec
+import org.apache.spark.sql.types.{ LongType, IntegerType, DoubleType }
 
-class SummarizeSpec extends FlatSpec with SharedSparkContext {
+class SummarizeSpec extends TimeSeriesSuite {
 
-  private val defaultPartitionParallelism: Int = 5
-
-  private val resourceDir: String = "/timeseries/summarize"
-
-  private def from(filename: String, schema: StructType): TimeSeriesRDD =
-    SpecUtils.withResource(s"$resourceDir/$filename") { source =>
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = true,
-        sorted = true,
-        schema = schema
-      ).repartition(defaultPartitionParallelism)
-    }
+  override val defaultResourceDir: String = "/timeseries/summarize"
 
   it should "`summarize` correctly" in {
-    val volumeTSRdd = from("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
     val expectedSchema = Schema("volume_sum" -> DoubleType)
     val expectedResults = Array[Row](new GenericRowWithSchema(Array(0L, 7800.0), expectedSchema))
     val results = volumeTSRdd.summarize(Summarizers.sum("volume"))
@@ -50,7 +35,7 @@ class SummarizeSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "`summarize` per key correctly" in {
-    val volumeTSRdd = from("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
     val expectedSchema = Schema("id" -> IntegerType, "volume_sum" -> DoubleType)
     val expectedResults = Array[Row](
       new GenericRowWithSchema(Array(0L, 7, 4100.0), expectedSchema),

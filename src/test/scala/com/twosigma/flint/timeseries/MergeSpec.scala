@@ -17,31 +17,16 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import org.apache.spark.sql.types.{ DoubleType, IntegerType, StructType }
-import org.scalatest.FlatSpec
+import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 
-class MergeSpec extends FlatSpec with SharedSparkContext {
+class MergeSpec extends TimeSeriesSuite {
 
-  private val defaultPartitionParallelism: Int = 5
-
-  private val resourceDir: String = "/timeseries/merge"
-
-  private def from(filename: String, schema: StructType): TimeSeriesRDD =
-    SpecUtils.withResource(s"$resourceDir/$filename") { source =>
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = true,
-        sorted = true,
-        schema = schema
-      ).repartition(defaultPartitionParallelism)
-    }
+  override val defaultResourceDir: String = "/timeseries/merge"
 
   "Merge" should "pass `Merge` test." in {
-    val priceTSRdd1 = from("Price1.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val priceTSRdd2 = from("Price2.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val resultsTSRdd = from("Merge.results", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val priceTSRdd1 = fromCSV("Price1.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val priceTSRdd2 = fromCSV("Price2.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val resultsTSRdd = fromCSV("Merge.results", Schema("id" -> IntegerType, "price" -> DoubleType))
     val mergedTSRdd = priceTSRdd1.merge(priceTSRdd2)
     assert(resultsTSRdd.schema == mergedTSRdd.schema)
     assert(resultsTSRdd.collect().deep == mergedTSRdd.collect().deep)

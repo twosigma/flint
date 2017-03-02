@@ -16,21 +16,16 @@
 
 package com.twosigma.flint.math.stats.regression
 
-import org.scalatest.FlatSpec
+import com.twosigma.flint.FlintSuite
 import org.apache.commons.math3.stat.regression.{
   OLSMultipleLinearRegression => OLSMultipleLinearRegressionModel
 }
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{ SparkConf, SparkContext }
-import org.apache.spark.sql.SQLContext
 import org.scalactic.TolerantNumerics
-
-import com.twosigma.flint.SharedSparkContext
-import com.twosigma.flint.SpecUtils
 
 import breeze.linalg.{ DenseMatrix, DenseVector }
 
-class LinearRegressionModelSpec extends FlatSpec with SharedSparkContext {
+class LinearRegressionModelSpec extends FlintSuite {
   var modelWithIntercept: LinearRegressionModel = _
   var modelWithoutIntercept: LinearRegressionModel = _
   var data: RDD[WeightedLabeledPoint] = _
@@ -50,7 +45,7 @@ class LinearRegressionModelSpec extends FlatSpec with SharedSparkContext {
   override def beforeAll() {
     super.beforeAll()
 
-    SpecUtils.withResource("/stat/regression/linear_regression_data.csv") { source =>
+    withResource("/stat/regression/linear_regression_data.csv") { source =>
       val dataFile = scala.io.Source.fromFile(source)
       data = sc.parallelize(dataFile.getLines().map(WeightedLabeledPoint.parse(_)).toSeq, 4)
 

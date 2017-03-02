@@ -17,15 +17,13 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
-import org.scalatest.FlatSpec
 
-class SummarizerSpec extends FlatSpec with SharedSparkContext {
+class SummarizerSpec extends TimeSeriesSuite {
 
   "SummarizerFactory" should "support alias." in {
-    SpecUtils.withResource("/timeseries/csv/Price.csv") { source =>
+    withResource("/timeseries/csv/Price.csv") { source =>
       val expectedSchema = Schema("C1" -> IntegerType, "C2" -> DoubleType)
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source, sorted = true, schema = expectedSchema)
       assert(timeseriesRdd.schema == expectedSchema)

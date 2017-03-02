@@ -17,35 +17,31 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
-import org.scalatest.FlatSpec
 
-class SummarizeWindowsSpec extends FlatSpec with SharedSparkContext {
+import scala.util.Random
 
-  private val defaultPartitionParallelism: Int = 5
+class SummarizeWindowsSpec extends TimeSeriesSuite {
 
-  private val resourceDir: String = "/timeseries/summarizewindows"
+  override val defaultResourceDir: String = "/timeseries/summarizewindows"
 
   private val volumeSchema = Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
+
   private val volumeWithGroupSchema = Schema(
     "id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType
   )
 
-  private def from(filename: String, schema: StructType): TimeSeriesRDD =
-    SpecUtils.withResource(s"$resourceDir/$filename") { source =>
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = true,
-        sorted = true,
-        schema = schema
-      ).repartition(defaultPartitionParallelism)
-    }
+  private def toTSRdd(clock: Seq[Int]): TimeSeriesRDD = {
+    val clockDF = sqlContext.createDataFrame(
+      sc.parallelize(clock).map { v => Row.fromSeq(Seq(v.toLong)) }, Schema()
+    )
+    TimeSeriesRDD.fromDF(clockDF)(isSorted = true, TimeUnit.NANOSECONDS)
+  }
 
   "SummarizeWindows" should "pass `SummarizeSingleColumn` test." in {
-    val volumeTSRdd = from("Volume.csv", volumeSchema)
-    val resultsTSRdd = from(
+    val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
+    val resultsTSRdd = fromCSV(
       "SummarizeSingleColumn.results",
       Schema.append(volumeSchema, "volume_sum" -> DoubleType)
     )
@@ -56,8 +52,8 @@ class SummarizeWindowsSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "pass `SummarizeSingleColumnPerKey` test." in {
-    val volumeTSRdd = from("Volume.csv", volumeSchema)
-    val resultsTSRdd = from(
+    val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
+    val resultsTSRdd = fromCSV(
       "SummarizeSingleColumnPerKey.results",
       Schema.append(volumeSchema, "volume_sum" -> DoubleType)
     )
@@ -69,8 +65,8 @@ class SummarizeWindowsSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "pass `SummarizeSingleColumnPerSeqOfKeys` test." in {
-    val volumeTSRdd = from("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
-    val resultsTSRdd = from(
+    val volumeTSRdd = fromCSV("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
+    val resultsTSRdd = fromCSV(
       "SummarizeSingleColumnPerSeqOfKeys.results",
       Schema.append(volumeWithGroupSchema, "volume_sum" -> DoubleType)
     )
@@ -79,5 +75,79 @@ class SummarizeWindowsSpec extends FlatSpec with SharedSparkContext {
     )
     assert(summarizedTSRdd.schema == resultsTSRdd.schema)
     assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+  }
+
+  it should "pass `SummarizeWindowCountOverTwoTimeSeries` test." in {
+    val left = fromCSV("Clock1.csv", Schema())
+    val right = fromCSV("Clock2.csv", Schema())
+    val summarizedTSRdd = left.summarizeWindows(Windows.pastAbsoluteTime("500ns"), Summarizers.count(), Seq(), right)
+    val resultsTSRdd = fromCSV(
+      "SummarizeWindowCountOverTwoTimeSeries.results",
+      Schema("count" -> LongType)
+    )
+    assert(summarizedTSRdd.schema == resultsTSRdd.schema)
+    assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+  }
+
+  it should "pass `SummarizeWindowCountOverSingleTimeSeries` test." in {
+    val clock = fromCSV("Clock.csv", Schema())
+    val summarizedTSRdd = clock.summarizeWindows(Windows.pastAbsoluteTime("5ns"), Summarizers.count())
+    val resultsTSRdd = fromCSV(
+      "SummarizeWindowCountOverSingleTimeSeries.results",
+      Schema("count" -> LongType)
+    )
+    assert(summarizedTSRdd.schema == resultsTSRdd.schema)
+    assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+  }
+
+  it should "pass `SummarizeWindowCountOverSingleRandomTimeSeries` test." in {
+    (1 to 10).foreach { _ =>
+      val n = 100
+      val step = 10
+      val clock = Seq.fill(n)(Random.nextInt(step * n)).sorted
+      val clockTSRdd = toTSRdd(clock)
+
+      val window = Windows.pastAbsoluteTime(s"$step ns")
+
+      val summarized1 = clockTSRdd.summarizeWindows(
+        window, Summarizers.count()
+      ).rdd.map(_.getAs[Long]("count"))
+
+      val summarized2 = clockTSRdd.summarizeWindows(
+        window, Summarizers.count(), Seq(), clockTSRdd
+      ).rdd.map(_.getAs[Long]("count"))
+
+      val results = clock.map {
+        t1 =>
+          val (b, e) = window.of(t1.toLong)
+          clock.filter { t2 => t2 >= b && t2 <= e }.length
+      }
+      assert(summarized1.collect().deep == results.toArray.deep)
+      assert(summarized2.collect().deep == results.toArray.deep)
+    }
+  }
+
+  it should "pass `SummarizeWindowCountOverTwoRandomTimeSeries` test." in {
+    (1 to 10).foreach { _ =>
+      val n = 100
+      val step = 10
+      val clock1 = Seq.fill(n)(Random.nextInt(step * n)).sorted
+      val clock2 = Seq.fill(n)(Random.nextInt(step * n)).sorted
+      val clockTSRdd1 = toTSRdd(clock1)
+      val clockTSRdd2 = toTSRdd(clock2)
+
+      val window = Windows.pastAbsoluteTime(s"$step ns")
+
+      val summarized = clockTSRdd1.summarizeWindows(
+        window, Summarizers.count(), Seq(), clockTSRdd2
+      ).rdd.map(_.getAs[Long]("count"))
+
+      val results = clock1.map {
+        t1 =>
+          val (b, e) = window.of(t1.toLong)
+          clock2.filter { t2 => t2 >= b && t2 <= e }.length
+      }
+      assert(summarized.collect().deep == results.toArray.deep)
+    }
   }
 }

@@ -17,43 +17,28 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import org.apache.spark.sql.types.{ DoubleType, LongType, IntegerType, StructType }
-import org.scalatest.FlatSpec
+import org.apache.spark.sql.types.{ DoubleType, LongType, IntegerType }
 
-class SummarizeCyclesSpec extends FlatSpec with SharedSparkContext {
+class SummarizeCyclesSpec extends TimeSeriesSuite {
 
-  private val defaultPartitionParallelism: Int = 5
-
-  private val resourceDir: String = "/timeseries/summarizecycles"
+  override val defaultResourceDir: String = "/timeseries/summarizecycles"
   private val volumeSchema = Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
   private val volume2Schema = volumeSchema
   private val volumeWithGroupSchema = Schema(
     "id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType
   )
 
-  private def from(filename: String, schema: StructType): TimeSeriesRDD =
-    SpecUtils.withResource(s"$resourceDir/$filename") { source =>
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = true,
-        sorted = true,
-        schema = schema
-      ).repartition(defaultPartitionParallelism)
-    }
-
   "SummarizeCycles" should "pass `SummarizeSingleColumn` test." in {
-    val volumeTSRdd = from("Volume.csv", volumeSchema)
-    val resultTSRdd = from("SummarizeSingleColumn.results", Schema("volume_sum" -> DoubleType))
+    val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
+    val resultTSRdd = fromCSV("SummarizeSingleColumn.results", Schema("volume_sum" -> DoubleType))
     val summarizedVolumeTSRdd = volumeTSRdd.summarizeCycles(Summarizers.sum("volume"))
 
     assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
   }
 
   it should "pass `SummarizeSingleColumnPerKey` test, i.e. with additional a single key." in {
-    val volumeTSRdd = from("Volume2.csv", volume2Schema)
-    val resultTSRdd = from(
+    val volumeTSRdd = fromCSV("Volume2.csv", volume2Schema)
+    val resultTSRdd = fromCSV(
       "SummarizeSingleColumnPerKey.results",
       Schema("id" -> IntegerType, "volume_sum" -> DoubleType)
     )
@@ -71,8 +56,8 @@ class SummarizeCyclesSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "pass `SummarizeSingleColumnPerSeqOfKeys` test, i.e. with additional a sequence of keys." in {
-    val volumeTSRdd = from("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
-    val resultTSRdd = from(
+    val volumeTSRdd = fromCSV("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
+    val resultTSRdd = fromCSV(
       "SummarizeSingleColumnPerSeqOfKeys.results",
       Schema("id" -> IntegerType, "group" -> IntegerType, "volume_sum" -> DoubleType)
     )

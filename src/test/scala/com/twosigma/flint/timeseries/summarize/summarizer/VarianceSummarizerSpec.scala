@@ -17,34 +17,16 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import com.twosigma.flint.timeseries.{ Summarizers, CSV, TimeSeriesRDD }
+import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers }
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.types.{ IntegerType, DoubleType, StructType }
-import org.scalactic.TolerantNumerics
-import org.scalatest.FlatSpec
+import org.apache.spark.sql.types.{ IntegerType, DoubleType }
 
-class VarianceSummarizerSpec extends FlatSpec with SharedSparkContext {
-  private implicit val doubleEquality = TolerantNumerics.tolerantDoubleEquality(1.0e-8)
-
-  private val defaultPartitionParallelism: Int = 5
-
+class VarianceSummarizerSpec extends TimeSeriesSuite {
   // It is by intention to reuse the files
-  private val resourceDir: String = "/timeseries/summarize/summarizer/meansummarizer"
-
-  private def from(filename: String, schema: StructType): TimeSeriesRDD =
-    SpecUtils.withResource(s"$resourceDir/$filename") { source =>
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = true,
-        sorted = true,
-        schema = schema
-      ).repartition(defaultPartitionParallelism)
-    }
+  override val defaultResourceDir: String = "/timeseries/summarize/summarizer/meansummarizer"
 
   "StandardDeviationSummarizer" should "compute `stddev` correctly" in {
-    val priceTSRdd = from("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType)).addColumns(
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType)).addColumns(
       "price2" -> DoubleType -> { r: Row => r.getAs[Double]("price") },
       "price3" -> DoubleType -> { r: Row => -r.getAs[Double]("price") },
       "price4" -> DoubleType -> { r: Row => r.getAs[Double]("price") * 2 },

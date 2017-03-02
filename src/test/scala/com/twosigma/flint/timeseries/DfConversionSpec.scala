@@ -18,18 +18,16 @@ package com.twosigma.flint.timeseries
 
 import java.util.concurrent.TimeUnit
 
-import com.twosigma.flint.SharedSparkContext
 import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 import com.twosigma.flint.timeseries.row.Schema
 
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
-import org.apache.spark.sql.types.{ LongType, StructType }
-import org.scalatest.FlatSpec
+import org.apache.spark.sql.types._
 
-class DfConversionSpec extends FlatSpec with SharedSparkContext {
-  val defaultNumPartitions = 5
+class DfConversionSpec extends TimeSeriesSuite {
+  override val defaultPartitionParallelism = 5
   val clockSchema: StructType = Schema("time" -> LongType)
   val clockData = (0L to 100L).map(ts => (ts, new GenericRowWithSchema(Array(ts), clockSchema).asInstanceOf[Row]))
 
@@ -38,7 +36,8 @@ class DfConversionSpec extends FlatSpec with SharedSparkContext {
   override def beforeAll() {
     super.beforeAll()
     clockTSRdd = TimeSeriesRDD.fromOrderedRDD(
-      OrderedRDD.fromRDD(sc.parallelize(clockData, defaultNumPartitions), KeyPartitioningType.Sorted), clockSchema
+      OrderedRDD.fromRDD(sc.parallelize(clockData, defaultPartitionParallelism), KeyPartitioningType.Sorted),
+      clockSchema
     )
   }
 
@@ -59,8 +58,8 @@ class DfConversionSpec extends FlatSpec with SharedSparkContext {
     val df = clockTSRdd.toDF
     val revertedDf = df.withColumn("time", -col("time") + 100)
 
-    val tsrdd = TimeSeriesRDD.fromDF(revertedDf)(isSorted = false, TimeUnit.NANOSECONDS)
-    val tsRows = tsrdd.collect()
+    val tsRdd = TimeSeriesRDD.fromDF(revertedDf)(isSorted = false, TimeUnit.NANOSECONDS)
+    val tsRows = tsRdd.collect()
 
     val zipped = tsRows.map(row => row.getAs[Long]("time")).zipWithIndex
     assert(zipped.forall {

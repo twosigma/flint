@@ -17,33 +17,15 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import com.twosigma.flint.timeseries.{ Summarizers, CSV, TimeSeriesRDD }
-import org.apache.spark.sql.types.{ DoubleType, IntegerType, StructType }
-import org.scalactic.TolerantNumerics
-import org.scalatest.FlatSpec
+import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers }
+import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 
-class NthMomentSummarizerSpec extends FlatSpec with SharedSparkContext {
+class NthMomentSummarizerSpec extends TimeSeriesSuite {
 
-  private implicit val doubleEquality = TolerantNumerics.tolerantDoubleEquality(1.0e-8)
-
-  private val defaultPartitionParallelism: Int = 5
-
-  private val resourceDir: String = "/timeseries/summarize/summarizer/nthmomentsummarizer"
-
-  private def from(filename: String, schema: StructType): TimeSeriesRDD =
-    SpecUtils.withResource(s"$resourceDir/$filename") { source =>
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = true,
-        sorted = true,
-        schema = schema
-      ).repartition(defaultPartitionParallelism)
-    }
+  override val defaultResourceDir: String = "/timeseries/summarize/summarizer/nthmomentsummarizer"
 
   "NthMomentSummarizer" should "`computeNthMoment` correctly" in {
-    val priceTSRdd = from("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
     var results = priceTSRdd.summarize(Summarizers.nthMoment("price", 0), Seq("id")).collect()
     assert(results.find(_.getAs[Int]("id") == 3).head.getAs[Double]("price_0thMoment") === 1.0)
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_0thMoment") === 1.0)
@@ -66,7 +48,7 @@ class NthMomentSummarizerSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "`computeNthCentralMoment` correctly" in {
-    val priceTSRdd = from("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
     var results = priceTSRdd.summarize(Summarizers.nthMoment("price", 0), Seq("id")).collect()
     results = priceTSRdd.summarize(Summarizers.nthCentralMoment("price", 1), Seq("id")).collect()
     assert(results.find(_.getAs[Int]("id") == 3).head.getAs[Double]("price_1thCentralMoment") === 0d)

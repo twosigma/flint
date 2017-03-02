@@ -17,15 +17,13 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.SharedSparkContext
-import com.twosigma.flint.timeseries.{ Clocks, Summarizers }
+import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers }
 import com.twosigma.flint.timeseries.clock.UniformClock
 import org.apache.commons.math3.stat.descriptive.rank.Percentile
 import org.scalactic.TolerantNumerics
 import org.scalatest.FlatSpec
 
-class QuantileSummarizerSpec extends FlatSpec with SharedSparkContext {
-
-  private implicit val doubleEquality = TolerantNumerics.tolerantDoubleEquality(1.0e-8)
+class QuantileSummarizerSpec extends TimeSeriesSuite {
 
   "QuantileSummarizer" should "compute `quantile` correctly" in {
     val clockTSRdd = Clocks.uniform(

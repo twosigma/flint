@@ -19,22 +19,17 @@ package com.twosigma.flint.timeseries
 import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.timeseries.row.Schema
-import org.scalatest.FlatSpec
 import org.scalatest.tagobjects.Slow
-import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
 import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 import org.apache.spark.sql.functions.{ col, udf }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ExternalRow }
-import org.scalactic.TolerantNumerics
 
 import scala.collection.mutable
 import scala.concurrent.duration._
 
-class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
-  val additivePrecision: Double = 1.0e-8
-  implicit val doubleEquality = TolerantNumerics.tolerantDoubleEquality(additivePrecision)
+class TimeSeriesRDDSpec extends TimeSeriesSuite {
 
   val priceSchema = Schema("time" -> LongType, "id" -> IntegerType, "price" -> DoubleType)
   val forecastSchema = Schema("time" -> LongType, "id" -> IntegerType, "forecast" -> DoubleType)
@@ -577,7 +572,7 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
 
   // This test is temporarily tagged as "Slow" so that scalatest runner could exclude this test optionally.
   it should "read parquet files" taggedAs (Slow) ignore {
-    SpecUtils.withResource("/timeseries/parquet/PriceWithHeader.parquet") { source =>
+    withResource("/timeseries/parquet/PriceWithHeader.parquet") { source =>
       val expectedSchema = Schema("id" -> IntegerType, "price" -> DoubleType, "info" -> StringType)
       val tsrdd = TimeSeriesRDD.fromParquet(sc, "file://" + source + "/*")(true, NANOSECONDS)
       val rows = tsrdd.collect()
@@ -593,7 +588,7 @@ class TimeSeriesRDDSpec extends FlatSpec with SharedSparkContext {
 
   // This test is temporarily tagged as "Slow" so that scalatest runner could exclude this test optionally.
   it should "not modify original rows during conversions/modifications" taggedAs (Slow) ignore {
-    SpecUtils.withResource("/timeseries/parquet/PriceWithHeader.parquet") { source =>
+    withResource("/timeseries/parquet/PriceWithHeader.parquet") { source =>
       val tsrdd = TimeSeriesRDD.fromParquet(sc, "file://" + source + "/*")(true, NANOSECONDS)
       // fromParquet outputs UnsafeRows. Recording the initial state.
       val rows = tsrdd.collect()

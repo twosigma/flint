@@ -17,58 +17,47 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import org.apache.spark.sql.types.{ LongType, IntegerType, DoubleType, StructType }
-import org.scalatest.FlatSpec
+import org.apache.spark.sql.types.{ LongType, IntegerType, DoubleType }
 
-class LeftJoinSpec extends FlatSpec with SharedSparkContext {
-
-  private val defaultPartitionParallelism: Int = 5
-
-  private val resourceDir: String = "/timeseries/leftjoin"
-
-  private def from(filename: String, schema: StructType): TimeSeriesRDD =
-    SpecUtils.withResource(s"$resourceDir/$filename") { source =>
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = true,
-        sorted = true,
-        schema = schema
-      ).repartition(defaultPartitionParallelism)
-    }
+class LeftJoinSpec extends TimeSeriesSuite {
+  override val defaultResourceDir: String = "/timeseries/leftjoin"
 
   "LeftJoin" should "pass `JoinOnTime` test." in {
-    val priceTSRdd = from("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val volumeTSRdd = from("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
-    val resultsTSRdd = from("JoinOnTime.results", Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType))
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+    val resultsTSRdd = fromCSV(
+      "JoinOnTime.results",
+      Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
+    )
     val joinedTSRdd = priceTSRdd.leftJoin(volumeTSRdd, "0ns", Seq("id"))
     assert(resultsTSRdd.schema == joinedTSRdd.schema)
     assert(resultsTSRdd.collect().deep == joinedTSRdd.collect().deep)
   }
 
   it should "pass `JoinOnTimeWithMissingMatching` test." in {
-    val priceTSRdd = from("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val volumeTSRdd = from("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
-    val resultsTSRdd = from(
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+    val resultsTSRdd = fromCSV(
       "JoinOnTimeWithMissingMatching.results",
       Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
     )
-    val joinedTSRdd = priceTSRdd.leftJoin(volumeTSRdd.deleteRows(row => row.getAs[Long]("time") == 1050L), "0ns", Seq("id"))
+    val joinedTSRdd = priceTSRdd.leftJoin(
+      volumeTSRdd.deleteRows(row => row.getAs[Long]("time") == 1050L), "0ns", Seq("id")
+    )
     assert(resultsTSRdd.schema == joinedTSRdd.schema)
     assert(resultsTSRdd.collect().deep == joinedTSRdd.collect().deep)
   }
 
   it should "pass `JoinOnTimeAndMultipleKeys` test." in {
-    val priceTSRdd = from(
+    val priceTSRdd = fromCSV(
       "PriceWithIndustryGroup.csv",
       Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType)
     )
-    val volumeTSRdd = from(
+    val volumeTSRdd = fromCSV(
       "VolumeWithIndustryGroup.csv",
       Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
     )
-    val resultsTSRdd = from(
+    val resultsTSRdd = fromCSV(
       "JoinOnTimeAndMultipleKeys.results",
       Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
     )

@@ -17,31 +17,16 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SpecUtils, SharedSparkContext }
-import org.apache.spark.sql.types.{ IntegerType, LongType, DoubleType, StructType }
-import org.scalatest.FlatSpec
+import org.apache.spark.sql.types._
 
-class FutureLeftJoinSpec extends FlatSpec with SharedSparkContext {
+class FutureLeftJoinSpec extends TimeSeriesSuite {
 
-  private val defaultPartitionParallelism: Int = 5
-
-  private val resourceDir: String = "/timeseries/futureleftjoin"
-
-  private def from(filename: String, schema: StructType): TimeSeriesRDD =
-    SpecUtils.withResource(s"$resourceDir/$filename") { source =>
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = true,
-        sorted = true,
-        schema = schema
-      ).repartition(defaultPartitionParallelism)
-    }
+  override val defaultResourceDir: String = "/timeseries/futureleftjoin"
 
   "FutureLeftJoin" should "pass `JoinOnTime` test." in {
-    val priceTSRdd = from("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val volumeTSRdd = from("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
-    val resultsTSRdd = from(
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+    val resultsTSRdd = fromCSV(
       "JoinOnTime.results",
       Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType, "time2" -> LongType)
     )
@@ -58,15 +43,15 @@ class FutureLeftJoinSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "pass `JoinOnTimeAndMultipleKeys` test." in {
-    val priceTSRdd = from(
+    val priceTSRdd = fromCSV(
       "PriceWithIndustryGroup.csv",
       Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType)
     )
-    val volumeTSRdd = from(
+    val volumeTSRdd = fromCSV(
       "VolumeWithIndustryGroup.csv",
       Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
     )
-    val resultsTSRdd = from(
+    val resultsTSRdd = fromCSV(
       "JoinOnTimeAndMultipleKeys.results",
       Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
     )

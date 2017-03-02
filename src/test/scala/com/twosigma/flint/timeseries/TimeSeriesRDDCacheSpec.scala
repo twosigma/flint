@@ -17,18 +17,16 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 import org.scalatest.concurrent.Timeouts
-import org.scalatest.FlatSpec
 import org.scalatest.tagobjects.Slow
 import org.scalatest.time.{ Second, Span }
 
-class TimeSeriesRDDCacheSpec extends FlatSpec with SharedSparkContext with Timeouts {
+class TimeSeriesRDDCacheSpec extends TimeSeriesSuite with Timeouts {
 
   "TimeSeriesRDD" should "correctly cache data" taggedAs Slow in {
-    SpecUtils.withResource("/timeseries/csv/Price.csv") { source =>
+    withResource("/timeseries/csv/Price.csv") { source =>
       val priceSchema = Schema("id" -> IntegerType, "price" -> DoubleType)
       val timeSeriesRdd = CSV.from(sqlContext, "file://" + source, sorted = true, schema = priceSchema)
 

@@ -19,16 +19,12 @@ package com.twosigma.flint.timeseries
 import java.util.TimeZone
 
 import com.twosigma.flint.timeseries.row.Schema
-import org.scalatest.FlatSpec
-
 import org.apache.spark.sql.types._
-import com.twosigma.flint.SharedSparkContext
-import com.twosigma.flint.SpecUtils
 
-class CSVSpec extends FlatSpec with SharedSparkContext {
+class CSVSpec extends TimeSeriesSuite {
 
   "CSV" should "read a CSV file without header." in {
-    SpecUtils.withResource("/timeseries/csv/Price.csv") { source =>
+    withResource("/timeseries/csv/Price.csv") { source =>
       val expectedSchema = Schema("C1" -> IntegerType, "C2" -> DoubleType)
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source, sorted = true, schema = expectedSchema)
       val ts = timeseriesRdd.collect()
@@ -41,7 +37,7 @@ class CSVSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "read a CSV file with header." in {
-    SpecUtils.withResource("/timeseries/csv/PriceWithHeader.csv") { source =>
+    withResource("/timeseries/csv/PriceWithHeader.csv") { source =>
       val expectedSchema = Schema("id" -> IntegerType, "price" -> DoubleType, "info" -> StringType)
       val timeseriesRdd = CSV.from(
         sqlContext,
@@ -58,7 +54,7 @@ class CSVSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "read a CSV file with header and keep origin time column." in {
-    SpecUtils.withResource("/timeseries/csv/PriceWithHeader.csv") { source =>
+    withResource("/timeseries/csv/PriceWithHeader.csv") { source =>
       val expectedSchema = Schema(
         "time_" -> IntegerType,
         "id" -> IntegerType,
@@ -80,11 +76,11 @@ class CSVSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "read an unsorted CSV file with header" in {
-    val ts1 = SpecUtils.withResource("/timeseries/csv/PriceWithHeaderUnsorted.csv") { source =>
+    val ts1 = withResource("/timeseries/csv/PriceWithHeaderUnsorted.csv") { source =>
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source, header = true, sorted = false)
       timeseriesRdd.collect()
     }
-    val ts2 = SpecUtils.withResource("/timeseries/csv/PriceWithHeader.csv") { source =>
+    val ts2 = withResource("/timeseries/csv/PriceWithHeader.csv") { source =>
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source, header = true, sorted = true)
       timeseriesRdd.collect()
     }
@@ -93,7 +89,7 @@ class CSVSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "correctly convert SQL TimestampType with default format" in {
-    SpecUtils.withResource("/timeseries/csv/TimeStampsWithHeader.csv") { source =>
+    withResource("/timeseries/csv/TimeStampsWithHeader.csv") { source =>
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source,
         header = true, sorted = false)
       val first = timeseriesRdd.first()
@@ -106,7 +102,7 @@ class CSVSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "correctly convert SQL TimestampType with specified format" in {
-    SpecUtils.withResource("/timeseries/csv/TimeStampsWithHeader2.csv") { source =>
+    withResource("/timeseries/csv/TimeStampsWithHeader2.csv") { source =>
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source,
         header = true, sorted = false, dateFormat = "yyyyMMdd'T'HH:mm:ssZ")
       val first = timeseriesRdd.first()

@@ -18,20 +18,17 @@ package com.twosigma.flint.timeseries
 
 import java.util.concurrent.TimeUnit
 
-import com.twosigma.flint.SharedSparkContext
 import com.twosigma.flint.timeseries.row.Schema
-import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.scalatest.FlatSpec
 import org.apache.spark.sql.{ SQLContext, DataFrame, Row }
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.expressions.{ GenericRowWithSchema => ExternalRow }
 import org.scalatest.tagobjects.Slow
 
-class TimeSeriesRDDConversionSpec extends FlatSpec with SharedSparkContext {
+class TimeSeriesRDDConversionSpec extends TimeSeriesSuite {
 
   // The largest prime < 100
-  private val defaultNumPartitions = 97
+  override val defaultPartitionParallelism = 97
 
   // The 10000-th prime.
   private val defaultNumRows = 104729
@@ -39,7 +36,7 @@ class TimeSeriesRDDConversionSpec extends FlatSpec with SharedSparkContext {
   private def createDataFrame(isSorted: Boolean = true)(implicit sqlContext: SQLContext): DataFrame = {
     val n = defaultNumRows
     val schema = Schema("value" -> DoubleType)
-    val rdd: RDD[Row] = sqlContext.sparkContext.parallelize(1 to n, defaultNumPartitions).map { i =>
+    val rdd: RDD[Row] = sqlContext.sparkContext.parallelize(1 to n, defaultPartitionParallelism).map { i =>
       val data: Array[Any] = if (isSorted) {
         Array((i / 100).toLong, i.toDouble)
       } else {

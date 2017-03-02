@@ -16,47 +16,22 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.{ SharedSparkContext, SpecUtils }
-import com.twosigma.flint.timeseries.{ CSV, Clocks, Summarizers, TimeSeriesRDD }
+import com.twosigma.flint.timeseries._
 import com.twosigma.flint.timeseries.row.Schema
-import org.apache.spark.sql.types.{ DoubleType, IntegerType, StructType }
+import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 import org.apache.spark.sql.Row
 
-import scala.io.Source
-import org.scalactic.TolerantNumerics
-import org.scalatest.FlatSpec
-import play.api.libs.json.{ JsNull, JsString, JsValue, Json }
+class ExponentialSmoothingSummarizerSpec extends TimeSeriesSuite {
 
-class ExponentialSmoothingSummarizerSpec extends FlatSpec with SharedSparkContext {
+  override val defaultPartitionParallelism: Int = 10
 
-  val defaultPartitionParallelism: Int = 10
-
-  val resourceDir = "/timeseries/summarize/summarizer/exponentialsmoothingsummarizer"
-
-  private def from(filename: String, schema: StructType): TimeSeriesRDD =
-    SpecUtils.withResource(s"$resourceDir/$filename") { source =>
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = true,
-        sorted = true,
-        schema = schema
-      ).repartition(defaultPartitionParallelism)
-    }
-
-  private def meta(filename: String): JsValue =
-    SpecUtils.withResource(s"$resourceDir/${filename}", suffix = "json") { source =>
-      Json.parse(Source.fromFile(source).mkString)
-    }
-
-  implicit val doubleEquality = TolerantNumerics.tolerantDoubleEquality(1.0E-8)
-
-  def assertEquals(a: Array[Double], b: Array[Double]) {
-    assert(a.corresponds(b)(_ === _))
-  }
+  override val defaultResourceDir = "/timeseries/summarize/summarizer/exponentialsmoothingsummarizer"
 
   "ExponentialSmoothingSummarizer" should "smooth correctly" in {
-    val timeSeriesRdd = from("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType, "expected" -> DoubleType))
+    val timeSeriesRdd = fromCSV(
+      "Price.csv",
+      Schema("id" -> IntegerType, "price" -> DoubleType, "expected" -> DoubleType)
+    )
     val result1 = timeSeriesRdd.addSummaryColumns(Summarizers.exponentialSmoothing(
       xColumn = "price",
       timestampsToPeriods = (a, b) => (b - a) / 100.0
