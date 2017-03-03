@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.timeseries.clock.UniformClock
+import com.twosigma.flint.timeseries.clock.{ RandomClock, UniformClock }
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.time.TimeFormat
 
@@ -24,35 +24,36 @@ import scala.concurrent.duration.Duration
 
 class ClockSpec extends TimeSeriesSuite {
 
-  "Clock" should "generate clock ticks correctly" in {
-    var clock = UniformClock(1000L, 2000L, 300L, 0L).toArray
+  "UniformClock" should "generate clock ticks correctly" in {
+    var clock = new UniformClock(sc, 1000L, 2000L, 300L, 0L).asStream().toArray
     var benchmark = Array(1000L, 1300L, 1600L, 1900L)
     assert(clock.deep == benchmark.deep)
 
-    clock = UniformClock(1000L, 2000L, 300L, 500L).toArray
+    clock = new UniformClock(sc, 1000L, 2000L, 300L, 500L).asStream().toArray
     benchmark = Array(1200L, 1500L, 1800L)
     assert(clock.deep == benchmark.deep)
   }
 
   it should "generate clock ticks in RDD correctly" in {
-    var clockRdd = UniformClock(sc, 1000L, 5000L, 30, 0L, 10).map(_._1)
-    var clockStream = UniformClock(1000L, 5000L, 30, 0L)
-    assert(clockRdd.collect().deep == clockStream.toArray.deep)
+    val clock = new UniformClock(sc, 1000L, 5000L, 30L, 0L)
+    var clockRdd = clock.asOrderedRDD(10).map(_._1)
+    val clockStream = clock.asStream().toArray
+    assert(clockRdd.collect().deep == clockStream.deep)
 
-    clockRdd = UniformClock(sc, 1000L, 5000L, 30, 500L, 10).map(_._1)
-    clockStream = UniformClock(1000L, 5000L, 30, 500L)
-    assert(clockRdd.collect().deep == clockStream.toArray.deep)
+    clockRdd = clock.asOrderedRDD(10).map(_._1)
+    assert(clockRdd.collect().deep == clockStream.deep)
   }
 
   it should "generate clock ticks in TimeSeriesRDD correctly" in {
     val clockTSRdd: TimeSeriesRDD = Clocks.uniform(sc, "5h", "0d", "20010101", "20010201")
     assert(clockTSRdd.schema == Schema())
-    val clockStream = UniformClock(
+    val clockStream = new UniformClock(
+      sc,
       TimeFormat.parseNano("20010101"),
       TimeFormat.parseNano("20010201"),
       Duration("5h").toNanos,
       0L
-    )
+    ).asStream()
     val rdd = clockTSRdd.rdd.map(r => r.getAs[Long](TimeSeriesRDD.timeColumnName))
     assert(rdd.collect().deep == clockStream.toArray.deep)
   }
@@ -75,5 +76,44 @@ class ClockSpec extends TimeSeriesSuite {
     val clockTSRdd1: TimeSeriesRDD = Clocks.uniform(sc, "1d", "0h", "19700101", "20300101", "UTC")
     val clockTSRdd2: TimeSeriesRDD = Clocks.uniform(sc, "1d")
     assert(clockTSRdd1.collect().deep == clockTSRdd2.collect().deep)
+  }
+
+  "RandomClock" should "generate clock ticks randomly" in {
+    def verifyDistribution(clock: Array[Long], frequency: Long): Unit = {
+      val ratio = 0.33
+      val half = frequency / 2
+      var i = 1
+      var count = 0
+      while (i < clock.length) {
+        val interval = clock(i) - clock(i - 1)
+        assert(interval > 0 && interval <= frequency)
+        if (interval < half) {
+          count = count + 1
+        }
+        i = i + 1
+      }
+      assert(count > clock.length * ratio && count < (1 - ratio) * clock.length)
+    }
+
+    (1 to 10).foreach { _ =>
+      val clock = new RandomClock(
+        sc,
+        beginDateTime = "20100101",
+        endDateTime = "20150101",
+        frequency = "1h",
+        offset = "0s",
+        timeZone = "UTC",
+        seed = System.currentTimeMillis()
+      )
+      verifyDistribution(
+        clock.asTimeSeriesRDD().collect().map(_.getAs[Long]("time")),
+        clock.frequency
+      )
+      verifyDistribution(
+        clock.asStream().toArray,
+        clock.frequency
+      )
+    }
+
   }
 }

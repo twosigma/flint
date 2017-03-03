@@ -16,12 +16,10 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.SharedSparkContext
 import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers }
-import com.twosigma.flint.timeseries.clock.UniformClock
+import com.twosigma.flint.timeseries.Summarizers
+import com.twosigma.flint.timeseries.Clocks
 import org.apache.commons.math3.stat.descriptive.rank.Percentile
-import org.scalactic.TolerantNumerics
-import org.scalatest.FlatSpec
 
 class QuantileSummarizerSpec extends TimeSeriesSuite {
 

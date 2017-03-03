@@ -37,7 +37,7 @@ import java.util.concurrent.TimeUnit
  *
  * CSV.from(
  *   sqlContext,
- *   s"file://foo/bar/data.csv",
+ *   s"file://foo/bar/data.csv.gz",
  *   header = true,
  *   dateFormat = "yyyyMMdd HH:mm:ss.SSS",
  *   codec = "gzip",
