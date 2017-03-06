@@ -22,12 +22,10 @@ import org.apache.spark.sql.types._
 
 import scala.util.Random
 
-class SummarizeWindowsSpec extends TimeSeriesSuite {
-
+class SummarizeWindowsSpec extends MultiPartitionSuite {
   override val defaultResourceDir: String = "/timeseries/summarizewindows"
 
   private val volumeSchema = Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
-
   private val volumeWithGroupSchema = Schema(
     "id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType
   )
@@ -39,65 +37,100 @@ class SummarizeWindowsSpec extends TimeSeriesSuite {
     TimeSeriesRDD.fromDF(clockDF)(isSorted = true, TimeUnit.NANOSECONDS)
   }
 
-  "SummarizeWindows" should "pass `SummarizeSingleColumn` test." in {
-    val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
+  "SummarizeWindows" should "pass `SummarizeSingleColumn` test." ignore {
     val resultsTSRdd = fromCSV(
       "SummarizeSingleColumn.results",
       Schema.append(volumeSchema, "volume_sum" -> DoubleType)
     )
 
-    val summarizedTSRdd = volumeTSRdd.summarizeWindows(Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"))
-    assert(summarizedTSRdd.schema == resultsTSRdd.schema)
-    assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+    def test(rdd: TimeSeriesRDD): Unit = {
+      val summarizedTSRdd = rdd.summarizeWindows(Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"))
+      assert(summarizedTSRdd.schema == resultsTSRdd.schema)
+      assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+    }
+
+    {
+      val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
+      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
-  it should "pass `SummarizeSingleColumnPerKey` test." in {
-    val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
+  it should "pass `SummarizeSingleColumnPerKey` test." ignore {
     val resultsTSRdd = fromCSV(
       "SummarizeSingleColumnPerKey.results",
       Schema.append(volumeSchema, "volume_sum" -> DoubleType)
     )
-    val summarizedTSRdd = volumeTSRdd.summarizeWindows(
-      Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"), Seq("id")
-    )
-    assert(summarizedTSRdd.schema == resultsTSRdd.schema)
-    assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+
+    def test(rdd: TimeSeriesRDD): Unit = {
+      val summarizedTSRdd = rdd.summarizeWindows(
+        Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"), Seq("id")
+      )
+      assert(summarizedTSRdd.schema == resultsTSRdd.schema)
+      assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+    }
+
+    {
+      val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
+      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
-  it should "pass `SummarizeSingleColumnPerSeqOfKeys` test." in {
-    val volumeTSRdd = fromCSV("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
+  it should "pass `SummarizeSingleColumnPerSeqOfKeys` test." ignore {
     val resultsTSRdd = fromCSV(
       "SummarizeSingleColumnPerSeqOfKeys.results",
       Schema.append(volumeWithGroupSchema, "volume_sum" -> DoubleType)
     )
-    val summarizedTSRdd = volumeTSRdd.summarizeWindows(
-      Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"), Seq("id", "group")
-    )
-    assert(summarizedTSRdd.schema == resultsTSRdd.schema)
-    assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+
+    def test(volumeTSRdd: TimeSeriesRDD): Unit = {
+      val summarizedTSRdd = volumeTSRdd.summarizeWindows(
+        Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"), Seq("id", "group")
+      )
+      assert(summarizedTSRdd.schema == resultsTSRdd.schema)
+      assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+    }
+
+    {
+      val volumeTSRdd = fromCSV("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
+      withPartitionStrategy(volumeTSRdd)(NONE)(test)
+    }
   }
 
-  it should "pass `SummarizeWindowCountOverTwoTimeSeries` test." in {
-    val left = fromCSV("Clock1.csv", Schema())
-    val right = fromCSV("Clock2.csv", Schema())
-    val summarizedTSRdd = left.summarizeWindows(Windows.pastAbsoluteTime("500ns"), Summarizers.count(), Seq(), right)
+  it should "pass `SummarizeWindowCountOverTwoTimeSeries` test." ignore {
     val resultsTSRdd = fromCSV(
       "SummarizeWindowCountOverTwoTimeSeries.results",
       Schema("count" -> LongType)
     )
-    assert(summarizedTSRdd.schema == resultsTSRdd.schema)
-    assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+
+    def test(left: TimeSeriesRDD, right: TimeSeriesRDD): Unit = {
+      val summarizedTSRdd = left.summarizeWindows(Windows.pastAbsoluteTime("500ns"), Summarizers.count(), Seq(), right)
+      assert(summarizedTSRdd.schema == resultsTSRdd.schema)
+      assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+    }
+
+    {
+      val clock1 = fromCSV("Clock1.csv", Schema())
+      val clock2 = fromCSV("Clock2.csv", Schema())
+      withPartitionStrategy(clock1, clock2)(DEFAULT)(test)
+    }
+
   }
 
   it should "pass `SummarizeWindowCountOverSingleTimeSeries` test." in {
-    val clock = fromCSV("Clock.csv", Schema())
-    val summarizedTSRdd = clock.summarizeWindows(Windows.pastAbsoluteTime("5ns"), Summarizers.count())
     val resultsTSRdd = fromCSV(
       "SummarizeWindowCountOverSingleTimeSeries.results",
       Schema("count" -> LongType)
     )
-    assert(summarizedTSRdd.schema == resultsTSRdd.schema)
-    assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+
+    def test(rdd: TimeSeriesRDD): Unit = {
+      val summarizedTSRdd = rdd.summarizeWindows(Windows.pastAbsoluteTime("5ns"), Summarizers.count())
+      assert(summarizedTSRdd.schema == resultsTSRdd.schema)
+      assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+    }
+
+    {
+      val clock = fromCSV("Clock.csv", Schema())
+      withPartitionStrategy(clock)(DEFAULT)(test)
+    }
   }
 
   it should "pass `SummarizeWindowCountOverSingleRandomTimeSeries` test." in {

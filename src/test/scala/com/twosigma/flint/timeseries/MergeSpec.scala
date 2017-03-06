@@ -19,16 +19,22 @@ package com.twosigma.flint.timeseries
 import com.twosigma.flint.timeseries.row.Schema
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 
-class MergeSpec extends TimeSeriesSuite {
-
+class MergeSpec extends MultiPartitionSuite {
   override val defaultResourceDir: String = "/timeseries/merge"
 
   "Merge" should "pass `Merge` test." in {
-    val priceTSRdd1 = fromCSV("Price1.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val priceTSRdd2 = fromCSV("Price2.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
     val resultsTSRdd = fromCSV("Merge.results", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val mergedTSRdd = priceTSRdd1.merge(priceTSRdd2)
-    assert(resultsTSRdd.schema == mergedTSRdd.schema)
-    assert(resultsTSRdd.collect().deep == mergedTSRdd.collect().deep)
+
+    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+      val mergedTSRdd = rdd1.merge(rdd2)
+      assert(resultsTSRdd.schema == mergedTSRdd.schema)
+      assert(resultsTSRdd.collect().deep == mergedTSRdd.collect().deep)
+    }
+
+    {
+      val priceTSRdd1 = fromCSV("Price1.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+      val priceTSRdd2 = fromCSV("Price2.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+      withPartitionStrategy(priceTSRdd1, priceTSRdd2)(DEFAULT)(test)
+    }
   }
 }

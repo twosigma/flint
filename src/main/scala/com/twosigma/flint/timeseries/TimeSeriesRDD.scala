@@ -256,7 +256,7 @@ object TimeSeriesRDD {
     }
 
     val sortedDf = if (isSorted) { timeFirstDf } else { timeFirstDf.sort(timeColumnName) }
-    fromSortedDfWithPartInfo(sortedDf, None)
+    fromDFWithPartInfo(sortedDf, None)
   }
 
   @PythonApi
@@ -273,7 +273,7 @@ object TimeSeriesRDD {
     val convertedDf = convertDfTimestamps(df, timeUnit)
 
     val partitionInfo = PartitionInfo(rangeSplits, deps)
-    TimeSeriesRDD.fromSortedDfWithPartInfo(convertedDf, Some(partitionInfo))
+    TimeSeriesRDD.fromDFWithPartInfo(convertedDf, Some(partitionInfo))
   }
 
   /**
@@ -352,7 +352,7 @@ object TimeSeriesRDD {
    * @param partInfo    Partition info.
    * @return a [[TimeSeriesRDD]].
    */
-  private[flint] def fromSortedDfWithPartInfo(
+  private[flint] def fromDFWithPartInfo(
     dataFrame: DataFrame,
     partInfo: Option[PartitionInfo]
   ): TimeSeriesRDD = new TimeSeriesRDDImpl(TimeSeriesStore(dataFrame, partInfo))
@@ -410,6 +410,11 @@ trait TimeSeriesRDD extends Serializable {
    * It always keeps a column named "time" and of type Long and the time unit is NANOSECONDS.
    */
   val schema: StructType
+
+  /**
+   * Partition info of this [[TimeSeriesRDD]]
+   */
+  private[flint] def partInfo: Option[PartitionInfo]
 
   /**
    * Get a key function from a list of column names.
@@ -1104,6 +1109,8 @@ class TimeSeriesRDDImpl private[timeseries] (
 ) extends TimeSeriesRDD {
 
   override val schema: StructType = dataStore.schema
+
+  override def partInfo: Option[PartitionInfo] = dataStore.partInfo
 
   private[flint] override def orderedRdd = dataStore.orderedRdd
 

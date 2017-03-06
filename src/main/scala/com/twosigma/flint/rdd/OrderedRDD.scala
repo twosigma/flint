@@ -27,7 +27,7 @@ import org.apache.spark.rdd.{ RDD, ShuffledRDD }
 import org.apache.spark._
 import scala.reflect.ClassTag
 
-private[rdd] case class OrderedRDDPartition(override val index: Int) extends Partition
+private[flint] case class OrderedRDDPartition(override val index: Int) extends Partition
 
 object OrderedRDD {
 

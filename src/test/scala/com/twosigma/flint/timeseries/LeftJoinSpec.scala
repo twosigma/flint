@@ -19,51 +19,70 @@ package com.twosigma.flint.timeseries
 import com.twosigma.flint.timeseries.row.Schema
 import org.apache.spark.sql.types.{ LongType, IntegerType, DoubleType }
 
-class LeftJoinSpec extends TimeSeriesSuite {
+class LeftJoinSpec extends MultiPartitionSuite {
   override val defaultResourceDir: String = "/timeseries/leftjoin"
 
   "LeftJoin" should "pass `JoinOnTime` test." in {
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
     val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
     val resultsTSRdd = fromCSV(
-      "JoinOnTime.results",
-      Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
+      "JoinOnTime.results", Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
     )
-    val joinedTSRdd = priceTSRdd.leftJoin(volumeTSRdd, "0ns", Seq("id"))
-    assert(resultsTSRdd.schema == joinedTSRdd.schema)
-    assert(resultsTSRdd.collect().deep == joinedTSRdd.collect().deep)
+
+    def test(priceTSRdd: TimeSeriesRDD, volumneTSRdd: TimeSeriesRDD): Unit = {
+      val joinedTSRdd = priceTSRdd.leftJoin(volumeTSRdd, "0ns", Seq("id"))
+      assert(resultsTSRdd.schema == joinedTSRdd.schema)
+      assert(resultsTSRdd.collect().deep == joinedTSRdd.collect().deep)
+    }
+
+    {
+      val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+      withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "pass `JoinOnTimeWithMissingMatching` test." in {
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
     val resultsTSRdd = fromCSV(
       "JoinOnTimeWithMissingMatching.results",
       Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
     )
-    val joinedTSRdd = priceTSRdd.leftJoin(
-      volumeTSRdd.deleteRows(row => row.getAs[Long]("time") == 1050L), "0ns", Seq("id")
-    )
-    assert(resultsTSRdd.schema == joinedTSRdd.schema)
-    assert(resultsTSRdd.collect().deep == joinedTSRdd.collect().deep)
+
+    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+      val joinedTSRdd = rdd1.leftJoin(
+        rdd2.deleteRows(row => row.getAs[Long]("time") == 1050L), "0ns", Seq("id")
+      )
+      assert(resultsTSRdd.schema == joinedTSRdd.schema)
+      assert(resultsTSRdd.collect().deep == joinedTSRdd.collect().deep)
+    }
+
+    {
+      val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+      val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+      withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "pass `JoinOnTimeAndMultipleKeys` test." in {
-    val priceTSRdd = fromCSV(
-      "PriceWithIndustryGroup.csv",
-      Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType)
-    )
-    val volumeTSRdd = fromCSV(
-      "VolumeWithIndustryGroup.csv",
-      Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
-    )
     val resultsTSRdd = fromCSV(
       "JoinOnTimeAndMultipleKeys.results",
       Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
     )
-    val joinedTSRdd = priceTSRdd.leftJoin(volumeTSRdd, "0ns", Seq("id", "group"))
-    assert(resultsTSRdd.schema == joinedTSRdd.schema)
-    assert(resultsTSRdd.collect().deep == joinedTSRdd.collect().deep)
-  }
 
+    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+      val joinedTSRdd = rdd1.leftJoin(rdd2, "0ns", Seq("id", "group"))
+      assert(resultsTSRdd.schema == joinedTSRdd.schema)
+      assert(resultsTSRdd.collect().deep == joinedTSRdd.collect().deep)
+    }
+
+    {
+      val priceTSRdd = fromCSV(
+        "PriceWithIndustryGroup.csv",
+        Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType)
+      )
+      val volumeTSRdd = fromCSV(
+        "VolumeWithIndustryGroup.csv",
+        Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
+      )
+      withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+    }
+  }
 }

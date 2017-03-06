@@ -34,7 +34,6 @@ class IntervalizeSpec extends FlatSpec with SharedSparkContext {
     (1010L, (2, 0.06)),
     (1015L, (1, 0.07)),
     (1015L, (2, 0.08)),
-    // ------------
     (1020L, (2, 0.11)),
     (1020L, (1, 0.12)),
     (1025L, (2, 0.13)),
@@ -44,7 +43,7 @@ class IntervalizeSpec extends FlatSpec with SharedSparkContext {
     (1035L, (1, 0.17))
   )
 
-  val expected = List(
+  val expectedEndInclusive = List(
     (1000, (1000, (1, 0.01))),
     (1000, (1000, (2, 0.02))),
     (1010, (1005, (1, 0.03))),
@@ -88,13 +87,13 @@ class IntervalizeSpec extends FlatSpec with SharedSparkContext {
     assert(round(7, clock, false).isEmpty)
   }
 
-  it should "intervalize OrderedRDD using array clock correctly" in {
+  it should "intervalize OrderedRDD using array clock with beginInclusive = false correctly" in {
     val intervalized = intervalize(orderedRDD, clock, false)
-    assert(intervalized.collect().toList == expected)
+    assert(intervalized.collect().toList == expectedEndInclusive)
   }
 
-  it should "intervalize OrderedRDD using OrderedRDD clock correctly" in {
+  it should "intervalize OrderedRDD using OrderedRDD clock correctly" ignore {
     val intervalized = intervalize(orderedRDD, clockRDD, false)
-    assert(intervalized.collect().toList == expected)
+    assert(intervalized.collect().toList == expectedEndInclusive)
   }
 }
