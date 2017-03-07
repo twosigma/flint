@@ -125,6 +125,8 @@ trait LeftSubtractableSummarizer extends Summarizer with OLeftSubtractableSummar
 }
 
 trait OverlappableSummarizerFactory extends SummarizerFactory {
+  override def apply(inputSchema: StructType): OverlappableSummarizer
+
   val window: TimeWindow
 }
 
@@ -136,5 +138,6 @@ trait OverlappableSummarizer extends Summarizer
   type V
   val summarizer: OOverlappableSummarizer[T, U, V]
 
-  final override def add(u: Any, r: (InternalRow, Boolean)): Any = summarizer.add(toU(u), (toT(r._1), r._2))
+  final override def addOverlapped(u: Any, r: (InternalRow, Boolean)): Any =
+    summarizer.addOverlapped(toU(u), (toT(r._1), r._2))
 }

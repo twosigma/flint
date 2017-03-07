@@ -38,39 +38,44 @@ case class CompositeSummarizerFactory(factory1: SummarizerFactory, factory2: Sum
     val summarizer1 = factory1.apply(inputSchema)
     val summarizer2 = factory2.apply(inputSchema)
 
-    // http://stackoverflow.com/questions/12229005/getting-reference-to-a-parameter-of-the-outer-function-having-a-conflicting-name
-    new {
-      private val inputSchemaOuterScope = inputSchema
-      private val prefixOptOuterScope = prefixOpt
-    } with Summarizer {
-      override type T = (summarizer1.T, summarizer2.T)
-      override type U = (summarizer1.U, summarizer2.U)
-      override type V = (summarizer1.V, summarizer2.V)
-
-      override val schema: StructType = StructType(summarizer1.outputSchema.fields ++ summarizer2.outputSchema.fields)
-      override val inputSchema: StructType = inputSchemaOuterScope
-      override val prefixOpt: Option[String] = prefixOptOuterScope
-
-      override val summarizer =
-        com.twosigma.flint.rdd.function.summarize.summarizer.CompositeSummarizer(
-          summarizer1.summarizer, summarizer2.summarizer
-        )
-
-      requireNoDuplicateColumns(outputSchema)
-
-      // Convert the output of `summarizer` to the InternalRow.
-      override def fromV(v: V): InternalRow = {
-        val r1 = summarizer1.fromV(v._1)
-        val r2 = summarizer2.fromV(v._2)
-        new GenericInternalRow((r1.toSeq(summarizer1.outputSchema) ++ r2.toSeq(summarizer2.outputSchema)).toArray)
-      }
-
-      // Convert the InternalRow to the type of row expected by the `summarizer`.
-      override def toT(r: InternalRow): T = (summarizer1.toT(r), summarizer2.toT(r))
-    }
+    new CompositeSummarizer(inputSchema, prefixOpt, summarizer1, summarizer2)
   }
 
-  def requireNoDuplicateColumns(schema: StructType): Unit = {
+  override def requiredColumns(): ColumnList =
+    ColumnList.union(factory1.requiredColumns(), factory2.requiredColumns())
+}
+
+class CompositeSummarizer(
+  override val inputSchema: StructType,
+  override val prefixOpt: Option[String],
+  val summarizer1: Summarizer,
+  val summarizer2: Summarizer
+) extends Summarizer {
+
+  override type T = (summarizer1.T, summarizer2.T)
+  override type U = (summarizer1.U, summarizer2.U)
+  override type V = (summarizer1.V, summarizer2.V)
+
+  override val schema: StructType = StructType(summarizer1.outputSchema.fields ++ summarizer2.outputSchema.fields)
+
+  override val summarizer =
+    com.twosigma.flint.rdd.function.summarize.summarizer.CompositeSummarizer(
+      summarizer1.summarizer, summarizer2.summarizer
+    )
+
+  requireNoDuplicateColumns(outputSchema)
+
+  // Convert the output of `summarizer` to the InternalRow.
+  override def fromV(v: V): InternalRow = {
+    val r1 = summarizer1.fromV(v._1)
+    val r2 = summarizer2.fromV(v._2)
+    new GenericInternalRow((r1.toSeq(summarizer1.outputSchema) ++ r2.toSeq(summarizer2.outputSchema)).toArray)
+  }
+
+  // Convert the InternalRow to the type of row expected by the `summarizer`.
+  override def toT(r: InternalRow): T = (summarizer1.toT(r), summarizer2.toT(r))
+
+  private def requireNoDuplicateColumns(schema: StructType): Unit = {
     try {
       Schema.requireUniqueColumnNames(schema)
     } catch {
@@ -81,7 +86,4 @@ case class CompositeSummarizerFactory(factory1: SummarizerFactory, factory2: Sum
         )
     }
   }
-
-  override def requiredColumns(): ColumnList =
-    ColumnList.union(factory1.requiredColumns(), factory2.requiredColumns())
 }

@@ -17,7 +17,7 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.annotation.PythonApi
-import com.twosigma.flint.timeseries.summarize.SummarizerFactory
+import com.twosigma.flint.timeseries.summarize.{ OverlappableSummarizerFactory, SummarizerFactory }
 import com.twosigma.flint.timeseries.summarize.summarizer._
 import org.apache.spark.sql.types._
 
@@ -276,7 +276,14 @@ object Summarizers {
    * @return a [[SummarizerFactory]] which is a composition of multiple [[SummarizerFactory]](s)
    *
    */
-  def compose(summarizers: SummarizerFactory*): SummarizerFactory = summarizers.reduce(CompositeSummarizerFactory(_, _))
+  def compose(summarizers: SummarizerFactory*): SummarizerFactory = {
+    summarizers.partition(_.isInstanceOf[OverlappableSummarizerFactory]) match {
+      case (Seq(), nonOverlappables) => nonOverlappables.reduce(CompositeSummarizerFactory)
+      case (overlappables, Seq()) => overlappables.map(_.asInstanceOf[OverlappableSummarizerFactory])
+        .reduce(OverlappableCompositeSummarizerFactory)
+      case _ => throw new IllegalArgumentException(s"Can't compose overlappable and non-overlappable summarizers.")
+    }
+  }
 
   /**
    * Performs single exponential smoothing over a column. Primes the EMA by maintaining two EMAs, one over the series

@@ -154,7 +154,7 @@ protected[flint] object Summarize {
           val v = iter.next()
           val sk = skFn(v._1)
           val previousU = uPerSK.getOrElse(sk, summarizer.zero())
-          uPerSK += sk -> summarizer.add(previousU, v)
+          uPerSK += sk -> summarizer.addOverlapped(previousU, v)
         }
         Iterator(uPerSK)
     }.map { m => Map[SK, U](m.toSeq: _*) } // Make it immutable to return.

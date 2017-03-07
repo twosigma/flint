@@ -29,5 +29,5 @@ import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
  */
 trait OverlappableSummarizer[T, U, V] extends Summarizer[T, U, V] {
 
-  def add(u: U, t: (T, Boolean)): U
+  def addOverlapped(u: U, t: (T, Boolean)): U
 }
