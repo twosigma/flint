@@ -21,19 +21,19 @@ import org.scalatest.FlatSpec
 class ColumnListSpec extends FlatSpec {
 
   "ColumnList" should "union column lists correctly" in {
-    val allUnion = ColumnList.union(ColumnList.All, ColumnList.All)
+    val allUnion = ColumnList.All ++ ColumnList.All
     assert(allUnion == ColumnList.All)
 
     val list1 = ColumnList.Sequence(Seq("a", "b", "c"))
     val list2 = ColumnList.Sequence(Seq("a", "d"))
 
-    val leftUnion = ColumnList.union(list1, ColumnList.All)
+    val leftUnion = list1 ++ ColumnList.All
     assert(leftUnion == ColumnList.All)
 
-    val rightUnion = ColumnList.union(ColumnList.All, list2)
+    val rightUnion = ColumnList.All ++ list2
     assert(rightUnion == ColumnList.All)
 
-    val union = ColumnList.union(list1, list2)
+    val union = list1 ++ list2
     assert(union == ColumnList.Sequence(Seq("a", "b", "c", "d")))
   }
 }

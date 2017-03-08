@@ -22,8 +22,6 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types.StructType
 
-// TODO: Currently, this doesn't support overlappable summarizers. One idea for dealing with that in the future is to
-//       have multiple types of summarizers inside composite summarizer.
 case class CompositeSummarizerFactory(factory1: SummarizerFactory, factory2: SummarizerFactory)
   extends SummarizerFactory {
 
@@ -42,7 +40,7 @@ case class CompositeSummarizerFactory(factory1: SummarizerFactory, factory2: Sum
   }
 
   override def requiredColumns(): ColumnList =
-    ColumnList.union(factory1.requiredColumns(), factory2.requiredColumns())
+    factory1.requiredColumns() ++ factory2.requiredColumns()
 }
 
 class CompositeSummarizer(

@@ -37,7 +37,7 @@ case class OverlappableCompositeSummarizerFactory(
   }
 
   override def requiredColumns(): ColumnList =
-    ColumnList.union(factory1.requiredColumns(), factory2.requiredColumns())
+    factory1.requiredColumns() ++ factory2.requiredColumns()
 }
 
 class OverlappableCompositeSummarizer(
