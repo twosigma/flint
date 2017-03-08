@@ -44,6 +44,9 @@ class OLSRegressionSummarizerSpec extends TimeSeriesSuite {
     assert(result.getAs[Double](OLSRegressionSummarizer.stdErrOfInterceptColumn) === 0.5351305295407137)
     assert(result.getAs[Double](OLSRegressionSummarizer.tStatOfInterceptColumn) === 5.825087203804313)
     assert(result.getAs[Double](OLSRegressionSummarizer.conditionColumn) === 1.4264121300439514)
+    assert(result.getAs[Double](OLSRegressionSummarizer.logLikelihoodColumn) === -312.11292022635649)
+    assert(result.getAs[Double](OLSRegressionSummarizer.akaikeICColumn) === 630.225840453)
+    assert(result.getAs[Double](OLSRegressionSummarizer.bayesICColumn) === 638.041351011)
 
     assertEquals(
       result.getAs[mutable.WrappedArray[Double]](OLSRegressionSummarizer.betaColumn).toArray,
@@ -65,6 +68,9 @@ class OLSRegressionSummarizerSpec extends TimeSeriesSuite {
     assert(result.getAs[Double](OLSRegressionSummarizer.rColumn) === 0.19129580479059843)
     assert(result.getAs[Double](OLSRegressionSummarizer.rSquaredColumn) === 0.036594084930482745)
     assert(result.getAs[Double](OLSRegressionSummarizer.conditionColumn) === 1.1509375418)
+    assert(result.getAs[Double](OLSRegressionSummarizer.logLikelihoodColumn) === -327.11113940398695)
+    assert(result.getAs[Double](OLSRegressionSummarizer.akaikeICColumn) === 658.222278808)
+    assert(result.getAs[Double](OLSRegressionSummarizer.bayesICColumn) === 663.43261918)
 
     assertEquals(
       result.getAs[mutable.WrappedArray[Double]](OLSRegressionSummarizer.betaColumn).toArray,
@@ -146,6 +152,12 @@ class OLSRegressionSummarizerSpec extends TimeSeriesSuite {
       result2.getAs[Double](OLSRegressionSummarizer.stdErrOfInterceptColumn))
     assert(result1.getAs[Double](OLSRegressionSummarizer.tStatOfInterceptColumn) ===
       result2.getAs[Double](OLSRegressionSummarizer.tStatOfInterceptColumn))
+    assert(result1.getAs[Double](OLSRegressionSummarizer.logLikelihoodColumn) ===
+      result2.getAs[Double](OLSRegressionSummarizer.logLikelihoodColumn))
+    assert(result1.getAs[Double](OLSRegressionSummarizer.akaikeICColumn) ===
+      result2.getAs[Double](OLSRegressionSummarizer.akaikeICColumn))
+    assert(result1.getAs[Double](OLSRegressionSummarizer.bayesICColumn) ===
+      result2.getAs[Double](OLSRegressionSummarizer.bayesICColumn))
     assert(result1.getAs[Double](OLSRegressionSummarizer.conditionColumn) ===
       result2.getAs[Double](OLSRegressionSummarizer.conditionColumn))
 
@@ -192,6 +204,12 @@ class OLSRegressionSummarizerSpec extends TimeSeriesSuite {
       result2.getAs[Double](OLSRegressionSummarizer.rColumn))
     assert(result1.getAs[Double](OLSRegressionSummarizer.rSquaredColumn) ===
       result2.getAs[Double](OLSRegressionSummarizer.rSquaredColumn))
+    assert(result1.getAs[Double](OLSRegressionSummarizer.logLikelihoodColumn) ===
+      result2.getAs[Double](OLSRegressionSummarizer.logLikelihoodColumn))
+    assert(result1.getAs[Double](OLSRegressionSummarizer.akaikeICColumn) ===
+      result2.getAs[Double](OLSRegressionSummarizer.akaikeICColumn))
+    assert(result1.getAs[Double](OLSRegressionSummarizer.bayesICColumn) ===
+      result2.getAs[Double](OLSRegressionSummarizer.bayesICColumn))
     assert(result2.getAs[Double](OLSRegressionSummarizer.stdErrOfInterceptColumn).isNaN)
     assert(result2.getAs[Double](OLSRegressionSummarizer.tStatOfInterceptColumn).isNaN)
     assert(result1.getAs[Double](OLSRegressionSummarizer.conditionColumn) ===

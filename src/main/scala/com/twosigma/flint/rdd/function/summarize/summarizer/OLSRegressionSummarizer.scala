@@ -26,6 +26,7 @@ case class OLSRegressionState(
   var vectorOfXY: DenseVector[Double],
   var sumOfYSquared: Double,
   var sumOfWeights: Double,
+  var sumOfLogWeights: Double,
   var sumOfY: Double,
   var rawPrimeConstXt: Option[Array[Double]],
   var primeConstCoordinates: Array[Int]
@@ -42,6 +43,9 @@ case class OLSRegressionOutput(
   val r: Double,
   val tStatOfIntercept: Double,
   val tStatOfBeta: Array[Double],
+  val logLikelihood: Double,
+  val akaikeIC: Double,
+  val bayesIC: Double,
   val cond: Double,
   val constantsCoordinates: Array[Int]
 )
@@ -81,6 +85,7 @@ class OLSRegressionSummarizer(
     0.0,
     0.0,
     0.0,
+    0.0,
     None,
     Array.empty[Int]
   )
@@ -98,6 +103,7 @@ class OLSRegressionSummarizer(
     mergedU.vectorOfXY = u1.vectorOfXY + u2.vectorOfXY
     mergedU.sumOfYSquared = u1.sumOfYSquared + u2.sumOfYSquared
     mergedU.sumOfWeights = u1.sumOfWeights + u2.sumOfWeights
+    mergedU.sumOfLogWeights = u1.sumOfLogWeights + u2.sumOfLogWeights
     mergedU.sumOfY = u1.sumOfY + u2.sumOfY
 
     // Both u1 and u2 are from non-empty partitions.
@@ -181,6 +187,9 @@ class OLSRegressionSummarizer(
         (0.0, beta, Double.NaN, stdErrs, Double.NaN, tStat)
       }
 
+    val logLikelihood = computeLogLikelihood(u.count, u.sumOfLogWeights, residualSumOfSquares)
+    val akaikeIC = computeAkaikeIC(vectorOfBeta, logLikelihood, shouldIntercept)
+    val bayesIC = computeBayesIC(vectorOfBeta, logLikelihood, u.count, shouldIntercept)
     val rSquared = computeRSquared(u.sumOfYSquared, u.sumOfWeights, u.sumOfY, residualSumOfSquares, shouldIntercept)
 
     OLSRegressionOutput(
@@ -194,6 +203,9 @@ class OLSRegressionSummarizer(
       r = Math.sqrt(rSquared),
       tStatOfBeta = tStatOfPrimeBeta,
       tStatOfIntercept = tStatOfIntercept,
+      logLikelihood = logLikelihood,
+      akaikeIC = akaikeIC,
+      bayesIC = bayesIC,
       cond = condOfMatrixOfXX,
       constantsCoordinates = u.primeConstCoordinates
     )
@@ -222,6 +234,9 @@ class OLSRegressionSummarizer(
           r = Double.NaN,
           tStatOfIntercept = Double.NaN,
           tStatOfBeta = Array.fill(dimensionOfX)(Double.NaN),
+          logLikelihood = Double.NaN,
+          akaikeIC = Double.NaN,
+          bayesIC = Double.NaN,
           cond = Double.NaN,
           constantsCoordinates = u.primeConstCoordinates
         )
@@ -237,6 +252,7 @@ class OLSRegressionSummarizer(
     u.sumOfYSquared += yt * yt
     u.count += 1L
     u.sumOfWeights += yw._2
+    u.sumOfLogWeights += math.log(yw._2)
     u.sumOfY += yw._1 * yw._2
 
     if (u.rawPrimeConstXt.isEmpty) {

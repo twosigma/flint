@@ -35,6 +35,9 @@ object OLSRegressionSummarizer {
   val rColumn: String = "r"
   val tStatOfInterceptColumn: String = "tStat_intercept"
   val tStatOfBetaColumn: String = "tStat_beta"
+  val logLikelihoodColumn: String = "logLikelihood"
+  val akaikeICColumn: String = "akaikeIC"
+  val bayesICColumn: String = "bayesIC"
   val conditionColumn: String = "cond"
   val constantsColumn: String = "const_columns"
 
@@ -49,6 +52,9 @@ object OLSRegressionSummarizer {
     rColumn -> DoubleType,
     tStatOfInterceptColumn -> DoubleType,
     tStatOfBetaColumn -> ArrayType(DoubleType),
+    logLikelihoodColumn -> DoubleType,
+    akaikeICColumn -> DoubleType,
+    bayesICColumn -> DoubleType,
     conditionColumn -> DoubleType,
     constantsColumn -> ArrayType(StringType)
   )
@@ -128,6 +134,9 @@ case class OLSRegressionSummarizer(
       o.r,
       o.tStatOfIntercept,
       new GenericArrayData(o.tStatOfBeta),
+      o.logLikelihood,
+      o.akaikeIC,
+      o.bayesIC,
       o.cond,
       new GenericArrayData(o.constantsCoordinates.map(i => UTF8String.fromString(xColumns(i))))
     )

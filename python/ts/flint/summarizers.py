@@ -209,6 +209,15 @@ def linear_regression(y_column, x_columns, weight_column=None, *, use_intercept=
     tStat_intercept (*float*)
         The t-stat of the intercept.
 
+    logLikelihood (*float*)
+        The log-likelihood of the data given the fitted model
+
+    akaikeIC (*float*)
+        The Akaike information criterion of the data given the fitted model
+
+    bayesIC (*float*)
+        The Bayes information criterion of the data given the fitted model
+
     cond (*float*)
         The condition number of Gramian matrix, i.e. X^TX.
 

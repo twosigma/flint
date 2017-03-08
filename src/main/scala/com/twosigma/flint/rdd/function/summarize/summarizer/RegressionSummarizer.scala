@@ -61,6 +61,50 @@ object RegressionSummarizer {
     (DenseMatrix(weightedX: _*), DenseVector(weightedY.toArray), yw.toArray)
   }
 
+  /**
+   * Find the value of the Gaussian log-likelihood function at the data
+   * We use the statsmodels' implementation as a reference:
+   * [[http://statsmodels.sourceforget.net/stable/_modules/statsmodels/regression/linear_model.html#WLS.loglike loglike]]
+   */
+  protected[summarizer] def computeLogLikelihood(
+    count: Long,
+    sumOfLogWeights: Double,
+    residualSumOfSquares: Double
+  ): Double = {
+    val nOver2: Double = count.toDouble / 2.0
+    var logLikelihood: Double = -nOver2 * math.log(residualSumOfSquares)
+    logLikelihood += -nOver2 * (1.0 + math.log(math.Pi / nOver2))
+    logLikelihood += 0.5 * sumOfLogWeights
+    logLikelihood
+  }
+
+  /**
+   * Find the Bayes information criterion of the data given the fitted model
+   * [[https://en.wikipedia.org/wiki/Bayesian_information_criterion Bayesian information criterion]]
+   */
+  protected[summarizer] def computeBayesIC(
+    beta: DenseVector[Double],
+    logLikelihood: Double,
+    count: Long,
+    shouldIntercept: Boolean
+  ): Double = {
+    val k = beta.length
+    -2.0 * logLikelihood + k * math.log(count.toDouble)
+  }
+
+  /**
+   * Find the Akaike information criterion of the data given the fitted model
+   * [[https://en.wikipedia.org/wiki/Akaike_information_criterion Akaike information criterion]]
+   */
+  protected[summarizer] def computeAkaikeIC(
+    beta: DenseVector[Double],
+    logLikelihood: Double,
+    shouldIntercept: Boolean
+  ): Double = {
+    val k = beta.length
+    -2.0 * logLikelihood + 2.0 * k
+  }
+
   protected[summarizer] def computeResidualSumOfSquares(
     beta: DenseVector[Double],
     sumOfYSquared: Double,

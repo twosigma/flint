@@ -193,6 +193,9 @@ object Summarizers {
    *   - "r": [[DoubleType]], the squared root of r-squared statistics.
    *   - "tStat_intercept": [[DoubleType]], the t-stats of intercept.
    *   - "tStat_beta": [[ArrayType]] of [[DoubleType]], the t-stats of beta.
+   *   - "logLikelihood": [[DoubleType]], the log-likelihood of the data given the fitted betas.
+   *   - "akaikeIC": [[DoubleType]], the Akaike information criterion.
+   *   - "bayesIC": [[DoubleType]], the Bayes information criterion.
    *   - "cond": [[DoubleType]], the condition number Gramian matrix, i.e. X^TX.
    *   - "const_columns": [[ArrayType]] of [[StringType], the list of variables in `xColumns` that are constants.
    *
