@@ -23,6 +23,7 @@ import org.apache.spark.sql.types._
 import scala.util.Random
 
 class SummarizeWindowsSpec extends MultiPartitionSuite {
+
   override val defaultResourceDir: String = "/timeseries/summarizewindows"
 
   private val volumeSchema = Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
@@ -37,7 +38,7 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
     TimeSeriesRDD.fromDF(clockDF)(isSorted = true, TimeUnit.NANOSECONDS)
   }
 
-  "SummarizeWindows" should "pass `SummarizeSingleColumn` test." ignore {
+  "SummarizeWindows" should "pass `SummarizeSingleColumn` test." in {
     val resultsTSRdd = fromCSV(
       "SummarizeSingleColumn.results",
       Schema.append(volumeSchema, "volume_sum" -> DoubleType)
@@ -55,7 +56,7 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
     }
   }
 
-  it should "pass `SummarizeSingleColumnPerKey` test." ignore {
+  it should "pass `SummarizeSingleColumnPerKey` test." in {
     val resultsTSRdd = fromCSV(
       "SummarizeSingleColumnPerKey.results",
       Schema.append(volumeSchema, "volume_sum" -> DoubleType)
@@ -75,7 +76,7 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
     }
   }
 
-  it should "pass `SummarizeSingleColumnPerSeqOfKeys` test." ignore {
+  it should "pass `SummarizeSingleColumnPerSeqOfKeys` test." in {
     val resultsTSRdd = fromCSV(
       "SummarizeSingleColumnPerSeqOfKeys.results",
       Schema.append(volumeWithGroupSchema, "volume_sum" -> DoubleType)
@@ -95,7 +96,7 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
     }
   }
 
-  it should "pass `SummarizeWindowCountOverTwoTimeSeries` test." ignore {
+  it should "pass `SummarizeWindowCountOverTwoTimeSeries` test." in {
     val resultsTSRdd = fromCSV(
       "SummarizeWindowCountOverTwoTimeSeries.results",
       Schema("count" -> LongType)

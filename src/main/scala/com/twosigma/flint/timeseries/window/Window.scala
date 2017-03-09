@@ -43,8 +43,28 @@ trait ShiftTimeWindow extends TimeWindow {
    * Given a time, return the length of the window
    */
   protected def length(time: Long): Long
-  final protected def of(time: Long, length: Long): (Long, Long) =
-    if (backward) (time - length, time) else (time, time + length)
+
+  protected def safeMinus(a: Long, b: Long): Long = {
+    require(b >= 0)
+    if (a < Long.MinValue + b) {
+      Long.MinValue
+    } else {
+      a - b
+    }
+  }
+
+  protected def safePlus(a: Long, b: Long): Long = {
+    require(b >= 0)
+    if (a > Long.MaxValue - b) {
+      Long.MaxValue
+    } else {
+      a + b
+    }
+  }
+
+  final protected def of(time: Long, length: Long): (Long, Long) = {
+    if (backward) (safeMinus(time, length), time) else (time, safePlus(time, length))
+  }
 
   final override def of(time: Long): (Long, Long) = of(time, length(time))
   final def shift(time: Long): Long = if (backward) of(time, length(time))._1 else of(time, length(time))._2

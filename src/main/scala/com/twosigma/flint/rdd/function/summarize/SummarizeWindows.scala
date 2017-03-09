@@ -16,11 +16,10 @@
 
 package com.twosigma.flint.rdd.function.summarize
 
-import com.twosigma.flint.rdd.OverlappedOrderedRDD
+import com.twosigma.flint.rdd._
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.LeftSubtractableSummarizer
 
 import org.apache.spark.OneToOneDependency
-import com.twosigma.flint.rdd.{ CloseClose, OrderedRDD, Range }
 import scala.reflect.ClassTag
 import scala.collection.mutable
 
@@ -35,12 +34,29 @@ object SummarizeWindows {
     summarizer: Summarizer[V, U, V2],
     skFn: V => SK
   ): OrderedRDD[K, (V, V2)] = {
+    val windowFn = getWindowRange(window) _
     val overlappedRdd = OverlappedOrderedRDD(rdd, window)
     val splits = overlappedRdd.rangeSplits
     overlappedRdd.mapPartitionsWithIndexOverlapped(
       (partitionIndex, iterator) =>
-        new WindowSummarizerIterator(iterator.buffered, splits(partitionIndex).range, window, summarizer, skFn)
+        new WindowSummarizerIterator(iterator.buffered, splits(partitionIndex).range, windowFn, summarizer, skFn)
     ).nonOverlapped()
+  }
+
+  private[rdd] def getWindowRange[K](windowFn: K => (K, K))(k: K)(implicit ord: Ordering[K]): Range[K] = {
+    val (b, e) = windowFn(k)
+    require(
+      ord.lteq(b, k) && ord.lteq(k, e),
+      s"The window function produces a window [$b, $e] which doesn't include key $k."
+    )
+
+    if (ord.lt(b, e)) {
+      CloseClose(b, Some(e))
+    } else if (ord.equiv(b, e)) {
+      CloseSingleton(b)
+    } else {
+      sys.error(s"Should never happen. We have asserted ${b} <= ${e}")
+    }
   }
 }
 
@@ -53,6 +69,8 @@ object SummarizeWindows {
  * [(5, [4, 5, 6]) (6, [5, 6, 7]) (7, [6, 7, 8]) (8, [7, 8, 9])]<br>
  *
  * We define the partition of [5, 6, 7, 8] as a core partition, and the left of a tuple in the output is a core row.
+ * Core range is range of the core partition.
+ *
  * The algorithm works as follows.
  *
  * We keep two pointers:
@@ -74,7 +92,7 @@ object SummarizeWindows {
 private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
   iter: BufferedIterator[(K, V)],
   coreRange: Range[K],
-  windowFn: K => (K, K),
+  windowFn: K => Range[K],
   summarizer: Summarizer[V, U, V2],
   skFn: V => SK
 )(implicit ord: Ordering[K]) extends Iterator[(K, (V, V2))] {
@@ -85,22 +103,23 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
   val summarizerStates = mutable.Map[SK, U]()
   val coreRowBuffer = mutable.Queue[(K, V)]()
 
-  def getWindowRange(k: K): Range[K] = {
-    val window = windowFn(k)
-    CloseClose(window._1, Some(window._2))
-  }
-
   lazy val rampUp = {
-    val initWindowRange = getWindowRange(coreRange.begin)
+    val initWindowRange = windowFn(coreRange.begin)
     logger.debug(s"Initial window range in rampUp: $initWindowRange")
     if (iter.hasNext) {
       logger.debug(s"rampUp: head: ${iter.head}")
     }
+
+    // Iterate rows until just before the core partition and initialize `windows` and `summarizerStates`
     while (iter.hasNext && ord.lt(iter.head._1, coreRange.begin)) {
       val (k, v) = iter.next
       val sk = skFn(v)
       logger.debug(s"rampUp: reading: ($k, $sk, $v)")
 
+      // Put rows that `could` be in first coreRow's window in `windows` and `summarizerStates`
+      // Because it's possible that coreRange.begin < first coreRow.begin, some rows here might
+      // not actually by in the first coreRow's window. In this case, those rows will be dropped
+      // later.
       if (initWindowRange.contains(k)) {
         val window = windows.getOrElseUpdate(sk, Vector.empty)
         val u = summarizerStates.getOrElseUpdate(sk, summarizer.zero())
@@ -110,14 +129,22 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
     }
   }
 
-  override def hasNext: Boolean = coreRowBuffer.nonEmpty || (iter.hasNext && coreRange.endGteq(iter.head._1))
-
-  override def next(): (K, (V, V2)) = {
-    // Only invoke once.
+  override def hasNext: Boolean = {
+    // rampUp is only invoke once.
     rampUp
+    coreRowBuffer.nonEmpty || (iter.hasNext && coreRange.endGteq(iter.head._1))
+  }
+
+  override def next(): (K, (V, V2)) = if (hasNext) computeNext else Iterator.empty.next
+
+  private def computeNext(): (K, (V, V2)) = {
+    // This is a little bit tricky. After `rampUp`, `iter.head` is guaranteed to point
+    // to the first row in the `coreRange` even if the `coreK` is far far from the `coreRange.begin`.
+    // This is because `iter.head._1 >= coreK` after `rampUp` and `coreK >= windowRange.begin` always
+    // holds by the definition of window function.
     val (coreK, coreV) = coreRowBuffer.headOption.getOrElse(iter.head)
     val coreSk = skFn(coreV)
-    val windowRange = getWindowRange(coreK)
+    val windowRange = windowFn(coreK)
     logger.debug(s"Invoking next() with core row: ($coreK, $coreSk, $coreV) and the window of $coreK: $windowRange")
 
     // Drop rows.
