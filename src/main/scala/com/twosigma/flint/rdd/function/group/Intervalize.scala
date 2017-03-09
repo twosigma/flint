@@ -16,17 +16,18 @@
 
 package com.twosigma.flint.rdd.function.group
 
-import com.twosigma.flint.rdd.{ Conversion, PartitionsIterator, RangeSplit, Range }
+import com.twosigma.flint.rdd._
 
 import scala.collection.Searching._
-import com.twosigma.flint.rdd.OrderedRDD
-import org.apache.spark.annotation.Experimental
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ NarrowDependency, OneToOneDependency, Partition, TaskContext }
 
 import scala.reflect.ClassTag
+import grizzled.slf4j.Logger
 
 object Intervalize {
+
+  private val logger = Logger()
 
   /**
    * Round a given key to one of boundaries defined by the clock.
@@ -40,7 +41,7 @@ object Intervalize {
    */
   private[function] def round[K: Ordering](
     k: K,
-    clock: IndexedSeq[K],
+    clock: Array[K],
     roundToBegin: Boolean
   ): Option[K] = {
     clock.search(k) match {
@@ -65,19 +66,54 @@ object Intervalize {
    *                       Otherwise, it is (begin, end].
    * @return an [[OrderedRDD]] whose keys are intervalized and the original keys are kept in the values as (K, V)s.
    */
-  @Experimental
-  def intervalize[K: Ordering: ClassTag, V](
+  def intervalize[K: ClassTag, V](
     rdd: OrderedRDD[K, V],
-    clock: IndexedSeq[K],
+    clock: Array[K],
     beginInclusive: Boolean
-  ): OrderedRDD[K, (K, V)] = {
-    val broadcastClock = rdd.sparkContext.broadcast(clock)
-    // TODO: we should use rdd.mapPartitions to make it much more efficient.
+  )(implicit ord: Ordering[K]): OrderedRDD[K, (K, V)] = {
+    // ensure ordering
+    var i = 0
+    while (i < clock.size - 1) {
+      require(
+        ord.lt(clock(i), clock(i + 1)),
+        s"Invalid interval. clock[n] must < clock[n + 1] for all n. " +
+          s"n: ${i} clock[n]: ${clock(i)} clock[n + 1]: ${clock(i + 1)}"
+      )
+      i += 1
+    }
+
+    val rddBegin = rdd.rangeSplits.head.range.begin
+    val rddEnd = rdd.rangeSplits.last.range.end
+
+    // Optimization: Reduce the size of the boardcast clock if possible
+    val from = clock.search(rddBegin) match {
+      case Found(idx) => Math.max(0, idx - 1) // -1 because beginInclusive can be false
+      case InsertionPoint(idx) => Math.max(0, idx - 1) // between idx - 1 and idx
+    }
+
+    val until = rddEnd.fold(clock.size) { end =>
+      clock.search(end) match {
+        // +2 because: (1) until is exclusive (2) need to include one more interval towards the end
+        case Found(idx) => Math.min(clock.size, idx + 2)
+        case InsertionPoint(idx) => Math.min(clock.size, idx + 2)
+      }
+    }
+
+    val trimedClock = clock.slice(from, until)
+    // 20 years of 5 min interval is about 16M
+    val maxClocksize = 20 * 365 * 24 * 12 * 8
+    if (trimedClock.size > maxClocksize) {
+      logger.warn(s"Boardcast clock is bigger than ${maxClocksize / 1024 / 1024} M. " +
+        s"Please provide a smaller time range.")
+    }
+
+    val broadcastClock = rdd.sparkContext.broadcast(trimedClock)
     val intervalized = rdd.map {
       case (k, v) => (round(k, broadcastClock.value, beginInclusive), (k, v))
     }.filter(_._1.isDefined).map {
       case (k, v) => (k.get, v)
     }
+
     // Normalize the above rdd such that rows with the same keys won't spread across multiple partitions.
     Conversion.fromSortedRDD(intervalized)
   }
@@ -95,12 +131,15 @@ object Intervalize {
    * @return an [[OrderedRDD]] whose keys are intervalized and the original keys are kept in the
    *         values as (K, V)s.
    */
-  @Experimental
   def intervalize[K: Ordering: ClassTag, SK, V, V1](
     rdd: OrderedRDD[K, V],
     clock: OrderedRDD[K, V1],
     beginInclusive: Boolean
   ): OrderedRDD[K, (K, V)] = {
+    // TODO: This algorithm doesn't deal with empty partitions correctly.
+    sys.error("This algorithm is broken, don't use this. " +
+      "If you see this message, please contact spark-ts-support@twosigma.com")
+
     val rddSplits = rdd.rangeSplits
     val clockSplits = clock.rangeSplits
     require(RangeSplit.isSortedByRange(clockSplits))
@@ -123,6 +162,7 @@ object Intervalize {
     }
 
     val sc = rdd.sparkContext
+
     val intervalizedRDD = new RDD[(K, (K, V))](sc, Seq(rddDep, clockDep)) {
       override def compute(part: Partition, context: TaskContext): Iterator[(K, (K, V))] = {
         val parts = rddPartToClockParts(part.index)

@@ -1350,7 +1350,8 @@ class TimeSeriesRDDImpl private[timeseries] (
   ): TimeSeriesRDD = {
     val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns(), key)
     val sum = summarizer(pruned.schema)
-    val intervalized = pruned.orderedRdd.intervalize(clock.orderedRdd, beginInclusive).mapValues {
+    val clockLocal = clock.toDF.map{ row => row.getAs[Long]("time") }.collect()
+    val intervalized = pruned.orderedRdd.intervalize(clockLocal, beginInclusive).mapValues {
       case (_, v) => v._2
     }
     val grouped = intervalized.groupByKey(pruned.safeGetAsAny(key))

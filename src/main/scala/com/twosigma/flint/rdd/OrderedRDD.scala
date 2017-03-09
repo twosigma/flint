@@ -490,7 +490,7 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * @return An [[OrderedRDD]] whose keys are intervalized and the original keys are kept in the
    *         values as (K, V)s.
    */
-  def intervalize(intervalizer: IndexedSeq[K], beginInclusive: Boolean): OrderedRDD[K, (K, V)] =
+  def intervalize(intervalizer: Array[K], beginInclusive: Boolean): OrderedRDD[K, (K, V)] =
     Intervalize.intervalize(self, intervalizer, beginInclusive)
 
   /**

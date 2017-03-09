@@ -23,7 +23,7 @@ class SummarizeIntervalsSpec extends MultiPartitionSuite {
 
   override val defaultResourceDir: String = "/timeseries/summarizeintervals"
 
-  "SummarizeInterval" should "pass `SummarizeSingleColumn` test." ignore {
+  "SummarizeInterval" should "pass `SummarizeSingleColumn` test." in {
     val clockTSRdd = fromCSV("Clock.csv", Schema())
     val resultTSRdd = fromCSV("SummarizeSingleColumn.results", Schema("volume_sum" -> DoubleType))
 
@@ -41,7 +41,7 @@ class SummarizeIntervalsSpec extends MultiPartitionSuite {
 
   }
 
-  it should "pass `SummarizeSingleColumnPerKey` test, i.e. with additional a single key." ignore {
+  it should "pass `SummarizeSingleColumnPerKey` test, i.e. with additional a single key." in {
     val clockTSRdd = fromCSV("Clock.csv", Schema())
     val resultTSRdd = fromCSV(
       "SummarizeSingleColumnPerKey.results",
@@ -83,7 +83,7 @@ class SummarizeIntervalsSpec extends MultiPartitionSuite {
 
   }
 
-  it should "pass `SummarizeSingleColumnPerSeqOfKeys` test, i.e. with additional a sequence of keys." ignore {
+  it should "pass `SummarizeSingleColumnPerSeqOfKeys` test, i.e. with additional a sequence of keys." in {
     val clockTSRdd = fromCSV("Clock.csv", Schema())
     val resultTSRdd = fromCSV(
       "SummarizeSingleColumnPerSeqOfKeys.results",
