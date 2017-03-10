@@ -17,15 +17,15 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.FlintSuite
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.types._
 import org.scalactic.{ Equality, TolerantNumerics }
 import play.api.libs.json.{ Json, JsValue }
 
+import scala.collection.mutable
 import scala.io.Source
 
-object TimeSeriesSuite {
-
-}
+object TimeSeriesSuite {}
 
 trait TimeSeriesSuite extends FlintSuite {
 
@@ -44,12 +44,91 @@ trait TimeSeriesSuite extends FlintSuite {
    */
   val defaultAdditivePrecision: Double = 1.0e-8
 
-  implicit val doubleEquality: Equality[Double] = TolerantNumerics.tolerantDoubleEquality(defaultAdditivePrecision)
+  implicit val doubleEquality: Equality[Double] =
+    TolerantNumerics.tolerantDoubleEquality(defaultAdditivePrecision)
 
   /**
    * Assert if two arrays of doubles are equal within additive precision `defaultAdditivePrecision`.
    */
-  def assertEquals(a: Array[Double], b: Array[Double]): Unit = assert(a.corresponds(b)(_ === _))
+  def assertEquals(thisArray: Array[Double], thatArray: Array[Double]): Unit =
+    (thisArray zip thatArray).map { case (x, y) => assertEquals(x, y) }
+
+  /**
+   * Assert if two doubles are equal within additive precision `defaultAdditivePrecision`.
+   */
+  def assertEquals(x: Double, y: Double): Unit = assert(x.isNaN && y.isNaN || x === y)
+
+  /**
+   * Assert if two rows have the same values within additive precision `defaultAdditivePrecision`.
+   *
+   * Only support columns of types [[IntegerType]], [[LongType]], [[FloatType]], [[DoubleType]] and
+   * [[ArrayType]] of [[IntegerType]], [[LongType]], [[FloatType]], [[DoubleType]] respectively.
+   */
+  def assertEquals(thisRow: Row, thatRow: Row): Unit = {
+    assert(thisRow.schema == thatRow.schema)
+    thisRow.schema.foreach { col =>
+      col.dataType match {
+        case BooleanType =>
+          assert(thisRow.getAs[Boolean](col.name) == thatRow.getAs[Boolean](col.name))
+        case IntegerType =>
+          assert(thisRow.getAs[Int](col.name) == thatRow.getAs[Int](col.name))
+        case LongType =>
+          assert(
+            thisRow.getAs[Long](col.name) == thatRow.getAs[Long](col.name)
+          )
+        case FloatType =>
+          assert(
+            thisRow.getAs[Float](col.name) === thatRow.getAs[Float](col.name)
+          )
+        case DoubleType =>
+          assertEquals(thisRow.getAs[Double](col.name), thatRow.getAs[Double](col.name))
+        case ArrayType(IntegerType, _) =>
+          assert(
+            thisRow.getAs[mutable.WrappedArray[Int]](col.name).deep ==
+              thatRow.getAs[mutable.WrappedArray[Int]](col.name).deep
+          )
+        case ArrayType(LongType, _) =>
+          assert(
+            thisRow.getAs[mutable.WrappedArray[Long]](col.name).deep ==
+              thatRow.getAs[mutable.WrappedArray[Long]](col.name).deep
+          )
+        case ArrayType(FloatType, _) =>
+          assertEquals(
+            thisRow
+              .getAs[mutable.WrappedArray[Float]](col.name)
+              .toArray
+              .map(_.toDouble),
+            thatRow
+              .getAs[mutable.WrappedArray[Float]](col.name)
+              .toArray
+              .map(_.toDouble)
+          )
+        case ArrayType(DoubleType, _) =>
+          assertEquals(
+            thisRow.getAs[mutable.WrappedArray[Double]](col.name).toArray,
+            thatRow.getAs[mutable.WrappedArray[Double]](col.name).toArray
+          )
+        case ArrayType(StringType, _) =>
+          assert(
+            thisRow.getAs[mutable.WrappedArray[String]](col.name).deep ==
+              thatRow.getAs[mutable.WrappedArray[String]](col.name).deep
+          )
+        case dataType =>
+          assert(
+            false,
+            s"Not supported $dataType for comparing two sql rows under column ${col.name}."
+          )
+      }
+    }
+  }
+
+  /**
+   * Assert two [[TimeSeriesRDD]] are equal row by row in order.
+   */
+  def assertEquals(thisTSRdd: TimeSeriesRDD, otherTSRdd: TimeSeriesRDD): Unit =
+    (thisTSRdd.collect() zip otherTSRdd.collect()).foreach {
+      case (thisRow, thatRow) => assertEquals(thisRow, thatRow)
+    }
 
   /**
    * Read a data set of time series from a CSV file in resource as a [[TimeSeriesRDD]]
@@ -70,21 +149,20 @@ trait TimeSeriesSuite extends FlintSuite {
     header: Boolean = true,
     sorted: Boolean = true,
     dateFormat: String = "yyyy-MM-dd HH:mm:ss.S"
-  ): TimeSeriesRDD = withResource(s"$defaultResourceDir/$filepath") {
-    source =>
-      var codec: String = null
-      if (filepath.endsWith(".gz")) {
-        codec = "gzip"
-      }
-      CSV.from(
-        sqlContext,
-        s"file://$source",
-        header = header,
-        sorted = sorted,
-        schema = schema,
-        dateFormat = dateFormat,
-        codec = codec
-      ).repartition(defaultPartitionParallelism)
+  ): TimeSeriesRDD = withResource(s"$defaultResourceDir/$filepath") { source =>
+    var codec: String = null
+    if (filepath.endsWith(".gz")) {
+      codec = "gzip"
+    }
+    CSV.from(
+      sqlContext,
+      s"file://$source",
+      header = header,
+      sorted = sorted,
+      schema = schema,
+      dateFormat = dateFormat,
+      codec = codec
+    ).repartition(defaultPartitionParallelism)
   }
 
   /**
@@ -93,7 +171,8 @@ trait TimeSeriesSuite extends FlintSuite {
    * @param filepath The json file path relative to `defaultResourceDir`.
    * @return the parsed [[JsValue]]
    */
-  def asJson(filepath: String): JsValue = withResource(s"$defaultResourceDir/$filepath") {
-    source => Json.parse(Source.fromFile(source).mkString)
-  }
+  def asJson(filepath: String): JsValue =
+    withResource(s"$defaultResourceDir/$filepath") { source =>
+      Json.parse(Source.fromFile(source).mkString)
+    }
 }

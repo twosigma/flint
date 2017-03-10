@@ -17,12 +17,13 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers }
+import com.twosigma.flint.timeseries.summarize.SummarizerSuite
+import com.twosigma.flint.timeseries.Summarizers
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
-import org.apache.spark.sql.types.{ IntegerType, DoubleType }
+import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 
-class ZScoreSummarizerSpec extends TimeSeriesSuite {
+class ZScoreSummarizerSpec extends SummarizerSuite {
 
   override val defaultResourceDir: String = "/timeseries/summarize/summarizer/zscoresummarizer"
 
@@ -42,5 +43,10 @@ class ZScoreSummarizerSpec extends TimeSeriesSuite {
     val results = priceTSRdd.summarize(Summarizers.zScore("price", false))
     assert(results.schema == expectedSchema)
     assert(results.collect().deep == expectedResults.deep)
+  }
+
+  it should "pass summarizer property test" in {
+    summarizerPropertyTest(AllProperties)(Summarizers.zScore("x1", true))
+    summarizerPropertyTest(AllProperties)(Summarizers.zScore("x2", false))
   }
 }

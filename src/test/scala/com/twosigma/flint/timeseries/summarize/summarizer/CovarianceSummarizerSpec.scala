@@ -17,11 +17,12 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers }
+import com.twosigma.flint.timeseries.summarize.SummarizerSuite
+import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesSuite }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 
-class CovarianceSummarizerSpec extends TimeSeriesSuite {
+class CovarianceSummarizerSpec extends SummarizerSuite {
 
   // It is by intention to reuse the files from correlation summarizer
   override val defaultResourceDir: String = "/timeseries/summarize/summarizer/correlationsummarizer"
@@ -55,5 +56,10 @@ class CovarianceSummarizerSpec extends TimeSeriesSuite {
     results = input.summarize(Summarizers.covariance("price", "forecast"), Seq("id")).collect()
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_covariance") === -0.190277778)
     assert(results.find(_.getAs[Int]("id") == 3).head.getAs[Double]("price_forecast_covariance") === -3.783333333)
+  }
+
+  it should "pass summarizer property test" in {
+    summarizerPropertyTest(AllProperties)(Summarizers.covariance("x1", "x2"))
+    summarizerPropertyTest(AllProperties)(Summarizers.covariance("x0", "x3"))
   }
 }

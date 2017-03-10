@@ -17,10 +17,11 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers, CSV, TimeSeriesRDD }
-import org.apache.spark.sql.types.{ DoubleType, IntegerType, StructType }
+import com.twosigma.flint.timeseries.summarize.SummarizerSuite
+import com.twosigma.flint.timeseries.Summarizers
+import org.apache.spark.sql.types._
 
-class WeightedMeanTestSummarizerSpec extends TimeSeriesSuite {
+class WeightedMeanTestSummarizerSpec extends SummarizerSuite {
 
   override val defaultResourceDir: String = "/timeseries/summarize/summarizer/weightedmeantestsummarizer"
 
@@ -35,5 +36,9 @@ class WeightedMeanTestSummarizerSpec extends TimeSeriesSuite {
     assert(result.getAs[Double]("price_forecast_weightedStandardDeviation") === 4.373623725800579)
     assert(result.getAs[Double]("price_forecast_weightedTStat") === 0.0788230123405099)
     assert(result.getAs[Long]("price_forecast_observationCount") == 12L)
+  }
+
+  it should "pass summarizer property test" in {
+    summarizerPropertyTest(AllProperties)(Summarizers.weightedMeanTest("x1", "x2"))
   }
 }

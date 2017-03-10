@@ -16,26 +16,27 @@
 
 package com.twosigma.flint.rdd.function.summarize
 
+import com.twosigma.flint.FlintSuite
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ SumSummarizer => SumSum }
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.LeftSubtractableSummarizer
-import org.scalatest.FlatSpec
-import org.scalactic.{ TolerantNumerics, Equality }
-import com.twosigma.flint.SharedSparkContext
 import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
+import org.scalactic.TolerantNumerics
 
-case class KVSumSummarizer() extends LeftSubtractableSummarizer[(Int, Double), Double, Double] {
+case class KVSumSummarizer()
+  extends LeftSubtractableSummarizer[(Int, Double), Double, Double] {
   val sum = SumSum[Double]()
 
   def toT(input: (Int, Double)): Double = input._2
 
   override def zero(): Double = sum.zero()
   override def add(u: Double, t: (Int, Double)): Double = sum.add(u, toT(t))
-  override def subtract(u: Double, t: (Int, Double)): Double = sum.subtract(u, toT(t))
+  override def subtract(u: Double, t: (Int, Double)): Double =
+    sum.subtract(u, toT(t))
   override def merge(u1: Double, u2: Double): Double = sum.merge(u1, u2)
   override def render(u: Double): Double = sum.render(u)
 }
 
-class SummarizeSpec extends FlatSpec with SharedSparkContext {
+class SummarizeSpec extends FlintSuite {
 
   val data = Array(
     (1000L, (1, 0.01)),
@@ -68,20 +69,25 @@ class SummarizeSpec extends FlatSpec with SharedSparkContext {
 
   override def beforeAll() {
     super.beforeAll()
-    orderedRDD = OrderedRDD.fromRDD(sc.parallelize(data, 4), KeyPartitioningType.Sorted)
+    orderedRDD =
+      OrderedRDD.fromRDD(sc.parallelize(data, 4), KeyPartitioningType.Sorted)
   }
 
   "Summarize" should "apply correctly" in {
-    val skFn = { case ((sk, v)) => None }: ((Int, Double)) => Option[Nothing]
-    val ret = Summarize(orderedRDD, summarizer, skFn)
-    assert(ret.size == 1)
-    assert(ret.head._2 === data.length * 0.01)
+    val skFn = { case ((_, _)) => None }: ((Int, Double)) => Option[Nothing]
+    (1 to 4).foreach { depth =>
+      val ret = Summarize(orderedRDD, summarizer, skFn, depth)
+      assert(ret.size == 1)
+      assert(ret.head._2 === data.length * 0.01)
+    }
   }
 
   it should "apply with sk correctly" in {
-    val skFn = { case ((sk, v)) => sk }: ((Int, Double)) => Int
-    val ret = Summarize(orderedRDD, summarizer, skFn)
-    assert(ret.size == 2)
-    assert(ret.head._2 === 0.1)
+    val skFn = { case ((sk, _)) => sk }: ((Int, Double)) => Int
+    (1 to 4).foreach { depth =>
+      val ret = Summarize(orderedRDD, summarizer, skFn, depth)
+      assert(ret.size == 2)
+      assert(ret.head._2 === 0.1)
+    }
   }
 }

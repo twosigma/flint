@@ -17,15 +17,17 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers }
-import org.apache.spark.sql.Row
-import org.apache.spark.sql.types.{ IntegerType, DoubleType }
+import com.twosigma.flint.timeseries.summarize.SummarizerSuite
+import com.twosigma.flint.timeseries.Summarizers
 
-class CorrelationSummarizerSpec extends TimeSeriesSuite {
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.types._
+
+class CorrelationSummarizerSpec extends SummarizerSuite {
 
   override val defaultResourceDir: String = "/timeseries/summarize/summarizer/correlationsummarizer"
 
-  "CorrelationSummarizer" should "`computeCorrelation` correctly" in {
+  "CorrelationSummarizer" should "compute correlation correctly" in {
     val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
     val forecastTSRdd = fromCSV("Forecast.csv", Schema("id" -> IntegerType, "forecast" -> DoubleType))
 
@@ -53,27 +55,46 @@ class CorrelationSummarizerSpec extends TimeSeriesSuite {
     assert(results(1).getAs[Double]("price_price5_correlation").isNaN)
 
     results = input.summarize(Summarizers.correlation("price", "forecast"), Seq("id")).collect()
-    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlation") === -0.021896121374023046)
-    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlationTStat") === -0.04380274440368827)
-    assert(results.find(_.getAs[Int]("id") == 3).head.getAs[Double]("price_forecast_correlation") === -0.47908485866330514)
-    assert(results.find(_.getAs[Int]("id") == 3).head.getAs[Double]("price_forecast_correlationTStat") === -1.0915971793294055)
+    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlation") ===
+      -0.021896121374023046)
+    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlationTStat") ===
+      -0.04380274440368827)
+    assert(results.find(_.getAs[Int]("id") == 3).head.getAs[Double]("price_forecast_correlation") ===
+      -0.47908485866330514)
+    assert(results.find(_.getAs[Int]("id") == 3).head.getAs[Double]("price_forecast_correlationTStat") ===
+      -1.0915971793294055)
 
     results = input.summarize(Summarizers.correlation("price", "price3", "forecast"), Seq("id")).collect()
-    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_price3_correlation") === -1.0)
-    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_price3_correlationTStat") == Double.NegativeInfinity)
-    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlation") === -0.021896121374023046)
-    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price3_forecast_correlation") === 0.021896121374023046)
-    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlationTStat") === -0.04380274440368827)
-    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price3_forecast_correlationTStat") === 0.04380274440368827)
+    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_price3_correlation") ===
+      -1.0)
+    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_price3_correlationTStat") ==
+      Double.NegativeInfinity)
+    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlation") ===
+      -0.021896121374023046)
+    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price3_forecast_correlation") ===
+      0.021896121374023046)
+    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlationTStat") ===
+      -0.04380274440368827)
+    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price3_forecast_correlationTStat") ===
+      0.04380274440368827)
 
     results = input.summarize(Summarizers.correlation(Seq("price", "price3"), Seq("forecast")), Seq("id")).collect()
-    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlation") === -0.021896121374023046)
-    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price3_forecast_correlation") === 0.021896121374023046)
-    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlationTStat") === -0.04380274440368827)
-    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price3_forecast_correlationTStat") === 0.04380274440368827)
-
+    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlation") ===
+      -0.021896121374023046)
+    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price3_forecast_correlation") ===
+      0.021896121374023046)
+    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_correlationTStat") ===
+      -0.04380274440368827)
+    assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price3_forecast_correlationTStat") ===
+      0.04380274440368827)
     intercept[RuntimeException] {
       input.summarize(Summarizers.correlation(Seq("price", "price3"), Seq("forecast", "price3")))
     }
   }
+
+  it should "pass summarizer property test" in {
+    summarizerPropertyTest(AllProperties)(Summarizers.correlation("x1", "x2"))
+    summarizerPropertyTest(AllProperties)(Summarizers.correlation("x0", "x3"))
+  }
+
 }

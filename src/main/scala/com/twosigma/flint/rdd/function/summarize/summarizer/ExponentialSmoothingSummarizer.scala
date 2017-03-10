@@ -74,7 +74,7 @@ class ExponentialSmoothingSummarizer(
     state1: ExponentialSmoothingState,
     state2: ExponentialSmoothingState
   ): ExponentialSmoothingState = {
-    require(state1.time <= state2.time)
+    require(state1.time <= state2.time || state1.count == 0 || state2.count == 0)
 
     val (primaryESDeltas, auxiliaryESDeltas) = if (state1.count > 0) {
       (

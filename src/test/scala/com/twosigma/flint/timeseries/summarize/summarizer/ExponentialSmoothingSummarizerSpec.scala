@@ -18,10 +18,11 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries._
 import com.twosigma.flint.timeseries.row.Schema
+import com.twosigma.flint.timeseries.summarize.SummarizerSuite
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 import org.apache.spark.sql.Row
 
-class ExponentialSmoothingSummarizerSpec extends TimeSeriesSuite {
+class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
 
   override val defaultPartitionParallelism: Int = 10
 
@@ -62,5 +63,12 @@ class ExponentialSmoothingSummarizerSpec extends TimeSeriesSuite {
       val trueVal = row.getAs[Double]("expected")
       assert(predVal === trueVal)
     })
+  }
+
+  it should "pass summarizer property test" ignore {
+    summarizerPropertyTest(AllProperties)(Summarizers.exponentialSmoothing(
+      xColumn = "x3",
+      timestampsToPeriods = (a, b) => (b - a) / 100.0
+    ))
   }
 }

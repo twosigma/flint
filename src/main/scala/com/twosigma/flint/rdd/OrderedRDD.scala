@@ -364,10 +364,15 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    *
    * @param summarizer A [[Summarizer]] expects to apply.
    * @param skFn       A function to extract keys from rows. The summarization will be applied per key level.
+   * @param depth      The depth of tree for merging partial summarized results across different partitions
+   *                   in a a multi-level tree aggregation fashion.
    * @return the summarized result(s).
    */
-  def summarize[SK, U, V2](summarizer: Summarizer[V, U, V2], skFn: V => SK): Map[SK, V2] =
-    Summarize(self, summarizer, skFn)
+  def summarize[SK, U, V2](
+    summarizer: Summarizer[V, U, V2],
+    skFn: V => SK,
+    depth: Int
+  ): Map[SK, V2] = Summarize(self, summarizer, skFn, depth)
 
   /**
    * Apply an [[OverlappableSummarizer]] to all rows of an [[OrderedRDD]].
@@ -377,13 +382,16 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    *                   needs to look-back or look-forward. Internally, a partition will be expanded by the windows of
    *                   its first row and last row.
    * @param skFn       A function to extract keys from rows. The summarization will be applied per key level.
+   * @param depth      The depth of tree for merging partial summarized results across different partitions
+   *                   in a a multi-level tree aggregation fashion.
    * @return the summarized result(s).
    */
   def summarize[SK, U, V2](
     summarizer: OverlappableSummarizer[V, U, V2],
     windowFn: K => (K, K),
-    skFn: V => SK
-  ): Map[SK, V2] = Summarize(self, summarizer, windowFn, skFn)
+    skFn: V => SK,
+    depth: Int
+  ): Map[SK, V2] = Summarize(self, summarizer, windowFn, skFn, depth)
 
   /**
    * Similar to [[org.apache.spark.rdd.RDD.zipWithIndex]], it zips values of this [[OrderedRDD]] with

@@ -27,8 +27,8 @@ import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
 protected[flint] object Summarize {
 
   /**
-   * Apply an summarizer to each partition of an [[org.apache.spark.rdd.RDD]] and return the intermediate summarized
-   * results for each partition.
+   * Apply an summarizer to each partition of an [[org.apache.spark.rdd.RDD]] and return the partially summarized
+   * results.
    *
    * @param rdd        An [[org.apache.spark.rdd.RDD]] whose partitions are expected to be summarized
    * @param summarizer The summarizer that is expected to apply.
@@ -60,37 +60,7 @@ protected[flint] object Summarize {
   }
 
   /**
-   * Merge the intermediate summarized results from different partitions by applying a summarizer's merge operator.
-   * The merging is applied in the order of partitions' indices.
-   *
-   * @param summarizer    The summarizer whose merge operator will be used to merge the intermediate summarized results
-   *                      from different partitions.
-   * @param intermediates An array of tuples where left(s) are partition indices and right(s) are the intermediate
-   *                      summarized results each of which is obtained by applying the summarizer only to the
-   *                      corresponding partition.
-   * @param skFn          A function that extracts keys from rows such that the summarizer will be applied per
-   *                      key level.
-   * @return the merged the intermediate summarized results.
-   */
-  def merge[K: Ordering, SK, V, U, V2](
-    summarizer: Summarizer[V, U, V2],
-    intermediates: Array[(Int, Map[SK, U])],
-    skFn: V => SK
-  ): Map[SK, V2] = {
-    val res = intermediates.map(_._2).foldLeft(mutable.Map.empty[SK, U]) {
-      case (sum, perPartition) =>
-        (sum ++ perPartition).map {
-          case (sk, _) => (sk, summarizer.merge(
-            sum.getOrElse(sk, summarizer.zero()), perPartition.getOrElse(sk, summarizer.zero())
-          ))
-        }
-    }.map { case (sk, v) => (sk, summarizer.render(v)) }
-    collection.immutable.Map(res.toSeq: _*)
-  }
-
-  /**
-   * Add intermediate values of the reduction (as per reduce) of summarizer, i.e. it applies the
-   * summarizer to all its previous rows and the the current row in order.
+   * Apply an [[summarizer]] to an [[OrderedRDD]].
    *
    * For a summarizer s, let us define
    *   - 0 = s.zero()
@@ -113,15 +83,37 @@ protected[flint] object Summarize {
    * @param summarizer A [[Summarizer]] expected to apply
    * @param skFn       A function that extracts the secondary keys from V such that the summarizer will be
    *                   applied per secondary key level in the order of K.
+   * @param depth      The depth of tree for merging partial summarized results across different partitions
+   *                   in a a multi-level tree aggregation fashion.
    * @return the summarized results.
    */
   def apply[K: Ordering, SK, V, U, V2](
     rdd: RDD[(K, V)],
     summarizer: Summarizer[V, U, V2],
-    skFn: V => SK
+    skFn: V => SK,
+    depth: Int
   ): Map[SK, V2] = {
-    val intermediates = summarizePartition(rdd, summarizer, skFn)
-    merge(summarizer, intermediates, skFn)
+    val partiallySummarized: RDD[Map[SK, U]] = rdd.mapPartitions {
+      iter =>
+        // Initialize the initial state.
+        val uPerSK = mutable.HashMap.empty[SK, U]
+        while (iter.hasNext) {
+          val (_, v) = iter.next()
+          val sk = skFn(v)
+          val previousU = uPerSK.getOrElse(sk, summarizer.zero())
+          uPerSK += sk -> summarizer.add(previousU, v)
+        }
+        Iterator(uPerSK)
+    }.map { m => Map[SK, U](m.toSeq: _*) } // Make it immutable to return.
+
+    val mergeOp = (u1: Map[SK, U], u2: Map[SK, U]) => (u1 ++ u2).map {
+      case (sk, _) =>
+        (sk, summarizer.merge(u1.getOrElse(sk, summarizer.zero()), u2.getOrElse(sk, summarizer.zero())))
+    }
+
+    TreeReduce(partiallySummarized)(mergeOp, depth).map {
+      case (sk, v) => (sk, summarizer.render(v))
+    }
   }
 
   /**
@@ -136,13 +128,16 @@ protected[flint] object Summarize {
    *                   that includes all rows failing into [b1, e1).
    * @param skFn       A function that extracts the secondary keys from V such that the summarizer will be
    *                   applied per secondary key level in the order of K.
+   * @param depth      The depth of tree for merging partial summarized results across different partitions
+   *                   in a a multi-level tree aggregation fashion.
    * @return the summarized results.
    */
   def apply[K: ClassTag: Ordering, SK, V: ClassTag, U, V2](
     rdd: OrderedRDD[K, V],
     summarizer: OverlappableSummarizer[V, U, V2],
     windowFn: K => (K, K),
-    skFn: V => SK
+    skFn: V => SK,
+    depth: Int
   ): Map[SK, V2] = {
     // Basically, an RDD of (K, (V, Boolean)) where the boolean flag indicates whether a row is overlapped.
     val overlappedRdd = OverlappedOrderedRDD(rdd, windowFn).zipOverlapped()
@@ -164,7 +159,7 @@ protected[flint] object Summarize {
         (sk, summarizer.merge(u1.getOrElse(sk, summarizer.zero()), u2.getOrElse(sk, summarizer.zero())))
     }
 
-    TreeReduce(partiallySummarized)(mergeOp).map {
+    TreeReduce(partiallySummarized)(mergeOp, depth).map {
       case (sk, v) => (sk, summarizer.render(v))
     }
   }

@@ -16,15 +16,15 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers }
-
+import com.twosigma.flint.timeseries.summarize.SummarizerSuite
+import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesSuite }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.DoubleType
 
 import scala.collection.mutable
 import scala.util.Random
 
-class OLSRegressionSummarizerSpec extends TimeSeriesSuite {
+class OLSRegressionSummarizerSpec extends SummarizerSuite {
 
   override val defaultPartitionParallelism: Int = 10
 
@@ -240,5 +240,14 @@ class OLSRegressionSummarizerSpec extends TimeSeriesSuite {
     assert(tStat2(0) == tStat1(0))
     assert(tStat2(1).isNaN)
     assert(tStat2(2) == tStat1(1))
+  }
+
+  it should "pass summarizer property test" in {
+    summarizerPropertyTest(AllProperties)(
+      Summarizers.OLSRegression("x0", Seq("x1", "x2"), "x3", shouldIntercept = false)
+    )
+    summarizerPropertyTest(AllProperties)(
+      Summarizers.OLSRegression("x0", Seq("x1", "x2"), "x3", shouldIntercept = true)
+    )
   }
 }

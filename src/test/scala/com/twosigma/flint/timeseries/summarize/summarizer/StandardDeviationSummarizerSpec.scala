@@ -17,11 +17,12 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers }
+import com.twosigma.flint.timeseries.summarize.SummarizerSuite
+import com.twosigma.flint.timeseries.Summarizers
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 
-class StandardDeviationSummarizerSpec extends TimeSeriesSuite {
+class StandardDeviationSummarizerSpec extends SummarizerSuite {
   // It is by intention to reuse the files
   override val defaultResourceDir: String = "/timeseries/summarize/summarizer/meansummarizer"
 
@@ -35,5 +36,9 @@ class StandardDeviationSummarizerSpec extends TimeSeriesSuite {
 
     val result = priceTSRdd.summarize(Summarizers.stddev("price")).first()
     assert(result.getAs[Double]("price_stddev") === 1.802775638)
+  }
+
+  it should "pass summarizer property test" in {
+    summarizerPropertyTest(AllProperties)(Summarizers.stddev("x1"))
   }
 }

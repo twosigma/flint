@@ -18,13 +18,14 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.SummarizerFactory
-import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers, CSV, TimeSeriesRDD }
-import org.apache.spark.sql.types.{ DoubleType, IntegerType, LongType, FloatType, StructType, DataType }
+import com.twosigma.flint.timeseries.summarize.{ SummarizerFactory, SummarizerSuite }
+import com.twosigma.flint.timeseries.{ CSV, Summarizers, TimeSeriesRDD, TimeSeriesSuite }
+import org.apache.spark.sql.types.{ DataType, DoubleType, FloatType, IntegerType, LongType, StructType }
 import java.util.Random
+
 import org.apache.spark.sql.Row
 
-class ExtremeSummarizerSpec extends TimeSeriesSuite {
+class ExtremeSummarizerSpec extends SummarizerSuite {
 
   override val defaultResourceDir: String = "/timeseries/summarize/summarizer/meansummarizer"
 
@@ -91,5 +92,10 @@ class ExtremeSummarizerSpec extends TimeSeriesSuite {
   it should "compute int min correctly" in {
     val rand = new Random()
     test[Int](IntegerType, { _: Row => rand.nextInt() }, Summarizers.min _, math.min, "x", "x_min")
+  }
+
+  it should "pass summarizer property test" in {
+    summarizerPropertyTest(AllProperties)(Summarizers.max("x1"))
+    summarizerPropertyTest(AllProperties)(Summarizers.min("x2"))
   }
 }

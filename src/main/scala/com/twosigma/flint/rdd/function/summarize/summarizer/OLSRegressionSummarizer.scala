@@ -90,41 +90,46 @@ class OLSRegressionSummarizer(
     Array.empty[Int]
   )
 
-  override def merge(u1: OLSRegressionState, u2: OLSRegressionState): OLSRegressionState = if (u1.count == 0) {
-    u2
-  } else if (u2.count == 0) {
-    u1
-  } else {
-    // Always create a new state
-    val mergedU = zero()
+  override def merge(
+    u1: OLSRegressionState,
+    u2: OLSRegressionState
+  ): OLSRegressionState =
+    if (u1.count == 0) {
+      u2
+    } else if (u2.count == 0) {
+      u1
+    } else {
+      // Always create a new state
+      val mergedU = zero()
 
-    mergedU.count = u1.count + u2.count
-    mergedU.matrixOfXX = u1.matrixOfXX + u2.matrixOfXX
-    mergedU.vectorOfXY = u1.vectorOfXY + u2.vectorOfXY
-    mergedU.sumOfYSquared = u1.sumOfYSquared + u2.sumOfYSquared
-    mergedU.sumOfWeights = u1.sumOfWeights + u2.sumOfWeights
-    mergedU.sumOfLogWeights = u1.sumOfLogWeights + u2.sumOfLogWeights
-    mergedU.sumOfY = u1.sumOfY + u2.sumOfY
+      mergedU.count = u1.count + u2.count
+      mergedU.matrixOfXX = u1.matrixOfXX + u2.matrixOfXX
+      mergedU.vectorOfXY = u1.vectorOfXY + u2.vectorOfXY
+      mergedU.sumOfYSquared = u1.sumOfYSquared + u2.sumOfYSquared
+      mergedU.sumOfWeights = u1.sumOfWeights + u2.sumOfWeights
+      mergedU.sumOfLogWeights = u1.sumOfLogWeights + u2.sumOfLogWeights
+      mergedU.sumOfY = u1.sumOfY + u2.sumOfY
 
-    // Both u1 and u2 are from non-empty partitions.
-    mergedU.rawPrimeConstXt = u1.rawPrimeConstXt
-    mergedU.primeConstCoordinates = u1.rawPrimeConstXt.get.zip(u2.rawPrimeConstXt.get).map {
-      case (x1, x2) => x1 == x2
-    }.zipWithIndex.filter(_._1).map(_._2).toSet.intersect(
-      u1.primeConstCoordinates.toSet
-    ).intersect(
-      u2.primeConstCoordinates.toSet
-    ).toArray
+      // Both u1 and u2 are from non-empty partitions.
+      mergedU.rawPrimeConstXt = u1.rawPrimeConstXt
+      mergedU.primeConstCoordinates = u1.rawPrimeConstXt.get.zip(u2.rawPrimeConstXt.get).map {
+        case (x1, x2) => x1 == x2
+      }.zipWithIndex.filter(_._1).map(_._2).toSet.intersect(
+        u1.primeConstCoordinates.toSet
+      ).intersect(
+        u2.primeConstCoordinates.toSet
+      ).toArray
 
-    mergedU
-  }
+      mergedU
+    }
 
   /**
    * @return a `dim`-dimension array where the value of `coordinates`(i)-th entry is `values`(i)
    *         otherwise `defaultValue`.
    */
   private def stretch(
-    coordinates: IndexedSeq[Int], dim: Int
+    coordinates: IndexedSeq[Int],
+    dim: Int
   )(
     values: Array[Double],
     defaultValue: Double
@@ -147,9 +152,10 @@ class OLSRegressionSummarizer(
   private def shrink(
     u: OLSRegressionState
   ): (OLSRegressionState, (Array[Double], Double) => Array[Double]) = {
-    val dim = u.rawPrimeConstXt.get.length
+    val dim = u.rawPrimeConstXt.fold(0) { _.length }
     if (shouldIgnoreConstants) {
-      val primCoordinates = ((0 until dim).toSet -- u.primeConstCoordinates).toIndexedSeq.sorted
+      val primCoordinates =
+        ((0 until dim).toSet -- u.primeConstCoordinates).toIndexedSeq.sorted
       var coordinates = primCoordinates
       if (shouldIntercept) {
         coordinates = 0 +: primCoordinates.map(_ + 1)
@@ -171,26 +177,45 @@ class OLSRegressionSummarizer(
     val vectorOfBeta = matrixOfBetaVariance * u.vectorOfXY
     val beta = vectorOfBeta.toArray
     val residualSumOfSquares =
-      computeResidualSumOfSquares(vectorOfBeta, u.sumOfYSquared, u.vectorOfXY, u.matrixOfXX)
+      computeResidualSumOfSquares(
+        vectorOfBeta,
+        u.sumOfYSquared,
+        u.vectorOfXY,
+        u.matrixOfXX
+      )
     val errorVariance = residualSumOfSquares / (u.count - beta.length)
-    val vectorOfStdErrs = diag(matrixOfBetaVariance).map {
-      betaVar => Math.sqrt(errorVariance * betaVar)
+    val vectorOfStdErrs = diag(matrixOfBetaVariance).map { betaVar =>
+      Math.sqrt(errorVariance * betaVar)
     }
     val stdErrs = vectorOfStdErrs.toArray
     val vectorOfTStat = vectorOfBeta :/ vectorOfStdErrs
     val tStat = vectorOfTStat.toArray
 
-    val (intercept, primeBeta, stdErrOfIntercept, stdErrOfPrimeBeta, tStatOfIntercept, tStatOfPrimeBeta) =
+    val (intercept,
+      primeBeta,
+      stdErrOfIntercept,
+      stdErrOfPrimeBeta,
+      tStatOfIntercept,
+      tStatOfPrimeBeta) =
       if (shouldIntercept) {
         (beta(0), beta.tail, stdErrs(0), stdErrs.tail, tStat(0), tStat.tail)
       } else {
         (0.0, beta, Double.NaN, stdErrs, Double.NaN, tStat)
       }
 
-    val logLikelihood = computeLogLikelihood(u.count, u.sumOfLogWeights, residualSumOfSquares)
-    val akaikeIC = computeAkaikeIC(vectorOfBeta, logLikelihood, shouldIntercept)
-    val bayesIC = computeBayesIC(vectorOfBeta, logLikelihood, u.count, shouldIntercept)
-    val rSquared = computeRSquared(u.sumOfYSquared, u.sumOfWeights, u.sumOfY, residualSumOfSquares, shouldIntercept)
+    val logLikelihood =
+      computeLogLikelihood(u.count, u.sumOfLogWeights, residualSumOfSquares)
+    val akaikeIC =
+      computeAkaikeIC(vectorOfBeta, logLikelihood, shouldIntercept)
+    val bayesIC =
+      computeBayesIC(vectorOfBeta, logLikelihood, u.count, shouldIntercept)
+    val rSquared = computeRSquared(
+      u.sumOfYSquared,
+      u.sumOfWeights,
+      u.sumOfY,
+      residualSumOfSquares,
+      shouldIntercept
+    )
 
     OLSRegressionOutput(
       count = u.count,
@@ -243,8 +268,12 @@ class OLSRegressionSummarizer(
     }
   }
 
-  override def add(u: OLSRegressionState, t: RegressionRow): OLSRegressionState = {
-    val (xt, yt, yw) = RegressionSummarizer.transform(t, shouldIntercept, isWeighted)
+  override def add(
+    u: OLSRegressionState,
+    t: RegressionRow
+  ): OLSRegressionState = {
+    val (xt, yt, yw) =
+      RegressionSummarizer.transform(t, shouldIntercept, isWeighted)
     val vectorOfXt = DenseVector(xt)
     val matrixOfXt = vectorOfXt.asDenseMatrix
     u.matrixOfXX += matrixOfXt.t * matrixOfXt

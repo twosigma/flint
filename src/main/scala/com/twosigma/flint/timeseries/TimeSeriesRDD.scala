@@ -419,7 +419,7 @@ trait TimeSeriesRDD extends Serializable {
   /**
    * Get a key function from a list of column names.
    */
-  // TODO: This should return a object that is associated with this TimeSeriesRDD, this can
+  // TODO: This should return an object that is associated with this TimeSeriesRDD, this can
   //       help us catch bugs where we are passing key function to the wrong OrderedRDD
   private[flint] def safeGetAsAny(cols: Seq[String]): InternalRow => Seq[Any] =
     TimeSeriesRDD.safeGetAsAny(schema, cols)
@@ -1389,16 +1389,31 @@ class TimeSeriesRDDImpl private[timeseries] (
     TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
   }
 
-  def summarize(summarizerFactory: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {
+  /**
+   * Computes aggregate statistics of all rows in multi-level tree aggregation fashion.
+   *
+   * @param summarizerFactory A summarizer expected to perform aggregation.
+   * @param key               Columns that could be used as the grouping key and the aggregations will be performed
+   *                          per key level.
+   * @param depth             The depth of tree for merging partial summarized results across different partitions
+   *                          in a a multi-level tree aggregation fashion.
+   * @return a [[TimeSeriesRDD]] with summarized column.
+   */
+  private[flint] def summarizeInternal(
+    summarizerFactory: SummarizerFactory, key: Seq[String] = Seq.empty, depth: Int
+  ): TimeSeriesRDD = {
     val pruned = TimeSeriesRDD.pruneColumns(this, summarizerFactory.requiredColumns(), key)
     val summarizer = summarizerFactory(pruned.schema)
     val keyGetter = pruned.safeGetAsAny(key)
 
     val summarized = summarizerFactory match {
       case factory: OverlappableSummarizerFactory =>
-        pruned.orderedRdd.summarize(summarizer.asInstanceOf[OverlappableSummarizer], factory.window.of, keyGetter)
+        pruned.orderedRdd.summarize(
+          summarizer.asInstanceOf[OverlappableSummarizer], factory.window.of, keyGetter, depth
+        )
       case _ =>
-        pruned.orderedRdd.summarize(summarizer, keyGetter)
+        // TODO: the depth here is hardcoded to be 1 until [[ExponentialSmoothingSummarizer]] passing the property test.
+        pruned.orderedRdd.summarize(summarizer, keyGetter, 1)
     }
     val rows = summarized.map {
       case (keyValues, row) => InternalRowUtils.prepend(row, summarizer.outputSchema, (0L +: keyValues): _*)
@@ -1407,6 +1422,9 @@ class TimeSeriesRDDImpl private[timeseries] (
     val newSchema = Schema.prependTimeAndKey(summarizer.outputSchema, key.map(pruned.schema(_)))
     TimeSeriesRDD.fromSeq(pruned.orderedRdd.sc, rows.toSeq, newSchema, true, 1)
   }
+
+  def summarize(summarizerFactory: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD =
+    summarizeInternal(summarizerFactory, key, 2)
 
   def addSummaryColumns(summarizer: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {
     val sum = summarizer(schema)

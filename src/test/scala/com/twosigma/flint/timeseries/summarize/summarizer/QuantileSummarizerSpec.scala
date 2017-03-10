@@ -16,12 +16,12 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers }
 import com.twosigma.flint.timeseries.Summarizers
 import com.twosigma.flint.timeseries.Clocks
+import com.twosigma.flint.timeseries.summarize.SummarizerSuite
 import org.apache.commons.math3.stat.descriptive.rank.Percentile
 
-class QuantileSummarizerSpec extends TimeSeriesSuite {
+class QuantileSummarizerSpec extends SummarizerSuite {
 
   "QuantileSummarizer" should "compute `quantile` correctly" in {
     val clockTSRdd = Clocks.uniform(
@@ -35,5 +35,9 @@ class QuantileSummarizerSpec extends TimeSeriesSuite {
     percentileEstimator.setData(clockTSRdd.collect().map(_.getAs[Long]("time").toDouble))
     val expectedResults = p.map { i => percentileEstimator.evaluate(i * 100.0) }
     (1 to 100).foreach { i => assert(results.getAs[Double](s"time_${i / 100.0}quantile") === expectedResults(i - 1)) }
+  }
+
+  it should "pass summarizer property test" in {
+    summarizerPropertyTest(AllProperties)(Summarizers.quantile("x1", Seq(0.25, 0.5, 0.75, 0.9, 0.95)))
   }
 }
