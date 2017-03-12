@@ -42,11 +42,8 @@ class AddColumnsForCycleSpec extends MultiPartitionSuite {
       assert(adjustedPriceTSRdd.collect().deep == resultTSRdd.collect().deep)
     }
 
-    {
-      val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-      withPartitionStrategy(priceTSRdd)(DEFAULT)(test)
-    }
-
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    withPartitionStrategy(priceTSRdd)(DEFAULT)(test)
   }
 
   it should "support non-primitive types" in {
@@ -67,10 +64,8 @@ class AddColumnsForCycleSpec extends MultiPartitionSuite {
       assert(adjustedPriceTSRdd.collect().deep == resultTSRdd.collect().deep)
     }
 
-    {
-      val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-      withPartitionStrategy(priceTSRdd)(DEFAULT)(test)
-    }
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    withPartitionStrategy(priceTSRdd)(DEFAULT)(test)
   }
 
   it should "pass `AddTotalVolumePerKey` test, i.e. with additional a single key. " in {
@@ -89,22 +84,11 @@ class AddColumnsForCycleSpec extends MultiPartitionSuite {
         ),
         Seq("id")
       )
-      assert(totalVolumeTSRdd.schema == resultTSRdd.schema)
-
-      // TODO: we should do this instead of the following 3 asserts
-      // assert(totalVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
-      assert(totalVolumeTSRdd.keepRows(_.getAs[Int]("id") == 3).collect().deep ==
-        resultTSRdd.keepRows(_.getAs[Int]("id") == 3).collect().deep)
-      assert(totalVolumeTSRdd.keepRows(_.getAs[Int]("id") == 7).collect().deep ==
-        resultTSRdd.keepRows(_.getAs[Int]("id") == 7).collect().deep)
-      assert(totalVolumeTSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep ==
-        resultTSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep)
+      totalVolumeTSRdd.collect().deep == resultTSRdd.collect().deep
     }
 
-    {
-      val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
-      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
-    }
+    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 
   it should "pass `AddTotalVolumePerSeqOfKeys` test, i.e. with additional a sequence of keys." in {
@@ -123,16 +107,14 @@ class AddColumnsForCycleSpec extends MultiPartitionSuite {
         ),
         Seq("id", "group")
       )
-      assert(totalVolumeTSRdd.schema == resultTSRdd.schema)
+
       assert(totalVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
     }
 
-    {
-      val volumeTSRdd = fromCSV(
-        "VolumeWithIndustryGroup.csv",
-        Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
-      )
-      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
-    }
+    val volumeTSRdd = fromCSV(
+      "VolumeWithIndustryGroup.csv",
+      Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
+    )
+    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 }

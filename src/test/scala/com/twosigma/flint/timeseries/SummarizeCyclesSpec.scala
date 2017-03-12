@@ -51,14 +51,7 @@ class SummarizeCyclesSpec extends MultiPartitionSuite {
     def test(rdd: TimeSeriesRDD): Unit = {
       val summarizedVolumeTSRdd = rdd.summarizeCycles(Summarizers.sum("volume"), Seq("id"))
 
-      // TODO: we should do this instead of the following 3 asserts
-      // assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
-      assert(summarizedVolumeTSRdd.keepRows(_.getAs[Int]("id") == 3).collect().deep ==
-        resultTSRdd.keepRows(_.getAs[Int]("id") == 3).collect().deep)
-      assert(summarizedVolumeTSRdd.keepRows(_.getAs[Int]("id") == 7).collect().deep ==
-        resultTSRdd.keepRows(_.getAs[Int]("id") == 7).collect().deep)
-      assert(summarizedVolumeTSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep ==
-        resultTSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep)
+      assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
     }
 
     {
@@ -76,19 +69,10 @@ class SummarizeCyclesSpec extends MultiPartitionSuite {
     def test(rdd: TimeSeriesRDD): Unit = {
       val summarizedVolumeTSRdd = rdd.summarizeCycles(Summarizers.sum("volume"), Seq("id", "group"))
 
-      // TODO: we should do this instead of the following 3 asserts
-      // assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
-      assert(summarizedVolumeTSRdd.keepRows(_.getAs[Int]("id") == 3).collect().deep ==
-        resultTSRdd.keepRows(_.getAs[Int]("id") == 3).collect().deep)
-      assert(summarizedVolumeTSRdd.keepRows(_.getAs[Int]("id") == 7).collect().deep ==
-        resultTSRdd.keepRows(_.getAs[Int]("id") == 7).collect().deep)
-      assert(summarizedVolumeTSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep ==
-        resultTSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep)
+      assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
     }
 
-    {
-      val volumeTSRdd = fromCSV("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
-      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
-    }
+    val volumeTSRdd = fromCSV("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
+    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 }

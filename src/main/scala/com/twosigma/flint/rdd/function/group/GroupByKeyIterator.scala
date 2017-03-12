@@ -16,8 +16,8 @@
 
 package com.twosigma.flint.rdd.function.group
 
-import scala.reflect.ClassTag
 import scala.collection.mutable
+import scala.reflect.ClassTag
 
 /**
  * We use the following example to illustrate what this iterator looks like.
@@ -45,20 +45,24 @@ private[rdd] case class GroupByKeyIterator[K, SK, V](
   override def hasNext: Boolean = groupedBySkIter.hasNext || bufferedIter.hasNext
 
   // Update groupedBySkIter with next key if bufferedIter.hasNext.
-  private def nextKey(): Unit = if (bufferedIter.hasNext) {
+  private def nextKey(): Unit = {
     val groupKey = bufferedIter.head._1
-    val group = mutable.ArrayBuffer[V]()
-    // Iterates through all rows from the given iterator until seeing a different key.
+    val group = mutable.LinkedHashMap[SK, mutable.ArrayBuffer[V]]()
+
     do {
-      group.append(bufferedIter.next._2)
+      val v = bufferedIter.next._2
+      val sk = skFn(v)
+      val vs = group.getOrElseUpdate(sk, new mutable.ArrayBuffer[V]())
+      vs.append(v)
     } while (bufferedIter.hasNext && ord.equiv(bufferedIter.head._1, groupKey))
-    groupedBySkIter = group.groupBy(skFn(_)).iterator.map { t => (groupKey, t._2.toArray) }
+
+    groupedBySkIter = group.values.map{ vs => (groupKey, vs.toArray) }.toIterator
   }
 
   override def next(): (K, Array[V]) = {
     if (!groupedBySkIter.hasNext) {
-      nextKey()
+      nextKey
     }
-    if (hasNext) groupedBySkIter.next() else Iterator.empty.next()
+    if (groupedBySkIter.hasNext) groupedBySkIter.next else Iterator.empty.next
   }
 }

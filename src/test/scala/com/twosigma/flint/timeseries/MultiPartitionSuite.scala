@@ -231,7 +231,7 @@ private[flint] object PartitionStrategy {
   }
 
   /**
-   * Repartition into n partitions where each partition has roughly the same amount of timestamps.
+   * Repartition into n partitions where each partition has roughly the same amount of cycles.
    */
   case object MultiTimestampNormalized extends PartitionStrategy {
     override def repartition(rdd: TimeSeriesRDD): TimeSeriesRDD = {

@@ -122,8 +122,8 @@ class GroupByIntervalSpec extends MultiPartitionSuite {
       Schema("id" -> IntegerType, "rows" -> ArrayType(Schema("id" -> IntegerType, "volume" -> LongType)))
     val rows = volumeTSRdd.rdd.collect()
     val expectedResults = Array[Row](
-      new GenericRowWithSchema(Array(1000L, 3, Array(rows(1), rows(2))), expectedSchema),
       new GenericRowWithSchema(Array(1000L, 7, Array(rows(0), rows(3))), expectedSchema),
+      new GenericRowWithSchema(Array(1000L, 3, Array(rows(1), rows(2))), expectedSchema),
       new GenericRowWithSchema(Array(1100L, 3, Array(rows(4), rows(6))), expectedSchema),
       new GenericRowWithSchema(Array(1100L, 7, Array(rows(5), rows(7))), expectedSchema),
       new GenericRowWithSchema(Array(1100L, 3, Array(rows(8), rows(10))), expectedSchema),

@@ -72,12 +72,14 @@ class GroupByKeySpec extends FlatSpec {
     var iter = GroupByKeyIterator(data.iterator, (x: (Int, Double)) => x._1).map {
       case (k, v) => (k, v.toList)
     }
-    assert(iter.next == (1000L, List((2, 0.02), (2, 0.04))))
+
     assert(iter.next == (1000L, List((1, 0.01), (1, 0.03))))
-    assert(iter.next == (1010L, List((2, 0.06), (2, 0.08))))
+    assert(iter.next == (1000L, List((2, 0.02), (2, 0.04))))
     assert(iter.next == (1010L, List((1, 0.05), (1, 0.07))))
+    assert(iter.next == (1010L, List((2, 0.06), (2, 0.08))))
     assert(iter.next == (1020L, List((2, 0.09), (2, 0.11))))
     assert(iter.next == (1020L, List((1, 0.10), (1, 0.12))))
+
     assert(!iter.hasNext)
 
     iter = GroupByKeyIterator(data.iterator, (x: (Int, Double)) => x._1).map {
@@ -94,8 +96,9 @@ class GroupByKeySpec extends FlatSpec {
     val iter = GroupByKeyIterator(data.take(4).iterator, (x: (Int, Double)) => x._1).map {
       case (k, v) => (k, v.toList)
     }
-    assert(iter.next == (1000L, List((2, 0.02), (2, 0.04))))
+
     assert(iter.next == (1000L, List((1, 0.01), (1, 0.03))))
+    assert(iter.next == (1000L, List((2, 0.02), (2, 0.04))))
     assert(!iter.hasNext)
   }
 }

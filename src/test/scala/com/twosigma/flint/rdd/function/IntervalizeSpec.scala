@@ -92,7 +92,7 @@ class IntervalizeSpec extends FlatSpec with SharedSparkContext {
     assert(intervalized.collect().toList == expectedEndInclusive)
   }
 
-  it should "intervalize OrderedRDD using OrderedRDD clock correctly" ignore {
+  it should "intervalize OrderedRDD using OrderedRDD clock correctly" in {
     val intervalized = intervalize(orderedRDD, clockRDD, false)
     assert(intervalized.collect().toList == expectedEndInclusive)
   }

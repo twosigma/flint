@@ -24,6 +24,10 @@ class SummarizeIntervalsSpec extends MultiPartitionSuite {
   override val defaultResourceDir: String = "/timeseries/summarizeintervals"
 
   "SummarizeInterval" should "pass `SummarizeSingleColumn` test." in {
+    val volumeTSRdd = fromCSV(
+      "Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
+    )
+
     val clockTSRdd = fromCSV("Clock.csv", Schema())
     val resultTSRdd = fromCSV("SummarizeSingleColumn.results", Schema("volume_sum" -> DoubleType))
 
@@ -32,16 +36,14 @@ class SummarizeIntervalsSpec extends MultiPartitionSuite {
       assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
     }
 
-    {
-      val volumeTSRdd = fromCSV(
-        "Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
-      )
-      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
-    }
-
+    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 
   it should "pass `SummarizeSingleColumnPerKey` test, i.e. with additional a single key." in {
+    val volumeTSRdd = fromCSV(
+      "Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
+    )
+
     val clockTSRdd = fromCSV("Clock.csv", Schema())
     val resultTSRdd = fromCSV(
       "SummarizeSingleColumnPerKey.results",
@@ -55,35 +57,21 @@ class SummarizeIntervalsSpec extends MultiPartitionSuite {
 
     def test(rdd: TimeSeriesRDD): Unit = {
       val summarizedVolumeTSRdd = rdd.summarizeIntervals(clockTSRdd, Summarizers.sum("volume"), Seq("id"))
+      assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
 
-      // TODO: we should do this instead of the following 3 asserts
-      // assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
-      assert(summarizedVolumeTSRdd.keepRows(_.getAs[Int]("id") == 3).collect().deep ==
-        resultTSRdd.keepRows(_.getAs[Int]("id") == 3).collect().deep)
-      assert(summarizedVolumeTSRdd.keepRows(_.getAs[Int]("id") == 7).collect().deep ==
-        resultTSRdd.keepRows(_.getAs[Int]("id") == 7).collect().deep)
-      assert(summarizedVolumeTSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep ==
-        resultTSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep)
-
-      val summarizedV2TSRdd = rdd.summarizeIntervals(clockTSRdd, Summarizers.sum("v2"), Seq("id"))
-      assert(summarizedV2TSRdd.keepRows(_.getAs[Int]("id") == 3).collect().deep ==
-        result2TSRdd.keepRows(_.getAs[Int]("id") == 3).collect().deep)
-      assert(summarizedV2TSRdd.keepRows(_.getAs[Int]("id") == 7).collect().deep ==
-        result2TSRdd.keepRows(_.getAs[Int]("id") == 7).collect().deep)
-      assert(summarizedV2TSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep ==
-        result2TSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep)
+      val summarizedVolumeTSRdd2 = rdd.summarizeIntervals(clockTSRdd, Summarizers.sum("v2"), Seq("id"))
+      assert(summarizedVolumeTSRdd2.collect().deep == result2TSRdd.collect().deep)
     }
 
-    {
-      val volumeTSRdd = fromCSV(
-        "Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
-      )
-      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
-    }
-
+    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 
   it should "pass `SummarizeSingleColumnPerSeqOfKeys` test, i.e. with additional a sequence of keys." in {
+    val volumeTSRdd = fromCSV(
+      "VolumeWithIndustryGroup.csv",
+      Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
+    )
+
     val clockTSRdd = fromCSV("Clock.csv", Schema())
     val resultTSRdd = fromCSV(
       "SummarizeSingleColumnPerSeqOfKeys.results",
@@ -95,23 +83,9 @@ class SummarizeIntervalsSpec extends MultiPartitionSuite {
         clockTSRdd,
         Summarizers.sum("volume"), Seq("id", "group")
       )
-
-      // TODO: we should do this instead of the following 3 asserts
-      // assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
-      assert(summarizedVolumeTSRdd.keepRows(_.getAs[Int]("id") == 3).collect().deep ==
-        resultTSRdd.keepRows(_.getAs[Int]("id") == 3).collect().deep)
-      assert(summarizedVolumeTSRdd.keepRows(_.getAs[Int]("id") == 7).collect().deep ==
-        resultTSRdd.keepRows(_.getAs[Int]("id") == 7).collect().deep)
-      assert(summarizedVolumeTSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep ==
-        resultTSRdd.keepColumns(TimeSeriesRDD.timeColumnName).collect().deep)
+      assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
     }
 
-    {
-      val volumeTSRdd = fromCSV(
-        "VolumeWithIndustryGroup.csv",
-        Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
-      )
-      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
-    }
+    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 }
