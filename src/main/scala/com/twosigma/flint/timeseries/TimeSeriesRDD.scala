@@ -1412,9 +1412,7 @@ class TimeSeriesRDDImpl private[timeseries] (
         pruned.orderedRdd.summarize(
           summarizer.asInstanceOf[OverlappableSummarizer], factory.window.of, keyGetter, depth
         )
-      case _ =>
-        // TODO: the depth here is hardcoded to be 1 until [[ExponentialSmoothingSummarizer]] passing the property test.
-        pruned.orderedRdd.summarize(summarizer, keyGetter, 1)
+      case _ => pruned.orderedRdd.summarize(summarizer, keyGetter, depth)
     }
     val rows = summarized.map {
       case (keyValues, row) => InternalRowUtils.prepend(row, summarizer.outputSchema, (0L +: keyValues): _*)

@@ -112,35 +112,16 @@ class ExponentialSmoothingSummarizer(
     state2.auxiliaryESValues = state2.auxiliaryESValues.zip(timeAuxiliaryESDeltas).map { v => v._1 + v._2 }
 
     val merged = zero()
-    val (primaryESValues, auxiliaryESValues, alphas, count, firstXValue) = (state1.count, state2.count) match {
-      case (0, 0) => (
-        ListBuffer[Double](),
-        ListBuffer[Double](),
-        ListBuffer[Double](),
-        0L,
-        None
-      )
-      case (_, 0) => (
-        state1.primaryESValues.takeRight(1),
-        state1.auxiliaryESValues.takeRight(1),
-        state1.alphas.takeRight(1),
-        1L,
-        state1.firstXValue
-      )
-      case (_, _) => (
-        state2.primaryESValues.takeRight(1),
-        state2.auxiliaryESValues.takeRight(1),
-        state2.alphas.takeRight(1),
-        1L,
-        state2.firstXValue
-      )
-    }
-    merged.primaryESValues = primaryESValues
-    merged.auxiliaryESValues = auxiliaryESValues
-    merged.alphas = alphas
-    merged.count = count
+    merged.primaryESValues = state1.primaryESValues ++ state2.primaryESValues
+    merged.auxiliaryESValues = state1.auxiliaryESValues ++ state2.auxiliaryESValues
+    merged.alphas = state1.alphas ++ state2.alphas
+    merged.count = state1.count + state2.count
     merged.time = state1.time max state2.time
-    merged.firstXValue = firstXValue
+    merged.firstXValue = (state1.count, state2.count) match {
+      case (0, 0) => None
+      case (0, _) => state2.firstXValue
+      case (_, _) => state1.firstXValue
+    }
 
     merged
   }

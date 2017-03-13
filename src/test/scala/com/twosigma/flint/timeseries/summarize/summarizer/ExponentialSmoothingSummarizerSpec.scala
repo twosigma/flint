@@ -65,7 +65,7 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
     })
   }
 
-  it should "pass summarizer property test" ignore {
+  it should "pass summarizer property test" in {
     summarizerPropertyTest(AllProperties)(Summarizers.exponentialSmoothing(
       xColumn = "x3",
       timestampsToPeriods = (a, b) => (b - a) / 100.0
