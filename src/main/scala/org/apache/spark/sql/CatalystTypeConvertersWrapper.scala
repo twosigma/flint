@@ -34,4 +34,7 @@ object CatalystTypeConvertersWrapper {
 
   def toCatalystConverter(dataType: DataType): Any => Any =
     CatalystTypeConverters.createToCatalystConverter(dataType)
+
+  def toScalaConverter(dataType: DataType): Any => Any =
+    CatalystTypeConverters.createToScalaConverter(dataType)
 }
