@@ -18,6 +18,7 @@ package com.twosigma.flint.rdd
 
 import com.twosigma.flint.SharedSparkContext
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.RowsSummarizer
+import org.apache.spark.SparkException
 import org.apache.spark.rdd.RDD
 import org.scalatest.FlatSpec
 
@@ -129,6 +130,49 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
     )
     val orderedRDD = OrderedRDD.fromRDD(sc.parallelize(unsortedData, unsortedData.length * 10), KeyPartitioningType.UnSorted)
     assert(orderedRDD.partitions.length <= unsortedData.length)
+  }
+
+  it should "be constructed by `fromNormalizedSortedRDD` correctly" in {
+    val partition1 = Seq(
+      (97L, (1, 1)),
+      (98L, (1, 1)),
+      (99L, (1, 1)),
+      (100L, (1, 1))
+    )
+
+    val partition2 = Seq(
+      (101L, (1, 1)),
+      (102L, (1, 1)),
+      (103L, (1, 1)),
+      (104L, (1, 1))
+    )
+
+    val rdd = sc.parallelize(partition1, 1).union(sc.parallelize(partition2, 1))
+    val orderedRDD = OrderedRDD.fromRDD(rdd, KeyPartitioningType.NormalizedSorted)
+    assert(orderedRDD.collect().toList === (partition1 ++ partition2))
+  }
+
+  it should "fail when constructed by `fromNormalizedSortedRDD` incorrectly" in {
+    val partition1 = Seq(
+      (97L, (1, 1)),
+      (98L, (1, 1)),
+      (99L, (1, 1)),
+      (100L, (1, 1))
+    )
+
+    val partition2 = Seq(
+      (100L, (1, 1)),
+      (101L, (1, 1)),
+      (102L, (1, 1)),
+      (103L, (1, 1))
+    )
+
+    val rdd = sc.parallelize(partition1, 1).union(sc.parallelize(partition2, 1))
+    val orderedRDD = OrderedRDD.fromRDD(rdd, KeyPartitioningType.NormalizedSorted)
+    val exception = intercept[SparkException] {
+      orderedRDD.collect()
+    }
+    assert(exception.getCause.isInstanceOf[IllegalArgumentException])
   }
 
   it should "be able to take the 1st row" in {

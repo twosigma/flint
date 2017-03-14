@@ -150,8 +150,20 @@ object Conversion {
     new OrderedRDD[K, V](rdd.sparkContext, rangeSplits, Seq(new OneToOneDependency(rdd) {
       override def getParents(partitionId: Int) = List(indexMapping(partitionId)._1)
     }))(
-      (partition, context) => rdd.iterator(indexToParentPartition(partition.index), context)
+      (partition, context) => {
+        val range = rangeSplits(partition.index).range
+        // We capture this as debug information in case of failure
+        // Potentially can use toDebugString but it seems heavyweight.
+        val rddString = rdd.toString()
+        rdd.iterator(indexToParentPartition(partition.index), context)
+          .map(rangeValidationFunction(rddString, range))
+      }
     )
+  }
+
+  private def rangeValidationFunction[K, V](rddString: String, range: CloseOpen[K])(r: (K, V)): (K, V) = {
+    require(range.contains(r._1), s"Key ${r._1} must be in range ${range}) for RDD: ${rddString}")
+    r
   }
 
   /**
