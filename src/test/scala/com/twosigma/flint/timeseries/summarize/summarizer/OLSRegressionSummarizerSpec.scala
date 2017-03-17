@@ -48,15 +48,15 @@ class OLSRegressionSummarizerSpec extends SummarizerSuite {
     assert(result.getAs[Double](OLSRegressionSummarizer.akaikeICColumn) === 630.225840453)
     assert(result.getAs[Double](OLSRegressionSummarizer.bayesICColumn) === 638.041351011)
 
-    assertEquals(
+    assertAlmostEquals(
       result.getAs[mutable.WrappedArray[Double]](OLSRegressionSummarizer.betaColumn).toArray,
       Array(0.28007101558427594, 1.3162178418611101)
     )
-    assertEquals(
+    assertAlmostEquals(
       result.getAs[mutable.WrappedArray[Double]](OLSRegressionSummarizer.stdErrOfBetaColumn).toArray,
       Array(0.5870869011202909, 0.5582749581661886)
     )
-    assertEquals(
+    assertAlmostEquals(
       result.getAs[mutable.WrappedArray[Double]](OLSRegressionSummarizer.tStatOfBetaColumn).toArray,
       Array(0.4770520600099199, 2.3576515883581814)
     )
@@ -72,15 +72,15 @@ class OLSRegressionSummarizerSpec extends SummarizerSuite {
     assert(result.getAs[Double](OLSRegressionSummarizer.akaikeICColumn) === 658.222278808)
     assert(result.getAs[Double](OLSRegressionSummarizer.bayesICColumn) === 663.43261918)
 
-    assertEquals(
+    assertAlmostEquals(
       result.getAs[mutable.WrappedArray[Double]](OLSRegressionSummarizer.betaColumn).toArray,
       Array(-0.18855696254850499, 1.2397406248059233)
     )
-    assertEquals(
+    assertAlmostEquals(
       result.getAs[mutable.WrappedArray[Double]](OLSRegressionSummarizer.stdErrOfBetaColumn).toArray,
       Array(0.672195067165334, 0.6451152214049083)
     )
-    assertEquals(
+    assertAlmostEquals(
       result.getAs[mutable.WrappedArray[Double]](OLSRegressionSummarizer.tStatOfBetaColumn).toArray,
       Array(-0.28050929225597476, 1.9217351934528257)
     )

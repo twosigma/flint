@@ -50,13 +50,13 @@ trait TimeSeriesSuite extends FlintSuite {
   /**
    * Assert if two arrays of doubles are equal within additive precision `defaultAdditivePrecision`.
    */
-  def assertEquals(thisArray: Array[Double], thatArray: Array[Double]): Unit =
-    (thisArray zip thatArray).map { case (x, y) => assertEquals(x, y) }
+  def assertAlmostEquals(thisArray: Array[Double], thatArray: Array[Double]): Unit =
+    (thisArray zip thatArray).map { case (x, y) => assertAlmostEquals(x, y) }
 
   /**
    * Assert if two doubles are equal within additive precision `defaultAdditivePrecision`.
    */
-  def assertEquals(x: Double, y: Double): Unit = assert(x.isNaN && y.isNaN || x === y)
+  def assertAlmostEquals(x: Double, y: Double): Unit = assert(x.isNaN && y.isNaN || x === y)
 
   /**
    * Assert if two rows have the same values within additive precision `defaultAdditivePrecision`.
@@ -64,7 +64,7 @@ trait TimeSeriesSuite extends FlintSuite {
    * Only support columns of types [[IntegerType]], [[LongType]], [[FloatType]], [[DoubleType]] and
    * [[ArrayType]] of [[IntegerType]], [[LongType]], [[FloatType]], [[DoubleType]] respectively.
    */
-  def assertEquals(thisRow: Row, thatRow: Row): Unit = {
+  def assertAlmostEquals(thisRow: Row, thatRow: Row): Unit = {
     assert(thisRow.schema == thatRow.schema)
     thisRow.schema.foreach { col =>
       col.dataType match {
@@ -81,7 +81,7 @@ trait TimeSeriesSuite extends FlintSuite {
             thisRow.getAs[Float](col.name) === thatRow.getAs[Float](col.name)
           )
         case DoubleType =>
-          assertEquals(thisRow.getAs[Double](col.name), thatRow.getAs[Double](col.name))
+          assertAlmostEquals(thisRow.getAs[Double](col.name), thatRow.getAs[Double](col.name))
         case ArrayType(IntegerType, _) =>
           assert(
             thisRow.getAs[mutable.WrappedArray[Int]](col.name).deep ==
@@ -93,7 +93,7 @@ trait TimeSeriesSuite extends FlintSuite {
               thatRow.getAs[mutable.WrappedArray[Long]](col.name).deep
           )
         case ArrayType(FloatType, _) =>
-          assertEquals(
+          assertAlmostEquals(
             thisRow
               .getAs[mutable.WrappedArray[Float]](col.name)
               .toArray
@@ -104,7 +104,7 @@ trait TimeSeriesSuite extends FlintSuite {
               .map(_.toDouble)
           )
         case ArrayType(DoubleType, _) =>
-          assertEquals(
+          assertAlmostEquals(
             thisRow.getAs[mutable.WrappedArray[Double]](col.name).toArray,
             thatRow.getAs[mutable.WrappedArray[Double]](col.name).toArray
           )
@@ -125,9 +125,9 @@ trait TimeSeriesSuite extends FlintSuite {
   /**
    * Assert two [[TimeSeriesRDD]] are equal row by row in order.
    */
-  def assertEquals(thisTSRdd: TimeSeriesRDD, otherTSRdd: TimeSeriesRDD): Unit =
+  def assertAlmostEquals(thisTSRdd: TimeSeriesRDD, otherTSRdd: TimeSeriesRDD): Unit =
     (thisTSRdd.collect() zip otherTSRdd.collect()).foreach {
-      case (thisRow, thatRow) => assertEquals(thisRow, thatRow)
+      case (thisRow, thatRow) => assertAlmostEquals(thisRow, thatRow)
     }
 
   /**
@@ -175,4 +175,26 @@ trait TimeSeriesSuite extends FlintSuite {
     withResource(s"$defaultResourceDir/$filepath") { source =>
       Json.parse(Source.fromFile(source).mkString)
     }
+
+  /**
+   * Assert two [[TimeSeriesRDD]] are equal. Works with comparing rows with nested structure.
+   */
+  def assertEquals(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+    assert(rdd1.schema == rdd2.schema)
+    assert(rdd1.rdd.collect.map(prepareRow).toSeq == rdd1.rdd.collect.map(prepareRow).toSeq)
+  }
+
+  /**
+   * Taken from https://github.com/apache/spark/blob/f48461ab2bdb91cd00efa5a5ec4b0b2bc361e7a2/sql/core/src/test/scala/org/apache/spark/sql/QueryTest.scala#L299
+   */
+  def prepareRow(row: Row): Row = {
+    Row.fromSeq(row.toSeq.map {
+      case null => null
+      case d: java.math.BigDecimal => BigDecimal(d)
+      // Convert array to Seq for easy equality check.
+      case b: Array[_] => b.toSeq
+      case r: Row => prepareRow(r)
+      case o => o
+    })
+  }
 }

@@ -110,7 +110,7 @@ protected[flint] object RangeMergeJoin {
 
     leftSplits.map { left =>
       val toleranceBegin = toleranceFn(left.range.begin)
-      require(ord.gteq(left.range.begin, toleranceBegin), "It should be a look-back tolerance.")
+      require(ord.gteq(left.range.begin, toleranceBegin), s"It should be a look-back tolerance. ${left.range.begin}, ${toleranceBegin}")
       (left, RangeSplit.getIntersectingSplits(
         CloseOpen(toleranceBegin, left.range.end), rightSplits
       ).map(_.partition))

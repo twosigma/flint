@@ -17,9 +17,9 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.timeseries.row.Schema
-import org.apache.spark.sql.types.{ DoubleType, LongType, IntegerType }
+import org.apache.spark.sql.types.{ DoubleType, IntegerType, LongType }
 
-class SummarizeCyclesSpec extends MultiPartitionSuite {
+class SummarizeCyclesSpec extends MultiPartitionSuite with TimeSeriesTestData {
 
   override val defaultResourceDir: String = "/timeseries/summarizecycles"
   private val volumeSchema = Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
@@ -33,13 +33,11 @@ class SummarizeCyclesSpec extends MultiPartitionSuite {
 
     def test(rdd: TimeSeriesRDD): Unit = {
       val summarizedVolumeTSRdd = rdd.summarizeCycles(Summarizers.sum("volume"))
-      assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
+      assertEquals(summarizedVolumeTSRdd, resultTSRdd)
     }
 
-    {
-      val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
-      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
-    }
+    val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
+    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 
   it should "pass `SummarizeSingleColumnPerKey` test, i.e. with additional a single key." in {
@@ -50,14 +48,11 @@ class SummarizeCyclesSpec extends MultiPartitionSuite {
 
     def test(rdd: TimeSeriesRDD): Unit = {
       val summarizedVolumeTSRdd = rdd.summarizeCycles(Summarizers.sum("volume"), Seq("id"))
-
-      assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
+      assertEquals(summarizedVolumeTSRdd, resultTSRdd)
     }
 
-    {
-      val volumeTSRdd = fromCSV("Volume2.csv", volume2Schema)
-      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
-    }
+    val volumeTSRdd = fromCSV("Volume2.csv", volume2Schema)
+    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 
   it should "pass `SummarizeSingleColumnPerSeqOfKeys` test, i.e. with additional a sequence of keys." in {
@@ -68,11 +63,20 @@ class SummarizeCyclesSpec extends MultiPartitionSuite {
 
     def test(rdd: TimeSeriesRDD): Unit = {
       val summarizedVolumeTSRdd = rdd.summarizeCycles(Summarizers.sum("volume"), Seq("id", "group"))
-
-      assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
+      assertEquals(summarizedVolumeTSRdd, resultTSRdd)
     }
 
     val volumeTSRdd = fromCSV("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
     withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+  }
+
+  it should "pass generated cycle data test" in {
+    val testData = cycleData1._1
+
+    def sum(rdd: TimeSeriesRDD): TimeSeriesRDD = {
+      rdd.summarizeCycles(Summarizers.compose(Summarizers.count(), Summarizers.sum("v1")))
+    }
+
+    withPartitionStrategyCompare(testData)(DEFAULT)(sum)
   }
 }

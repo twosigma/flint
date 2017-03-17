@@ -107,7 +107,7 @@ class SummarizerSuite extends TimeSeriesSuite {
           .summarizeInternal(summarizerFactory, Seq.empty, depth)
       }
       summarizedResults.foreach { result =>
-        assertEquals(summarizedResults.head, result)
+        assertAlmostEquals(summarizedResults.head, result)
       }
     }
 
@@ -127,7 +127,7 @@ class SummarizerSuite extends TimeSeriesSuite {
       val toExternalRow = CatalystTypeConvertersWrapper.toScalaRowConverter(
         summarizer.outputSchema
       )
-      assertEquals(
+      assertAlmostEquals(
         toExternalRow(summarizer.render(summarizer.zero())),
         toExternalRow(summarizer.render(mergedZero))
       )
@@ -153,7 +153,7 @@ class SummarizerSuite extends TimeSeriesSuite {
       )
       val rightMerged =
         summarizer.merge(summarizer.zero(), nonZero).asInstanceOf[summarizer.U]
-      assertEquals(
+      assertAlmostEquals(
         toExternalRow(summarizer.render(nonZero)),
         toExternalRow(summarizer.render(rightMerged))
       )
@@ -179,7 +179,7 @@ class SummarizerSuite extends TimeSeriesSuite {
       )
       val leftMerged =
         summarizer.merge(nonZero, summarizer.zero()).asInstanceOf[summarizer.U]
-      assertEquals(
+      assertAlmostEquals(
         toExternalRow(summarizer.render(nonZero)),
         toExternalRow(summarizer.render(leftMerged))
       )

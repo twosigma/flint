@@ -16,9 +16,16 @@
 
 package com.twosigma.flint.timeseries
 
-import org.apache.spark.sql.types.{ StructField, LongType, StructType }
-import org.apache.spark.sql.{ DataFrame, SQLImplicits, SQLContext }
+import com.twosigma.flint.rdd.{ CloseOpen, ParallelCollectionRDD }
+import org.apache.spark.{ Partition, SparkContext, TaskContext }
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.types.{ IntegerType, LongType, StructField, StructType }
+import org.apache.spark.sql._
+import org.apache.spark.sql.functions.{ col, round }
+
 import scala.concurrent.duration.NANOSECONDS
+import scala.util.Random
 
 private[flint] trait TimeSeriesTestData {
   protected def sqlContext: SQLContext
@@ -57,6 +64,69 @@ private[flint] trait TimeSeriesTestData {
         TestData(5000) :: Nil
     ).toDF()
     TimeSeriesRDD.fromDF(changeTimeNotNull(df))(isSorted = true, timeUnit = NANOSECONDS)
+  }
+
+  protected lazy val cycleData1: (TimeSeriesRDD, CycleMetaData) = generateCycleData(0)
+  protected lazy val cycleData2: (TimeSeriesRDD, CycleMetaData) = generateCycleData(1)
+
+  /**
+   * Meta data for the generated cycle data. Metadata is used by test to decide arguments for various functions.
+   * See below for how the data looks like.
+   */
+  case class CycleMetaData(cycleWidth: Long, intervalWidth: Long)
+
+  /**
+   * Generate cycle data. Generated data has multiple intervals, each interval has the multiple cycles.
+   *
+   * For instance, for cycleWidth = 1000, intervalWidth = 10000, beginCycleOffset = 3, endCycleOffset = 8:
+   *
+   * Interval 1:
+   * [3000, 4000, 5000, 6000, 7000]
+   * Interval 2:
+   * [13000, 14000, 15000, 16000, 17000]
+   * ...
+   *
+   */
+  private def generateCycleData(salt: Long): (TimeSeriesRDD, CycleMetaData) = {
+    val begin = 0L
+    val numIntervals = 13
+    val cyclesPerInterval = 10
+    val beginCycleOffset = 3
+    val endCycleOffset = 8
+    val cycleWidth = 1000000L // 1 millis
+    val intervalWitdh = cycleWidth * cyclesPerInterval
+    val seed = 123456789L
+
+    var df = new TimeSeriesGenerator(
+      sqlContext.sparkContext,
+      begin = begin,
+      end = numIntervals * cycleWidth, frequency = cycleWidth
+    )(
+      columns = Seq(
+        "v1" -> { (_: Long, _: Int, r: Random) => r.nextDouble() }
+      ),
+      ids = 1 to 10,
+      ratioOfCycleSize = 0.8,
+      seed = seed + salt
+    ).generate().toDF
+
+    df = df.withColumn("index", (df("time") / intervalWitdh).cast(IntegerType))
+      .withColumn("cycleOffset", (df("time") % intervalWitdh / cycleWidth).cast(IntegerType))
+      .where(col("cycleOffset") > beginCycleOffset)
+      .where(col("cycleOffset") < endCycleOffset)
+      .drop("cycleOffset")
+
+    val rows = df.queryExecution.executedPlan.executeCollect().toSeq
+    val indexColumn = df.schema.fieldIndex("index")
+    val groupedRows = rows.groupBy(_.getInt(indexColumn)).toSeq.sortBy(_._1).map(_._2)
+
+    val rdd = new ParallelCollectionRDD[InternalRow](sqlContext.sparkContext, groupedRows)
+    val ranges = df.select("index").distinct().collect().map(_.getInt(0)).sorted.map{
+      case index =>
+        CloseOpen(index * intervalWitdh, Some((index + 1) * intervalWitdh))
+    }
+    val tsrdd = TimeSeriesRDD.fromDFWithRanges(DFConverter.toDataFrame(sqlContext, df.schema, rdd), ranges)
+    (tsrdd, CycleMetaData(cycleWidth, intervalWitdh))
   }
 }
 

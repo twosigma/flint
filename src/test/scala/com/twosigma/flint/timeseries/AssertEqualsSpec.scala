@@ -30,9 +30,9 @@ class AssertEqualsSpec extends TimeSeriesSuite {
     val row1 = new SqlRow(Array(1L, 1.0), schema)
     val row2 = new SqlRow(Array(1L, 1.0 + defaultAdditivePrecision * 0.1), schema)
     val row3 = new SqlRow(Array(1L, 1.0 + defaultAdditivePrecision * 10.0), schema)
-    assertEquals(row1, row2)
+    assertAlmostEquals(row1, row2)
     intercept[TestFailedException] {
-      assertEquals(row1, row3)
+      assertAlmostEquals(row1, row3)
     }
   }
 
@@ -45,9 +45,9 @@ class AssertEqualsSpec extends TimeSeriesSuite {
     val row3: Row = new SqlRow(
       Array(1L, mutable.WrappedArray.make(Array(1.0 + defaultAdditivePrecision * 10.0))), schema
     )
-    assertEquals(row1, row2)
+    assertAlmostEquals(row1, row2)
     intercept[TestFailedException] {
-      assertEquals(row1, row3)
+      assertAlmostEquals(row1, row3)
     }
   }
 
@@ -56,9 +56,9 @@ class AssertEqualsSpec extends TimeSeriesSuite {
     val row1 = new SqlRow(Array(1L, mutable.WrappedArray.make(Array(Double.NaN))), schema)
     val row2 = new SqlRow(Array(1L, mutable.WrappedArray.make(Array(Double.NaN))), schema)
     val row3 = new SqlRow(Array(1L, mutable.WrappedArray.make(Array(1.0))), schema)
-    assertEquals(row1, row2)
+    assertAlmostEquals(row1, row2)
     intercept[TestFailedException] {
-      assertEquals(row1, row3)
+      assertAlmostEquals(row1, row3)
     }
   }
 }

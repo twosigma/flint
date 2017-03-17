@@ -16,13 +16,14 @@
 
 package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.timeseries.clock.{ UniformClock, RandomClock }
+import com.twosigma.flint.timeseries.clock.{ RandomClock, UniformClock }
 import com.twosigma.flint.timeseries.row.Schema
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 import scala.util
+import scala.util.Random
 
 /**
  * A generator to generate a random [[TimeSeriesRDD]].
@@ -75,12 +76,7 @@ private[flint] class TimeSeriesGenerator(
   numSlices: Int = sc.defaultParallelism,
   seed: Long = System.currentTimeMillis()
 ) extends Serializable {
-
   require(ids.nonEmpty, s"ids must be non-empty.")
-
-  private val cycleSize = math.max(math.ceil(ids.size * ratioOfCycleSize), 1).toInt
-
-  private val rand = new util.Random(seed)
 
   private val schema = {
     var _schema = Schema(
@@ -93,30 +89,30 @@ private[flint] class TimeSeriesGenerator(
     _schema
   }
 
-  private def getCycle(time: Long, ids: Seq[Int]): Seq[InternalRow] = {
-    ids.map {
-      id =>
-        val values = columns.map {
-          case (_, fn) =>
-            fn(time, id, rand)
-        }
-        InternalRow.fromSeq(time +: id +: values)
-    }
-  }
-
-  private def getCycle(time: Long): Seq[InternalRow] = getCycle(time, getIds())
-
-  private def getIds(): Seq[Int] = rand.shuffle(ids).take(cycleSize)
-
   def generate(): TimeSeriesRDD = {
     val cycles = if (uniform) {
       new UniformClock(sc, begin = begin, end = end, frequency = frequency, offset = 0L)
     } else {
       new RandomClock(sc, begin = begin, end = end, frequency = frequency, offset = 0L, seed = seed)
     }
+    val cycleSize = math.max(math.ceil(ids.size * ratioOfCycleSize), 1).toInt
+
     TimeSeriesRDD.fromInternalOrderedRDD(
-      cycles.asOrderedRDD(numSlices).flatMapValues {
-        case (t, _) => getCycle(t)
+      cycles.asOrderedRDD(numSlices).mapPartitionsWithIndexOrdered {
+        case (partIndex, iter) =>
+          val rand = new Random(seed + partIndex)
+          def getCycle(time: Long): Seq[InternalRow] = {
+            val randIds = rand.shuffle(ids).take(cycleSize)
+            randIds.map {
+              id =>
+                val values = columns.map {
+                  case (_, fn) =>
+                    fn(time, id, rand)
+                }
+                InternalRow.fromSeq(time +: id +: values)
+            }
+          }
+          iter.map(_._2).flatMap{ case t => getCycle(t).map((t, _)) }
       },
       schema
     )

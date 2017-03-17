@@ -16,13 +16,18 @@
 
 package com.twosigma.flint.timeseries
 
+import java.util.concurrent.TimeUnit
+
+import com.twosigma.flint.timeseries.PartitionStrategy.MultiTimestampUnnormailzed
 import com.twosigma.flint.timeseries.row.Schema
+import com.twosigma.flint.timeseries.window.ShiftTimeWindow
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
+import org.scalatest.tagobjects.Slow
 
 import scala.util.Random
 
-class SummarizeWindowsSpec extends MultiPartitionSuite {
+class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData {
 
   override val defaultResourceDir: String = "/timeseries/summarizewindows"
 
@@ -46,8 +51,7 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
 
     def test(rdd: TimeSeriesRDD): Unit = {
       val summarizedTSRdd = rdd.summarizeWindows(Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"))
-      assert(summarizedTSRdd.schema == resultsTSRdd.schema)
-      assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+      assertEquals(summarizedTSRdd, resultsTSRdd)
     }
 
     {
@@ -66,8 +70,7 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
       val summarizedTSRdd = rdd.summarizeWindows(
         Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"), Seq("id")
       )
-      assert(summarizedTSRdd.schema == resultsTSRdd.schema)
-      assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+      assertEquals(summarizedTSRdd, resultsTSRdd)
     }
 
     {
@@ -86,8 +89,7 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
       val summarizedTSRdd = volumeTSRdd.summarizeWindows(
         Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"), Seq("id", "group")
       )
-      assert(summarizedTSRdd.schema == resultsTSRdd.schema)
-      assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+      assertEquals(summarizedTSRdd, resultsTSRdd)
     }
 
     {
@@ -104,8 +106,7 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
 
     def test(left: TimeSeriesRDD, right: TimeSeriesRDD): Unit = {
       val summarizedTSRdd = left.summarizeWindows(Windows.pastAbsoluteTime("500ns"), Summarizers.count(), Seq(), right)
-      assert(summarizedTSRdd.schema == resultsTSRdd.schema)
-      assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+      assertEquals(summarizedTSRdd, resultsTSRdd)
     }
 
     {
@@ -124,8 +125,7 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
 
     def test(rdd: TimeSeriesRDD): Unit = {
       val summarizedTSRdd = rdd.summarizeWindows(Windows.pastAbsoluteTime("5ns"), Summarizers.count())
-      assert(summarizedTSRdd.schema == resultsTSRdd.schema)
-      assert(summarizedTSRdd.collect().deep == resultsTSRdd.collect().deep)
+      assertEquals(summarizedTSRdd, resultsTSRdd)
     }
 
     {
@@ -135,10 +135,11 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
   }
 
   it should "pass `SummarizeWindowCountOverSingleRandomTimeSeries` test." in {
-    (1 to 10).foreach { _ =>
+    (1 to 10).foreach { seed =>
       val n = 100
       val step = 10
-      val clock = Seq.fill(n)(Random.nextInt(step * n)).sorted
+      val rand = new Random(seed)
+      val clock = Seq.fill(n)(rand.nextInt(step * n)).sorted
       val clockTSRdd = toTSRdd(clock)
 
       val window = Windows.pastAbsoluteTime(s"$step ns")
@@ -154,7 +155,7 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
       val results = clock.map {
         t1 =>
           val (b, e) = window.of(t1.toLong)
-          clock.filter { t2 => t2 >= b && t2 <= e }.length
+          clock.count{ t2 => t2 >= b && t2 <= e }
       }
       assert(summarized1.collect().deep == results.toArray.deep)
       assert(summarized2.collect().deep == results.toArray.deep)
@@ -162,11 +163,12 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
   }
 
   it should "pass `SummarizeWindowCountOverTwoRandomTimeSeries` test." in {
-    (1 to 10).foreach { _ =>
+    (1 to 10).foreach { seed =>
       val n = 100
       val step = 10
-      val clock1 = Seq.fill(n)(Random.nextInt(step * n)).sorted
-      val clock2 = Seq.fill(n)(Random.nextInt(step * n)).sorted
+      val rand = new Random(seed)
+      val clock1 = Seq.fill(n)(rand.nextInt(step * n)).sorted
+      val clock2 = Seq.fill(n)(rand.nextInt(step * n)).sorted
       val clockTSRdd1 = toTSRdd(clock1)
       val clockTSRdd2 = toTSRdd(clock2)
 
@@ -179,9 +181,64 @@ class SummarizeWindowsSpec extends MultiPartitionSuite {
       val results = clock1.map {
         t1 =>
           val (b, e) = window.of(t1.toLong)
-          clock2.filter { t2 => t2 >= b && t2 <= e }.length
+          clock2.count{ t2 => t2 >= b && t2 <= e }
       }
       assert(summarized.collect().deep == results.toArray.deep)
+    }
+  }
+
+  // TODO: Fix this!
+  it should "pass cycle data property test" ignore {
+    val (testData1, CycleMetaData(cycleWidth, intervalWidth)) = cycleData1
+
+    def addWindows(
+      windowFn: (String) => ShiftTimeWindow,
+      windowSize: Long,
+      key: Seq[String]
+    )(rdd1: TimeSeriesRDD): TimeSeriesRDD = {
+      val window = windowFn(s"${windowSize}ns")
+      rdd1.addWindows(window, key = key)
+    }
+
+    for (
+      windowFn <- Seq(Windows.pastAbsoluteTime _, Windows.futureAbsoluteTime _);
+      width <- Seq(
+        0, cycleWidth / 2, cycleWidth, cycleWidth * 2, intervalWidth / 2, intervalWidth, intervalWidth * 2
+      );
+      key <- Seq(Seq.empty, Seq("id"))
+    ) {
+      withPartitionStrategyCompare(testData1)(DEFAULT)(addWindows(windowFn, width, key))
+    }
+  }
+
+  it should "pass cycle data property test with other rdd" in {
+    val (testData1, CycleMetaData(cycleWidth, intervalWidth)) = cycleData1
+    val testData2 = cycleData2._1
+
+    def addWindows(
+      windowFn: (String) => ShiftTimeWindow,
+      windowWidth: Long,
+      key: Seq[String]
+    )(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): TimeSeriesRDD = {
+      val window = windowFn(s"${windowWidth}ns")
+      rdd1.addWindows(window, key = key, otherRdd = rdd2)
+    }
+
+    for (
+      windowFn <- Seq(Windows.pastAbsoluteTime _, Windows.futureAbsoluteTime _);
+      width <- Seq(
+        0, cycleWidth / 2, cycleWidth, cycleWidth * 2, intervalWidth / 2, intervalWidth, intervalWidth * 2
+      );
+      key <- Seq(Seq.empty, Seq("id"))
+    ) {
+      withPartitionStrategyCompare(
+        testData1, testData2
+      )(
+        // Ideally we want to run DEFAULT partition strategies, but it's too freaking slow!
+        NONE :+ MultiTimestampUnnormailzed
+      )(
+          addWindows(windowFn, width, key)
+        )
     }
   }
 }

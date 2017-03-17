@@ -19,7 +19,7 @@ package com.twosigma.flint.timeseries
 import com.twosigma.flint.timeseries.row.Schema
 import org.apache.spark.sql.types.{ DoubleType, LongType, IntegerType }
 
-class SummarizeIntervalsSpec extends MultiPartitionSuite {
+class SummarizeIntervalsSpec extends MultiPartitionSuite with TimeSeriesTestData {
 
   override val defaultResourceDir: String = "/timeseries/summarizeintervals"
 
@@ -57,10 +57,9 @@ class SummarizeIntervalsSpec extends MultiPartitionSuite {
 
     def test(rdd: TimeSeriesRDD): Unit = {
       val summarizedVolumeTSRdd = rdd.summarizeIntervals(clockTSRdd, Summarizers.sum("volume"), Seq("id"))
-      assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
-
-      val summarizedVolumeTSRdd2 = rdd.summarizeIntervals(clockTSRdd, Summarizers.sum("v2"), Seq("id"))
-      assert(summarizedVolumeTSRdd2.collect().deep == result2TSRdd.collect().deep)
+      assertEquals(summarizedVolumeTSRdd, resultTSRdd)
+      val summarizedV2TSRdd = rdd.summarizeIntervals(clockTSRdd, Summarizers.sum("v2"), Seq("id"))
+      assertEquals(summarizedV2TSRdd, result2TSRdd)
     }
 
     withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
@@ -81,9 +80,10 @@ class SummarizeIntervalsSpec extends MultiPartitionSuite {
     def test(rdd: TimeSeriesRDD): Unit = {
       val summarizedVolumeTSRdd = rdd.summarizeIntervals(
         clockTSRdd,
-        Summarizers.sum("volume"), Seq("id", "group")
+        Summarizers.sum("volume"),
+        Seq("id", "group")
       )
-      assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
+      assertEquals(summarizedVolumeTSRdd, resultTSRdd)
     }
 
     withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)

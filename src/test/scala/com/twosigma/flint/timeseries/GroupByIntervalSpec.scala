@@ -23,7 +23,7 @@ import org.apache.spark.sql.types._
 
 import scala.collection.mutable
 
-class GroupByIntervalSpec extends MultiPartitionSuite {
+class GroupByIntervalSpec extends MultiPartitionSuite with TimeSeriesTestData {
 
   override val defaultResourceDir: String = "/timeseries/groupbyinterval"
   private val clockBegin = "1970-01-01 00:00:00.000"
@@ -136,5 +136,36 @@ class GroupByIntervalSpec extends MultiPartitionSuite {
     }
 
     withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+  }
+
+  it should "pass cycle data property test" in {
+    val (testData, CycleMetaData(cycleWidth, intervalWidth)) = cycleData1
+    val clockBegin = "1970-01-01 00:00:00"
+    val clockEnd = "1970-01-01 00:00:01"
+
+    def sum(intervalNanos: Long, key: Seq[String], beginInclusive: Boolean)(
+      rdd: TimeSeriesRDD
+    ): TimeSeriesRDD = {
+      val clock = Clocks.uniform(
+        sc,
+        frequency = s"${intervalNanos}ns",
+        beginDateTime = clockBegin,
+        endDateTime = clockEnd
+      )
+
+      rdd.groupByInterval(
+        clock,
+        key,
+        beginInclusive
+      )
+    }
+
+    for (
+      width <- Seq(cycleWidth, cycleWidth / 2, cycleWidth * 2, intervalWidth, intervalWidth / 2, intervalWidth * 2);
+      key <- Seq(Seq.empty, Seq("id"));
+      beginInclusive <- Seq(true, false)
+    ) {
+      withPartitionStrategyCompare(testData)(DEFAULT)(sum(width, key, beginInclusive))
+    }
   }
 }

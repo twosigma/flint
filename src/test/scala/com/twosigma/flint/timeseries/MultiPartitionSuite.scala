@@ -104,7 +104,7 @@ private[flint] object PartitionStrategy {
   case object OneTimestampTightBound extends PartitionStrategy {
     override def repartition(rdd: TimeSeriesRDD): TimeSeriesRDD = {
       val timeIndex = rdd.schema.fieldIndex("time")
-      val rowGroupMap = TreeMap(rdd.toDF.queryExecution.sparkPlan.executeCollect().groupBy{
+      val rowGroupMap = TreeMap(rdd.toDF.queryExecution.executedPlan.executeCollect().groupBy{
         r => r.getLong(timeIndex)
       }.toArray: _*)
       val rowGroupArray = rowGroupMap.values.toArray
@@ -382,7 +382,7 @@ class MultiPartitionSuite extends TimeSeriesSuite {
     test: TimeSeriesRDD => Unit
   ): Unit = {
     for (s <- strategies) {
-      info(s"PartitionStrategy: ${s}")
+      // info(s"PartitionStrategy: ${s}")
       // info(s"Range: ${s.partition(rdd).partInfo.get.splits}")
       test(s.repartitionEnsureValid(rdd))
     }
@@ -392,10 +392,32 @@ class MultiPartitionSuite extends TimeSeriesSuite {
     test: (TimeSeriesRDD, TimeSeriesRDD) => Unit
   ): Unit = {
     for (s1 <- strategies; s2 <- strategies) {
-      info(s"PartitionStrategy: ${s1} ${s2}")
+      // info(s"PartitionStrategy: ${s1} ${s2}")
       // info(s"Range1: ${s1.partition(rdd1).partInfo.get.splits}")
       // info(s"Range2: ${s2.partition(rdd2).partInfo.get.splits}")
       test(s1.repartitionEnsureValid(rdd1), s2.repartitionEnsureValid(rdd2))
+    }
+  }
+
+  def withPartitionStrategyCompare(rdd: TimeSeriesRDD)(strategies: Seq[PartitionStrategy])(
+    fn: (TimeSeriesRDD) => TimeSeriesRDD
+  ): Unit = {
+    val baseline = fn(OnePartition.repartition(rdd))
+    val strategiesWithoutOnePartition = strategies.filter(_ != OnePartition)
+    for (s <- strategiesWithoutOnePartition) {
+      val result = fn(s.repartition(rdd))
+      assertEquals(result, baseline)
+    }
+  }
+
+  def withPartitionStrategyCompare(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD)(strategies: Seq[PartitionStrategy])(
+    fn: (TimeSeriesRDD, TimeSeriesRDD) => TimeSeriesRDD
+  ): Unit = {
+    val baseline = fn(OnePartition.repartition(rdd1), OnePartition.repartition(rdd2))
+    val strategiesWithoutOnePartition = strategies.filter(_ != OnePartition)
+    for (s1 <- strategiesWithoutOnePartition; s2 <- strategiesWithoutOnePartition) {
+      val result = fn(s1.repartitionEnsureValid(rdd1), s2.repartitionEnsureValid(rdd2))
+      assertEquals(result, baseline)
     }
   }
 }

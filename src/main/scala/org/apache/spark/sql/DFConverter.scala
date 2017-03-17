@@ -17,9 +17,8 @@
 package org.apache.spark.sql
 
 import com.twosigma.flint.rdd.OrderedRDD
-
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.LogicalRDD
 import org.apache.spark.sql.types.StructType
 
 /**
@@ -31,4 +30,7 @@ object DFConverter {
 
     sqlContext.internalCreateDataFrame(internalRows, schema)
   }
+
+  def toDataFrame(sqlContext: SQLContext, schema: StructType, rdd: RDD[InternalRow]): DataFrame =
+    sqlContext.internalCreateDataFrame(rdd, schema)
 }

@@ -16,14 +16,16 @@
 
 package com.twosigma.flint.timeseries
 
+import com.twosigma.flint.timeseries.PartitionStrategy.MultiTimestampUnnormailzed
 import com.twosigma.flint.timeseries.row.Schema
 import org.apache.spark.sql.types._
+import org.scalatest.tagobjects.Slow
 
-class FutureLeftJoinSpec extends MultiPartitionSuite {
+class FutureLeftJoinSpec extends MultiPartitionSuite with TimeSeriesTestData {
 
   override val defaultResourceDir: String = "/timeseries/futureleftjoin"
 
-  "FutureLeftJoin" should "pass `JoinOnTime` test." in {
+  "FutureLeftJoin" should "pass `JoinOnTime` with strictLookahead test." in {
     val resultsTSRdd = fromCSV(
       "JoinOnTime.results",
       Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType, "time2" -> LongType)
@@ -38,8 +40,7 @@ class FutureLeftJoinSpec extends MultiPartitionSuite {
         key = Seq("id"),
         strictLookahead = true
       )
-      assert(resultsTSRdd.schema == joinedTSRdd.schema)
-      assert(resultsTSRdd.collect().deep == joinedTSRdd.collect().deep)
+      assertEquals(joinedTSRdd, resultsTSRdd)
     }
 
     {
@@ -57,8 +58,7 @@ class FutureLeftJoinSpec extends MultiPartitionSuite {
 
     def test(priceTSRdd: TimeSeriesRDD, volumeTSRdd: TimeSeriesRDD): Unit = {
       val joinedTSRdd = priceTSRdd.leftJoin(volumeTSRdd, "0ns", Seq("id", "group"))
-      assert(resultsTSRdd.schema == joinedTSRdd.schema)
-      assert(resultsTSRdd.collect().deep == joinedTSRdd.collect().deep)
+      assertEquals(joinedTSRdd, resultsTSRdd)
     }
 
     {
@@ -71,6 +71,41 @@ class FutureLeftJoinSpec extends MultiPartitionSuite {
         Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
       )
       withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+    }
+  }
+
+  it should "pass cycle data property test" taggedAs Slow in {
+    val (testData1, CycleMetaData(cycleWidth, intervalWidth)) = cycleData1
+    val (testData2, _) = cycleData2
+
+    def futureLeftJoin(
+      tolerance: Long,
+      key: Seq[String],
+      strictLookahead: Boolean,
+      rightShift: String
+    )(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): TimeSeriesRDD = {
+      rdd1.futureLeftJoin(
+        rdd2.shift(Windows.pastAbsoluteTime(rightShift)),
+        tolerance = s"${tolerance}ns",
+        key = key,
+        strictLookahead = strictLookahead, rightAlias = "right"
+      )
+    }
+
+    for (
+      tolerance <- Seq(0, cycleWidth, intervalWidth);
+      key <- Seq(Seq.empty, Seq("id"));
+      strictLookahead <- Seq(true, false);
+      rightShift <- Seq("0ns", "1ns")
+    ) {
+      // Ideally we want to run DEFAULT partition strategies, but it's too freaking slow!
+      withPartitionStrategyCompare(
+        testData1, testData2
+      )(
+        NONE :+ MultiTimestampUnnormailzed
+      )(
+          futureLeftJoin(tolerance, key, strictLookahead, rightShift)
+        )
     }
   }
 }

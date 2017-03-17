@@ -19,14 +19,14 @@ package com.twosigma.flint.timeseries
 import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.annotation.PythonApi
-import com.twosigma.flint.rdd.{ Conversion, KeyPartitioningType, OrderedRDD, RangeSplit }
+import com.twosigma.flint.rdd._
 import com.twosigma.flint.timeseries.row.{ InternalRowUtils, Schema }
 import com.twosigma.flint.timeseries.summarize.{ ColumnList, OverlappableSummarizer, OverlappableSummarizerFactory, SummarizerFactory }
 import com.twosigma.flint.timeseries.time.TimeFormat
 import com.twosigma.flint.timeseries.window.{ ShiftTimeWindow, TimeWindow, Window }
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{ Dependency, SparkContext }
+import org.apache.spark.{ Dependency, OneToOneDependency, SparkContext }
 import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DataFrame, Row, SQLContext }
 import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ERow }
 import org.apache.spark.sql.catalyst.InternalRow
@@ -343,6 +343,17 @@ object TimeSeriesRDD {
     val dataStore = TimeSeriesStore(orderedRdd, schema)
 
     new TimeSeriesRDDImpl(dataStore)
+  }
+
+  private[flint] def fromDFWithRanges(
+    dataFrame: DataFrame,
+    ranges: Array[CloseOpen[Long]]
+  ): TimeSeriesRDD = {
+    val rangeSplits = ranges.zipWithIndex.map {
+      case (range, index) => RangeSplit(OrderedRDDPartition(index), range)
+    }
+    val partInfo = PartitionInfo(rangeSplits, Seq(new OneToOneDependency(null)))
+    TimeSeriesRDD.fromDFWithPartInfo(dataFrame, Some(partInfo))
   }
 
   /**
@@ -1274,8 +1285,8 @@ class TimeSeriesRDDImpl private[timeseries] (
     leftAlias: String = null,
     rightAlias: String = null
   ): TimeSeriesRDD = {
-    val toleranceNum = Duration(tolerance).toNanos
-    val toleranceFn = (t: Long) => t - toleranceNum
+    val window = Windows.pastAbsoluteTime(tolerance)
+    val toleranceFn = window.shift _
     val joinedRdd = orderedRdd.leftJoin(
       right.orderedRdd, toleranceFn, safeGetAsAny(key), right.safeGetAsAny(key)
     )
@@ -1303,8 +1314,8 @@ class TimeSeriesRDDImpl private[timeseries] (
     rightAlias: String = null,
     strictLookahead: Boolean = false
   ): TimeSeriesRDD = {
-    val toleranceNum = Duration(tolerance).toNanos
-    val toleranceFn = (t: Long) => t + toleranceNum
+    val window = Windows.futureAbsoluteTime(tolerance)
+    val toleranceFn = window.shift _
     val joinedRdd = orderedRdd.futureLeftJoin(
       right.orderedRdd, toleranceFn, safeGetAsAny(key),
       right.safeGetAsAny(key), strictForward = strictLookahead

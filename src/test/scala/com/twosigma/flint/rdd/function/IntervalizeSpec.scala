@@ -96,4 +96,5 @@ class IntervalizeSpec extends FlatSpec with SharedSparkContext {
     val intervalized = intervalize(orderedRDD, clockRDD, false)
     assert(intervalized.collect().toList == expectedEndInclusive)
   }
+
 }
