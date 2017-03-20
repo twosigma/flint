@@ -16,11 +16,13 @@
 
 package com.twosigma.flint.timeseries
 
+import java.util.concurrent.TimeUnit
+
 import com.twosigma.flint.FlintSuite
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
-import org.scalactic.{ Equality, TolerantNumerics }
-import play.api.libs.json.{ Json, JsValue }
+import org.scalactic.{Equality, TolerantNumerics}
+import play.api.libs.json.{JsValue, Json}
 
 import scala.collection.mutable
 import scala.io.Source
@@ -163,6 +165,21 @@ trait TimeSeriesSuite extends FlintSuite {
       dateFormat = dateFormat,
       codec = codec
     ).repartition(defaultPartitionParallelism)
+  }
+
+  def fromParquet(
+     filepath: String,
+     sorted: Boolean = true
+   ): TimeSeriesRDD = withResource(s"$defaultResourceDir/$filepath") { source =>
+    var codec: String = null
+    if (filepath.endsWith(".gz")) {
+      codec = "gzip"
+    }
+    TimeSeriesRDD.fromParquet(
+      sc,
+      s"file://$source")(
+      isSorted = sorted,
+      timeUnit = TimeUnit.NANOSECONDS).repartition(defaultPartitionParallelism)
   }
 
   /**

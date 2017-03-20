@@ -16,14 +16,17 @@
 
 package com.twosigma.flint.rdd.function.summarize
 
-import com.twosigma.flint.rdd._
-import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.LeftSubtractableSummarizer
+import java.util
 
+import com.twosigma.flint.rdd._
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{LeftSubtractableOverlappableSummarizer, LeftSubtractableSummarizer}
 import org.apache.spark.OneToOneDependency
+
 import scala.reflect.ClassTag
-import scala.collection.mutable
+import java.util.{LinkedList => JList, HashMap => JHMap}
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
+import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.{DriscollKraayState, OverlappableSummarizer}
 import grizzled.slf4j.Logger
 
 object SummarizeWindows {
@@ -43,20 +46,52 @@ object SummarizeWindows {
     ).nonOverlapped()
   }
 
+  def applyOverlapped[K: ClassTag, SK, V: ClassTag, U, V2: ClassTag](
+    rdd: OrderedRDD[K, V],
+    window: K => (K, K),
+    summarizer: OverlappableSummarizer[V, U, V2],
+    skFn: V => SK,
+    lagWindow: K => (K, K)
+  )(
+    implicit
+    ord: Ordering[K]
+  ): OrderedRDD[K, (V, V2)] = {
+    val windowFn = getWindowRange(window) _
+    val lagWindowFn = getCloseOpenWindowRange(lagWindow) _
+
+    val composedWindow: K => (K, K) = { k =>
+      val lagWindowRange = lagWindowFn(windowFn(k).begin)
+      require(ord.equiv(lagWindowRange.end.getOrElse(lagWindowRange.begin), windowFn(k).begin),
+        "Lag window and data window must be contiguous")
+      (lagWindowFn(windowFn(k).begin).begin, windowFn(k).end.get)
+    }
+    if (otherRdd == null) {
+      val overlappedRdd = OverlappedOrderedRDD(rdd, composedWindow)
+      val splits = overlappedRdd.rangeSplits
+      overlappedRdd.mapPartitionsWithIndexOverlapped(
+        (partitionIndex, iterator) =>
+          new OverlappableWindowSummarizerIterator(
+            iterator.buffered, splits(partitionIndex).range, windowFn, lagWindowFn, summarizer, skFn
+          )
+      ).nonOverlapped()
+    } else {
+      throw new scala.NotImplementedError("Join iterator not implemented for overlappable summarizers")
+    }
+  }
+
+  private[rdd] def getCloseOpenWindowRange[K](windowFn: K => (K, K))(k: K)(implicit ord: Ordering[K]): Range[K] = {
+    val (b, e) = windowFn(k)
+    val range = Range.closeOpen(b, Some(e))
+    require(range.contains(k) || ord.equiv(k, e),
+      s"The window function produces a window [$b, $e) which doesn't include key $k and $k is not equal to $e.")
+    range
+  }
+
   private[rdd] def getWindowRange[K](windowFn: K => (K, K))(k: K)(implicit ord: Ordering[K]): Range[K] = {
     val (b, e) = windowFn(k)
-    require(
-      ord.lteq(b, k) && ord.lteq(k, e),
-      s"The window function produces a window [$b, $e] which doesn't include key $k."
-    )
-
-    if (ord.lt(b, e)) {
-      CloseClose(b, Some(e))
-    } else if (ord.equiv(b, e)) {
-      CloseSingleton(b)
-    } else {
-      sys.error(s"Should never happen. We have asserted ${b} <= ${e}")
-    }
+    val range = Range.closeClose(b, e)
+    require(range.contains(k), s"The window function produces a window [$b, $e] which doesn't include key $k.")
+    range
   }
 }
 
@@ -99,9 +134,11 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
 
   val logger = Logger(this.getClass)
 
-  val windows = mutable.Map[SK, Vector[(K, V)]]()
-  val summarizerStates = mutable.Map[SK, U]()
-  val coreRowBuffer = mutable.Queue[(K, V)]()
+  private val INITIAL_MAP_CAPACITY = 1024
+
+  private val windows = new JHMap[SK, Vector[(K, V)]](INITIAL_MAP_CAPACITY)
+  private val summarizerStates = new JHMap[SK, U](INITIAL_MAP_CAPACITY)
+  private val coreRowBuffer = new JList[(K, V)]()
 
   lazy val rampUp = {
     val initWindowRange = windowFn(coreRange.begin)
@@ -121,8 +158,8 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
       // not actually by in the first coreRow's window. In this case, those rows will be dropped
       // later.
       if (initWindowRange.contains(k)) {
-        val window = windows.getOrElseUpdate(sk, Vector.empty)
-        val u = summarizerStates.getOrElseUpdate(sk, summarizer.zero())
+        val window = windows.getOrDefault(sk, Vector.empty)
+        val u = summarizerStates.getOrDefault(sk, summarizer.zero())
         windows.put(sk, window :+ (k, v))
         summarizerStates.put(sk, summarizer.add(u, v))
       }
@@ -133,7 +170,7 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
     // rampUp is only invoke once.
     // rampUp read all the rows before the coreRange and initialize windows
     rampUp
-    coreRowBuffer.nonEmpty || (iter.hasNext && coreRange.contains(iter.head._1))
+    !coreRowBuffer.isEmpty || (iter.hasNext && coreRange.contains(iter.head._1))
   }
 
   override def next(): (K, (V, V2)) = if (hasNext) computeNext() else Iterator.empty.next
@@ -143,14 +180,14 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
     // to the first row in the `coreRange` even if the `coreK` is far far from the `coreRange.begin`.
     // This is because `iter.head._1 >= coreK` after `rampUp` and `coreK >= windowRange.begin` always
     // holds by the definition of window function.
-    val (coreK, coreV) = coreRowBuffer.headOption.getOrElse(iter.head)
+    val (coreK, coreV) = Option(coreRowBuffer.peekFirst()).getOrElse(iter.head)
     val coreSk = skFn(coreV)
     val windowRange = windowFn(coreK)
     logger.debug(s"Invoking next() with core row: ($coreK, $coreSk, $coreV) and the window of $coreK: $windowRange")
 
     // Drop rows.
-    val window = windows.getOrElse(coreSk, Vector.empty)
-    val priorState = summarizerStates.getOrElse(coreSk, summarizer.zero())
+    val window = windows.getOrDefault(coreSk, Vector.empty)
+    val priorState = summarizerStates.getOrDefault(coreSk, summarizer.zero())
     val (droppedWindow, currentWindow) = window.span { case ((k, _)) => !windowRange.contains(k) }
 
     val currentState: U = summarizer match {
@@ -171,24 +208,190 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
       val (k, v) = iter.next
       val sk = skFn(v)
       if (coreRange.contains(k)) {
-        coreRowBuffer.enqueue((k, v))
+        coreRowBuffer.addLast((k, v))
       }
 
       // Update windows
-      val window = windows.getOrElse(sk, Vector.empty)
-      val u = summarizerStates.getOrElse(sk, summarizer.zero())
+      val window = windows.getOrDefault(sk, Vector.empty)
+      val u = summarizerStates.getOrDefault(sk, summarizer.zero())
       windows.put(sk, window :+ (k, v))
       summarizerStates.put(sk, summarizer.add(u, v))
     }
 
-    val dequed = coreRowBuffer.dequeue
+    val dequed = coreRowBuffer.removeFirst()
     logger.debug(s"Invoking next() deque: $dequed")
 
-    (coreK,
-      (
-        coreV,
-        summarizer.render(summarizerStates.getOrElse(coreSk, sys.error(s"Summarize state is empty for $coreSk")))
-      ))
+    if (!summarizerStates.containsKey(coreSk)) {
+      sys.error(s"Summarize state is empty for $coreSk")
+    }
+    val state = summarizerStates.get(coreSk)
+    val rendered = summarizer.render(state)
+
+    (coreK, (coreV, rendered))
+  }
+}
+
+/**
+ * The algorithm proceeds identically to the iterator in [[SummarizeWindows]] with the extension that we also
+ * track a lag window for each key and the summarizer must be overlappable. The lag window defines the range of
+ * rows that need to be added as overlapped during the ramp-up. By definition, the lag window is "before" the window,
+ * and the window contains the core row, so when scanning left to right after rampUp, rows should always be added
+ * to the window, i.e. added as non-overlapped.
+ *
+ * The algorithm guarantees the following when `summarizer` is a [[LeftSubtractableOverlappableSummarizer]]:
+ * 1. When a row passes out of the window, `subtractOverlapped` will be called with the row and the boolean flag
+ *    set to false. This occurs regardless of whether or not the row passed into the lag window
+ * 2. When a row passes out of the lag window, `subtractOverlapped` will be called with the row and the boolean flag
+ *    set to false.
+ */
+private[rdd] class OverlappableWindowSummarizerIterator[K, SK, V, U, V2](
+  iter: BufferedIterator[(K, V)],
+  coreRange: Range[K],
+  windowFn: K => Range[K],
+  lagWindowFn: K => Range[K],
+  summarizer: OverlappableSummarizer[V, U, V2],
+  skFn: V => SK
+)(implicit ord: Ordering[K]) extends Iterator[(K, (V, V2))] {
+
+  val logger = Logger(this.getClass)
+
+  private val INITIAL_MAP_CAPACITY = 1024
+
+  private val lagWindows = new JHMap[SK, Vector[(K, V)]](INITIAL_MAP_CAPACITY)
+  private val windows = new JHMap[SK, Vector[(K, V)]](INITIAL_MAP_CAPACITY)
+  private val summarizerStates = new JHMap[SK, U](INITIAL_MAP_CAPACITY)
+  private val coreRowBuffer = new JList[(K, V)]()
+
+  private val initWindowRange = windowFn(coreRange.begin)
+  private val initLagWindowRange = lagWindowFn(initWindowRange.begin)
+
+  private lazy val rampUp = {
+    // initLagWindowRange must be empty (i.e. [k, k)) or contiguous with the initWindowRange
+    require(
+      initLagWindowRange.endEquals(Option(initLagWindowRange.begin))
+      || initLagWindowRange.endEquals(Some(initWindowRange.begin))
+    )
+    logger.debug(s"Initial window range in rampUp: $initWindowRange")
+    logger.debug(s"Initial lag window range in rampUp: $initLagWindowRange")
+    if (iter.hasNext) {
+      logger.debug(s"rampUp: head: ${iter.head}")
+    }
+
+    // Iterate rows until just before the core partition and initialize `windows`, `lagWindows` and `summarizerStates`
+    while (iter.hasNext && coreRange.beginGt(iter.head._1)) {
+      val (k, v) = iter.next
+      val sk = skFn(v)
+      logger.debug(s"rampUp: reading: ($k, $sk, $v)")
+
+      // Put rows that `could` be in first coreRow's window in `windows`, `lagWindows` and `summarizerStates`
+      if (initWindowRange.contains(k) || initLagWindowRange.contains(k)) {
+        val lagWindow = lagWindows.getOrDefault(sk, Vector.empty)
+        val window = windows.getOrDefault(sk, Vector.empty)
+        val u = summarizerStates.getOrDefault(sk, summarizer.zero())
+        val overlapped = initLagWindowRange.contains(k)
+        if (overlapped) {
+          lagWindows.put(sk, lagWindow :+ (k, v))
+        } else {
+          windows.put(sk, window :+ (k, v))
+        }
+
+        summarizerStates.put(sk, summarizer.addOverlapped(u, (v, overlapped)))
+      }
+    }
   }
 
+  override def hasNext: Boolean = {
+    // rampUp is only invoke once.
+    rampUp
+    !coreRowBuffer.isEmpty || (iter.hasNext && coreRange.endGteq(iter.head._1))
+  }
+
+  override def next(): (K, (V, V2)) = if (hasNext) computeNext else Iterator.empty.next
+
+  private def computeNext(): (K, (V, V2)) = {
+    // This is a little bit tricky. After `rampUp`, `iter.head` is guaranteed to point
+    // to the first row in the `coreRange` even if the `coreK` is far far from the `coreRange.begin`.
+    // This is because `iter.head._1 >= coreK` after `rampUp` and `coreK >= windowRange.begin` always
+    // holds by the definition of window function.
+    val (coreK, coreV) = Option(coreRowBuffer.peekFirst()).getOrElse(iter.head)
+    val coreSk = skFn(coreV)
+    val windowRange = windowFn(coreK)
+    val lagWindowRange = lagWindowFn(windowRange.begin)
+    // lagWindowRange must be empty (i.e. [k, k)) or contigious with the windowRange
+    require(lagWindowRange.endEquals(Option(lagWindowRange.begin)) || lagWindowRange.endEquals(Some(windowRange.begin)))
+    logger.debug(s"Invoking next() with core row: ($coreK, $coreSk, $coreV) " +
+      s"and the window of $coreK: $windowRange, $lagWindowRange")
+
+    val window = windows.getOrDefault(coreSk, Vector.empty)
+    val lagWindow = lagWindows.getOrDefault(coreSk, Vector.empty)
+
+    // The slices here are
+    //   droppedLagWindow:       the rows that were in the lag window last iteration but are no longer in the lag
+    //                           window
+    //   existingLagWindow:      the rows that were in the lag window last iteration and are still in the lag window
+    //   freshlyLaggedWindow:    the rows that were in the window last iteration and are now in the lag window
+    //   notLaggedWindow:        the rows that were in the window last iteration and are not in the lag window
+    //   droppedNotLaggedWindow: the rows that were in the window last iteration and are now in neither the lag window
+    //                           or window. Either this or the lag window range should be empty since we constrain the
+    //                           lag window and the window to be contiguous
+    //   currentWindow:          the rows that were in the window last iteration and are still in the window
+    val priorState = summarizerStates.getOrDefault(coreSk, summarizer.zero())
+    val (droppedLagWindow, existingLagWindow) = lagWindow.span { case ((k, _)) => !lagWindowRange.contains(k) }
+    val (freshlyLaggedWindow, notLaggedWindow) = window.span { case ((k, _)) => lagWindowRange.contains(k) }
+    val (droppedNotLaggedWindow, currentWindow) = notLaggedWindow.span { case ((k, _)) => !windowRange.contains(k) }
+
+    val fullLagWindow = existingLagWindow ++ freshlyLaggedWindow
+    val currentState: U = summarizer match {
+      case lss: LeftSubtractableOverlappableSummarizer[V, U, V2] =>
+        // Subtract rows that were dropped from the left side of the lag window
+        val droppedLaggedState = droppedLagWindow.foldLeft(priorState) { case (u, (k, v)) =>
+          lss.subtractOverlapped(u, (v, true))
+        }
+        // Subtract rows that have passed from the left side of the window. Since these rows were added
+        // as non-overlapped, we set the overlap flag to flase
+        (freshlyLaggedWindow ++ droppedNotLaggedWindow).foldLeft(droppedLaggedState) { case (u, (k, v)) =>
+          lss.subtractOverlapped(u, (v, false))
+        }
+      case os: OverlappableSummarizer[V, U, V2] =>
+        val withLagged = fullLagWindow.foldLeft(summarizer.zero()) { case (u, (k, v)) =>
+          os.addOverlapped(u, (v, true))
+        }
+        currentWindow.foldLeft(withLagged) { case (u, (k, v)) => os.addOverlapped(u, (v, false)) }
+    }
+    lagWindows.put(coreSk, fullLagWindow)
+    windows.put(coreSk, currentWindow)
+    summarizerStates.put(coreSk, currentState)
+
+    // Iterating through the rest of rows until reaching the boundary of "core row" window, it
+    // (1) updates the window for the "core row";
+    // (2) updates the summarizer state for the window of rows that have been iterated through so far;
+    // (3) puts iterated rows into "core row" buffer for future use, i.e. the next().
+    while (iter.hasNext && (lagWindowRange.contains(iter.head._1) || windowRange.contains(iter.head._1))) {
+      val (k, v) = iter.next
+      val sk = skFn(v)
+      if (coreRange.contains(k)) {
+        coreRowBuffer.addLast((k, v))
+      }
+
+      // Update windows
+      val window = windows.getOrDefault(sk, Vector.empty)
+      val u = summarizerStates.getOrDefault(sk, summarizer.zero())
+      val overlapped = lagWindowRange.contains(k)
+      require(!overlapped)
+      windows.put(sk, window :+ (k, v))
+      val state = summarizer.addOverlapped(u, (v, overlapped))
+
+      summarizerStates.put(sk, state)
+    }
+
+    val dequed = coreRowBuffer.removeFirst()
+    logger.debug(s"Invoking next() deque: $dequed")
+    if (!summarizerStates.containsKey(coreSk)) {
+      sys.error(s"Summarize state is empty for $coreSk")
+    }
+    val state = summarizerStates.get(coreSk)
+    val rendered = summarizer.render(state)
+
+    (coreK, (coreV, rendered))
+  }
 }

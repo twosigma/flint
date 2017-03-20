@@ -17,7 +17,7 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.annotation.PythonApi
-import com.twosigma.flint.timeseries.summarize.{ OverlappableSummarizerFactory, SummarizerFactory }
+import com.twosigma.flint.timeseries.summarize.{LeftSubtractableOverlappableSummarizerFactory, OverlappableSummarizerFactory, SummarizerFactory}
 import com.twosigma.flint.timeseries.summarize.summarizer._
 import org.apache.spark.sql.types._
 

@@ -17,6 +17,7 @@
 package com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
+import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.OverlappableSummarizer
 
 /**
  * With the following definitions and notations for a summarizer: s,<br>
@@ -32,3 +33,9 @@ import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
 trait LeftSubtractableSummarizer[V, U, V2] extends Summarizer[V, U, V2] {
   def subtract(u: U, v: V): U
 }
+
+trait LeftSubtractableOverlappableSummarizer[V, U, V2] extends OverlappableSummarizer[V, U, V2] {
+  def addOverlapped(u: U, t: (V, Boolean)): U
+  def subtractOverlapped(u: U, t: (V, Boolean)): U
+}
+

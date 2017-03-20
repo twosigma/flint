@@ -18,8 +18,9 @@ package com.twosigma.flint.timeseries
 
 import java.util.concurrent.TimeUnit
 
-import com.twosigma.flint.timeseries.PartitionStrategy.{ ExtendEnd, MultiTimestampUnnormailzed, OneTimestampTightBound }
+import com.twosigma.flint.timeseries.PartitionStrategy.{ExtendEnd, MultiTimestampUnnormailzed, OneTimestampTightBound}
 import com.twosigma.flint.timeseries.row.Schema
+import com.twosigma.flint.timeseries.summarize.summarizer.LagSumSummarizerFactory
 import com.twosigma.flint.timeseries.window.ShiftTimeWindow
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
@@ -35,6 +36,10 @@ class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData w
   private val volumeSchema = Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
   private val volumeWithGroupSchema = Schema(
     "id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType
+  )
+
+  private val valueSchema = Schema(
+    "value" -> DoubleType
   )
 
   private def toTSRdd(clock: Seq[Int]): TimeSeriesRDD = {
@@ -132,6 +137,24 @@ class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData w
     {
       val clock = fromCSV("Clock.csv", Schema())
       withPartitionStrategy(clock)(DEFAULT)(test)
+    }
+  }
+
+  it should "pass `SummarizeWindowSumOverSingleTimeSeries` test." in {
+    val resultsTSRdd = fromCSV(
+      "SummarizeWindowSumOverSingleTimeSeries.results",
+      Schema.append(valueSchema, "lagSum" -> DoubleType, "sum" -> DoubleType)
+    )
+
+    def test(rdd: TimeSeriesRDD): Unit = {
+      val summarizedTSRdd = rdd.summarizeWindows(Windows.pastAbsoluteTime("3ns"),
+        LagSumSummarizerFactory("value", "3ns"))
+      assertEquals(summarizedTSRdd, resultsTSRdd)
+    }
+
+    {
+      val valueTSRDD = fromCSV("Value.csv", valueSchema)
+      withPartitionStrategy(valueTSRDD)(DEFAULT)(test)
     }
   }
 

@@ -1404,7 +1404,13 @@ class TimeSeriesRDDImpl private[timeseries] (
     val (concat, newSchema) = InternalRowUtils.concat2(schema, sum.outputSchema)
 
     val summarizedRdd = window match {
-      case w: TimeWindow => orderedRdd.summarizeWindows(w.of, sum, keyFn)
+      case w: TimeWindow =>
+        (sum, summarizer) match {
+          case (s: OverlappableSummarizer, sf: OverlappableSummarizerFactory) =>
+            orderedRdd.summarizeWindows(w.of, s, keyFn, sf.window.of)
+          case (s, sf: SummarizerFactory) =>
+            orderedRdd.summarizeWindows(w.of, s, keyFn)
+        }
       case _ => sys.error(s"Unsupported window type: $window")
     }
 

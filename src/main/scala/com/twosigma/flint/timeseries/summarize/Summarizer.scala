@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries.summarize
 
 import scala.reflect.runtime.universe.{ TypeTag, typeTag }
 import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.{ OverlappableSummarizer => OOverlappableSummarizer }
-import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ LeftSubtractableSummarizer => OLeftSubtractableSummarizer }
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ LeftSubtractableSummarizer => OLeftSubtractableSummarizer, LeftSubtractableOverlappableSummarizer => OLeftSubtractableOverlappableSummarizer }
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ Summarizer => OSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.summarizer.PredicateSummarizerFactory
@@ -187,4 +187,22 @@ trait OverlappableSummarizer extends Summarizer
 
   final override def addOverlapped(u: Any, r: (InternalRow, Boolean)): Any =
     summarizer.addOverlapped(toU(u), (toT(r._1), r._2))
+}
+
+trait LeftSubtractableOverlappableSummarizer extends OverlappableSummarizer
+  with OLeftSubtractableOverlappableSummarizer[InternalRow, Any, InternalRow]
+  with InputOutputSchema {
+  type T
+  type U
+  type V
+  val summarizer: OLeftSubtractableOverlappableSummarizer[T, U, V]
+
+  final override def subtractOverlapped(u: Any, r: (InternalRow, Boolean)): Any =
+    summarizer.subtractOverlapped(toU(u), (toT(r._1), r._2))
+}
+
+trait LeftSubtractableOverlappableSummarizerFactory extends OverlappableSummarizerFactory {
+  override def apply(inputSchema: StructType): LeftSubtractableOverlappableSummarizer
+
+  val window: TimeWindow
 }
