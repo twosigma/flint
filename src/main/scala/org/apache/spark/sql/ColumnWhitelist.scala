@@ -20,6 +20,7 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.objects.StaticInvoke
 import org.apache.spark.sql.execution.python.PythonUDF
 
+@deprecated("This class is deprecated. Should use [[PartitionPreservingOperation]]")
 object ColumnWhitelist {
 
   def preservesOrdering(column: Column): Boolean = {

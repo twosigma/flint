@@ -19,7 +19,7 @@ package com.twosigma.flint.timeseries
 import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD, RangeSplit }
 import org.apache.spark.{ Dependency, OneToOneDependency }
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{ DFConverter, DataFrame, Row, SQLContext }
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.storage.StorageLevel
@@ -34,15 +34,15 @@ private[timeseries] object TimeSeriesStore {
   /**
    * Convert a [[org.apache.spark.sql.DataFrame]] to a [[TimeSeriesStore]].
    *
-   * @param dataFrame  A [[org.apache.spark.sql.DataFrame]] with `time` column, and sorted by time value.
-   * @param partInfo   This parameter should be either empty, or correctly represent partitioning of
-   *                   the given DataFrame.
+   * @param dataFrame    A [[org.apache.spark.sql.DataFrame]] with `time` column, and sorted by time value.
+   * @param partInfoOpt  This parameter should be either empty, or correctly represent partitioning of
+   *                     the given DataFrame.
    * @return a [[TimeSeriesStore]].
    */
-  def apply(dataFrame: DataFrame, partInfo: Option[PartitionInfo]): TimeSeriesStore =
-    if (partInfo.isDefined) {
-      new NormalizedDataFrameStore(dataFrame, partInfo.get)
-    } else {
+  def apply(dataFrame: DataFrame, partInfoOpt: Option[PartitionInfo]): TimeSeriesStore = partInfoOpt match {
+    case Some(partInfo) =>
+      new NormalizedDataFrameStore(dataFrame, partInfo)
+    case None =>
       val schema = dataFrame.schema
       val internalRows = dataFrame.queryExecution.toRdd
       val pairRdd = internalRows.mapPartitions { rows =>
@@ -57,7 +57,7 @@ private[timeseries] object TimeSeriesStore {
       val keyRdd = internalRows.mapPartitions { rows => rows.map(_.getLong(timeColumnIndex)) }
       val orderedRdd = OrderedRDD.fromRDD(pairRdd, KeyPartitioningType(isSorted = true, isNormalized = false), keyRdd)
       TimeSeriesStore(orderedRdd, schema)
-    }
+  }
 
   /**
    * Convert an [[OrderedRDD]] to a [[TimeSeriesStore]].
@@ -168,6 +168,12 @@ private[timeseries] class NormalizedDataFrameStore(
   private var internalPartInfo: PartitionInfo
 ) extends TimeSeriesStore {
 
+  require(
+    PartitionPreservingOperation.isPartitionPreservingDataFrame(internalDf),
+    s"df is not a PartitionPreservingRDDScanDataFrame. " +
+      s"sparkPlan: ${PartitionPreservingOperation.executedPlan(internalDf)}"
+  )
+
   override val schema: StructType = internalDf.schema
 
   override def rdd: RDD[Row] = newDf.rdd
@@ -206,9 +212,7 @@ private[timeseries] class NormalizedDataFrameStore(
    * We create a new DataFrame object to force reevaluation of 'lazy val' fields
    * in [[org.apache.spark.sql.execution.QueryExecution]].
    */
-  private def newDf: DataFrame = {
-    internalDf.withColumnRenamed(TimeSeriesRDD.timeColumnName, TimeSeriesRDD.timeColumnName)
-  }
+  private def newDf: DataFrame = new DataFrame(internalDf.sqlContext, internalDf.queryExecution.logical)
 }
 
 private[timeseries] case class PartitionInfo(

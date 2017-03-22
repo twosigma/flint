@@ -16,6 +16,9 @@
 
 package com.twosigma.flint.annotation;
 
+/**
+ * Code that used by Python binding
+ */
 public @interface PythonApi {
     String message() default "";
 

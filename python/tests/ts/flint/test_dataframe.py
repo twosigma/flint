@@ -46,7 +46,6 @@ def pyspark_types(pyspark):
     import pyspark.sql.types as pyspark_types
     return pyspark_types
 
-
 @pytest.fixture(scope='module')
 def py4j(pyspark):
     import py4j
@@ -96,10 +95,8 @@ def tests_utils(flint):
 
 
 def make_pdf(data, schema):
-    return pd.DataFrame({
-        schema[i]:[row[i] for row in data] for i in range(len(schema))
-    })[schema]
-
+    d = {schema[i]:[row[i] for row in data] for i in range(len(schema))}
+    return pd.DataFrame(data=d)[schema]
 
 intervals_data = [
     (1000,),
@@ -244,6 +241,7 @@ def vol3(flintContext):
 
 
 #--[ Tests ]--------------------------------------
+
 def test_addColumnsForCycle(pyspark_types, tests_utils, price, vol3):
     expected_pdf = make_pdf([
         [1000, 7, 0.5, 1.0],
@@ -847,6 +845,7 @@ def test_shiftTime(tests_utils, price):
     new_pdf = price.shiftTime(pd.Timedelta("1000ns"), backwards=True).toPandas()
     tests_utils.assert_same(new_pdf, expected_pdf, "backwards")
 
+
 @pytest.mark.net
 def test_read_dataframe_begin_end(sqlContext, flintContext, tests_utils):
     test_url="hdfs:///user/tsram/spark_example_data/tsdata/price/ts/datasys/6558"
@@ -866,109 +865,9 @@ def test_read_dataframe_begin_end(sqlContext, flintContext, tests_utils):
 
 def test_uniform_clocks(sqlContext, clocks):
     df = clocks.uniform(sqlContext, '1d', '0s', '2016-11-07', '2016-11-17')
-    assert(df.count() == 10)
-    # the last timestamp should be 16 Nov 2016 00:00:00 GMT
-    assert(df.collect()[-1]['time'] == 1479254400000000000)
-
-
-def test_na_preserve_order(sqlContext, flintContext):
-    from pyspark.sql.functions import lit
-    from pyspark.sql.types import StringType
-
-    df_lazy = (flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-               .withColumn("null_column", lit(None).cast(StringType())))
-
-    df_eager = (flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-                .withColumn("null_column", lit(None).cast(StringType())))
-    df_eager.timeSeriesRDD
-
-    ops = [lambda df: df,
-           lambda df: df.sort("id"),
-           lambda df: df.repartition(int(df.rdd.getNumPartitions() / 2)),
-           lambda df: df.repartition(df.rdd.getNumPartitions() * 2),
-           lambda df: df.repartition("id")]
-
-    for df in [df_eager]:
-        for op in ops:
-            test_df = op(df)
-            assert_invariants_unchanged(test_df, lambda df: df.fillna("v1"))
-            assert_invariants_unchanged(test_df, lambda df: df.na.fill("v1"))
-            assert_invariants_unchanged(test_df, lambda df: df.dropna())
-            assert_invariants_unchanged(test_df, lambda df: df.na.drop())
-            assert_invariants_unchanged(test_df, lambda df: df.fillna("v1").replace("v1", "v2", 'null_column'))
-            assert_invariants_unchanged(test_df, lambda df: df.fillna("v1").na.replace("v1", "v2", 'null_column'))
-
-
-def test_with_column_preserve_order(sqlContext, flintContext):
-    df_lazy = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-    df_eager = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-    df_eager.timeSeriesRDD
-
-    def func(df):
-        return df.withColumn("neg_forecast", -df.forecast)
-
-    assert_invariants_unchanged(df_lazy, func)
-    assert_invariants_unchanged(df_eager, func)
-
-
-def test_drop_column_preserve_order(sqlContext, flintContext):
-    df_lazy = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-    df_eager = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-    df_eager.timeSeriesRDD
-
-    def func(df):
-        return df.drop("forecast")
-
-    assert_invariants_unchanged(df_lazy, func)
-    assert_invariants_unchanged(df_eager, func)
-
-
-def test_filter_preserve_order(sqlContext, flintContext):
-    df_lazy = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-    df_eager = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-    df_eager.timeSeriesRDD
-
-    def func(df):
-        return df.filter(df.id == 3)
-
-    assert_invariants_unchanged(df_lazy, func)
-    assert_invariants_unchanged(df_eager, func)
-
-
-def test_select_preserve_order(sqlContext, flintContext):
-    df_lazy = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-    df_eager = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-    df_eager.timeSeriesRDD
-
-    def func(df):
-        return df.select("time", "id")
-
-    assert_invariants_unchanged(df_lazy, func)
-    assert_invariants_unchanged(df_eager, func)
-
-
-def test_with_column_renamed_preserve_order(sqlContext, flintContext):
-    df_lazy = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-    df_eager = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-    df_eager.timeSeriesRDD
-
-    def func(df):
-        return df.withColumnRenamed("forecast", "signal")
-
-    assert_invariants_unchanged(df_lazy, func)
-    assert_invariants_unchanged(df_eager, func)
-
-
-def test_replace_preserve_order(sqlContext, flintContext):
-    df_lazy = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-    df_eager = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
-    df_eager.timeSeriesRDD
-
-    def func(df):
-        return df.replace([3, 7], [4, 8], 'id')
-
-    assert_invariants_unchanged(df_lazy, func)
-    assert_invariants_unchanged(df_eager, func)
+    assert(df.count() == 11)
+    # the last timestamp should be 17 Nov 2016 00:00:00 GMT
+    assert(df.collect()[-1]['time'] == 1479340800000000000)
 
 
 def test_from_tsrdd(sqlContext, flintContext, flint):
@@ -981,18 +880,176 @@ def test_from_tsrdd(sqlContext, flintContext, flint):
     assert(tsrdd.orderedRdd().getNumPartitions() == tsrdd2.orderedRdd().getNumPartitions())
 
 
-def assert_invariants_unchanged(input_df, func):
-    """Assert certain properties of a :class:`TimeSeriesDataFrame` is unchanged after a tranformation.
+def test_with_column_preserve_order(sqlContext, flintContext):
+    shared_test_partition_preserving(flintContext, lambda df: df.withColumn("neg_forecast", -df.forecast), True)
 
-    This is used to test order preserving dataframe operations.
-    """
+
+def test_drop_column_preserve_order(sqlContext, flintContext):
+    shared_test_partition_preserving(flintContext, lambda df: df.drop("forecast"), True)
+
+
+def test_filter_preserve_order(sqlContext, flintContext):
+    shared_test_partition_preserving(flintContext, lambda df: df.filter(df.id == 3), True)
+
+
+def test_select_preserve_order(sqlContext, flintContext):
+    shared_test_partition_preserving(flintContext, lambda df: df.select("time", "id"), True)
+
+
+def test_with_column_renamed_preserve_order(sqlContext, flintContext):
+    shared_test_partition_preserving(flintContext, lambda df: df.withColumnRenamed("forecast", "signal"), True)
+
+
+def test_replace_preserve_order(sqlContext, flintContext):
+    shared_test_partition_preserving(flintContext, lambda df: df.replace([3, 7], [4, 8], 'id'), True)
+
+
+def test_na_preserve_order(sqlContext, flintContext):
+    from pyspark.sql.functions import lit
+    from pyspark.sql.types import StringType
+
+    def create_dataframe():
+        return (flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
+                .withColumn("null_column", lit(None).cast(StringType())))
+
+    shared_test_partition_preserving(flintContext, lambda df: df.fillna("v1"), True, create_dataframe)
+    shared_test_partition_preserving(flintContext, lambda df: df.dropna(), True, create_dataframe)
+    shared_test_partition_preserving(flintContext, lambda df: df.fillna("v1").replace("v1", "v2", 'null_column'), True, create_dataframe)
+
+
+def test_with_column_udf_preserve_order(sqlContext, flintContext):
+    def with_udf_column(df):
+        from pyspark.sql.types import DoubleType
+        from pyspark.sql.functions import udf
+        times_two = udf(lambda x: x * 2, DoubleType())
+        return df.withColumn("forecast2", times_two(df.forecast))
+    shared_test_partition_preserving(flintContext, with_udf_column, True)
+
+
+def test_sort_dont_preserve_order(sqlContext, flintContext):
+    shared_test_partition_preserving(flintContext, lambda df: df.orderBy("id"), False)
+
+
+def test_repatition_dont_preserve_order(sqlContext, flintContext):
+    shared_test_partition_preserving(flintContext, lambda df: df.repartition(df.rdd.getNumPartitions() * 2), False)
+
+
+def test_select_aggregate_dont_preserve_order(sqlContext, flintContext):
+    from pyspark.sql.functions import sum
+    shared_test_partition_preserving(flintContext, lambda df: df.select(sum('forecast')), False)
+
+
+def test_with_window_column_dont_preserve_order(sqlContext, flintContext):
+    def with_window_column(df):
+        from pyspark.sql.window import Window
+        from pyspark.sql.functions import percent_rank
+        windowSpec = Window.partitionBy(df['id']).orderBy(df['forecast'])
+        return df.withColumn("r", percent_rank().over(windowSpec))
+    shared_test_partition_preserving(flintContext, with_window_column, False)
+
+
+def test_df_lazy(flintContext):
+    df_lazy = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
+    assert(df_lazy._is_sorted is True)
+    assert(df_lazy._tsrdd_part_info is None)
+
+
+def test_df_eager(flintContext):
+    df_eager = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
+    df_eager.timeSeriesRDD
+    assert(df_eager._is_sorted)
+    assert(df_eager._tsrdd_part_info is not None)
+
+
+def test_df_joined(flintContext):
+    df = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
+    df_joined = df.leftJoin(df, right_alias="right")
+    assert(df_joined._is_sorted)
+    assert(df_joined._tsrdd_part_info is not None)
+    assert(df_joined._jpkg.PartitionPreservingOperation.isPartitionPreservingDataFrame(df_joined._jdf))
+
+
+def test_df_cached(flintContext):
+    df_cached = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
+    df_cached.cache()
+    df_cached.count()
+    assert(df_cached._is_sorted)
+    assert(df_cached._tsrdd_part_info is None)
+    assert(df_cached._jpkg.PartitionPreservingOperation.isPartitionPreservingDataFrame(df_cached._jdf))
+
+
+def test_df_cached_joined(flintContext):
+    df_cached = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
+    df_cached.cache()
+    df_cached.count()
+    df_cached_joined = df_cached.leftJoin(df_cached, right_alias="right")
+    assert(df_cached_joined._is_sorted)
+    assert(df_cached_joined._tsrdd_part_info is not None)
+    assert(df_cached_joined._jpkg.PartitionPreservingOperation.isPartitionPreservingDataFrame(df_cached_joined._jdf))
+
+
+def test_df_orderBy(flintContext):
+    df = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
+    df = df.orderBy("time")
+    assert(not df._is_sorted)
+    assert(df._tsrdd_part_info is None)
+
+
+def test_withColumn_time(flintContext):
+    from ts.flint import TimeSeriesDataFrame
+    from pyspark.sql import DataFrame
+
+    df = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
+    df = df.withColumn("time", df.time * 2)
+    assert(not isinstance(df, TimeSeriesDataFrame))
+    assert(isinstance(df, DataFrame))
+
+
+def shared_test_partition_preserving(flintContext, func, preserve, create = None):
+    def create_dataframe():
+        return flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
+
+    if create is None:
+        create = create_dataframe
+
+    df_lazy = create()
+
+    df_eager = create()
+    df_eager.timeSeriesRDD
+
+    df = create()
+    df_joined = df.leftJoin(df, right_alias="right")
+
+    df = create()
+    df_cached = df.cache()
+    df_cached.count()
+
+    df_cached_joined = df_cached.leftJoin(df_cached, right_alias="right")
+
+    input_tranforms = [
+        lambda df: df,
+        lambda df: df.withColumn("f2", df.forecast * 2),
+        lambda df: df.select("time", "id", "forecast"),
+        lambda df: df.orderBy("time"),
+        lambda df: df.filter(df.time % 1000 == 0)
+    ]
+
+    for transform in input_tranforms:
+        assert_partition_preserving(transform(df_lazy), func, preserve)
+        assert_partition_preserving(transform(df_eager), func, preserve)
+        assert_partition_preserving(transform(df_joined), func, preserve)
+        assert_partition_preserving(transform(df_cached), func, preserve)
+        assert_partition_preserving(transform(df_cached_joined), func, preserve)
+
+    df_cached.unpersist()
+
+def assert_partition_preserving(input_df, func, preserve):
     output_df = func(input_df)
 
-    assert(input_df.rdd.getNumPartitions() == output_df.rdd.getNumPartitions())
-    assert(input_df._is_sorted == output_df._is_sorted)
-
-    assert(bool(input_df._tsrdd_part_info) == bool(output_df._tsrdd_part_info))
-
-    if input_df._tsrdd_part_info and output_df._tsrdd_part_info:
-        assert(input_df._tsrdd_part_info.jdeps == output_df._tsrdd_part_info.jdeps)
-        assert(input_df._tsrdd_part_info.jrange_splits == output_df._tsrdd_part_info.jrange_splits)
+    if preserve:
+        assert(input_df.rdd.getNumPartitions() == output_df.rdd.getNumPartitions())
+        assert(input_df._is_sorted == output_df._is_sorted)
+        assert(input_df._tsrdd_part_info == output_df._tsrdd_part_info)
+    else:
+        assert(not output_df._is_sorted)
+        assert(output_df._tsrdd_part_info == None)

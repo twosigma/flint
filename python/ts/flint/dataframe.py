@@ -28,28 +28,9 @@ import pandas as pd
 from . import java
 from . import utils
 from . import summarizers
+from .error import FlintError
 
 __all__ = ['TimeSeriesDataFrame']
-
-_ORDER_PRESERVING_METHODS = [
-    "cache",
-    "drop",
-    "dropna",
-    "fill",
-    "fillna",
-    "filter",
-    "persist",
-    "replace",
-    "sample",
-    "sampleBy",
-    "select",
-    "toDF",
-    "unpersist",
-    "withColumn",
-    "withColumnRenamed"
-]
-
-TimeSeriesRDDPartInfo = collections.namedtuple('TimeSeriesRDDPartInfo', ['jdeps', 'jrange_splits'])
 
 class TimeSeriesDataFrame(pyspark.sql.DataFrame):
     '''A :class:`pyspark.sql.DataFrame` backed by time-ordered rows, with
@@ -109,6 +90,18 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
     '''
 
     def __init__(self, df, sql_ctx, *, time_column=DEFAULT_TIME_COLUMN, is_sorted=True, unit=DEFAULT_UNIT, tsrdd_part_info=None):
+        '''
+        :type df: pyspark.sql.DataFrame
+        :type sql_ctx: pyspark.sql.SqlContext
+        :param time_column: which column is treated as "time" column
+        :type time_column: str
+        :param is_sorted: whether the df is sorted
+        :type is_sorted: bool
+        :param unit: unit of the "time" column
+        :type unit: scala.concurrent.duration.TimeUnit
+        :param tsrdd_part_info: Partition info
+        :type tsrdd_part_info: Option[com.twosigma.flint.timeseries.PartitionInfo]
+        '''
         self._time_column = time_column
         self._is_sorted = is_sorted
         self._tsrdd_part_info = tsrdd_part_info
@@ -118,11 +111,14 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         super().__init__(self._jdf, sql_ctx)
 
-        if tsrdd_part_info and not is_sorted:
-            raise ValueError("Cannot take partition information for unsorted df")
-
-        self._junit = utils.junit(self._sc, unit) if isinstance(unit,str) else unit
         self._jpkg = java.Packages(self._sc)
+        self._junit = utils.junit(self._sc, unit) if isinstance(unit,str) else unit
+
+        if tsrdd_part_info:
+            if not is_sorted:
+                raise FlintError("Cannot take partition information for unsorted df")
+            if not self._jpkg.PartitionPreservingOperation.isPartitionPreservingDataFrame(df._jdf):
+                raise FlintError("df is not a PartitionPreservingRDDScanDataFrame")
 
     @property
     def timeSeriesRDD(self):
@@ -135,11 +131,15 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                 # This will scan ranges
                 self._lazy_tsrdd = self._jpkg.TimeSeriesRDD.fromDF(
                     self._jdf, self._is_sorted, self._junit, self._time_column)
-                self._tsrdd_part_info = TimeSeriesDataFrame._get_tsrdd_part_info(self._lazy_tsrdd)
+                if self._jpkg.PartitionPreservingOperation.isPartitionPreservingDataFrame(self._jdf):
+                    self._tsrdd_part_info = self._lazy_tsrdd.partInfo()
             else:
+                # TODO: Ideally we should use fromDFWithPartInfo, but
+                # fromDFWithPartInfo doesn't take unit and time column
+                # args.
                 self._lazy_tsrdd = self._jpkg.TimeSeriesRDD.fromDFUnSafe(
                     self._jdf, self._junit, self._time_column,
-                    self._tsrdd_part_info.jdeps, self._tsrdd_part_info.jrange_splits)
+                    self._tsrdd_part_info.get().deps(), self._tsrdd_part_info.get().splits().array())
 
         return self._lazy_tsrdd
 
@@ -176,16 +176,19 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                 "unit": self._junit
             }
 
-            # withColumn sql.functions don't guarantee partitioning order
+            tsdf_args['is_sorted'] = self._is_sorted and self._jpkg.OrderPreservingOperation.isOrderPreserving(self._jdf, df._jdf)
+            if self._tsrdd_part_info and self._jpkg.PartitionPreservingOperation.isPartitionPreserving(self._jdf, df._jdf):
+                tsdf_args['tsrdd_part_info'] = self._tsrdd_part_info
+            else:
+                tsdf_args['tsrdd_part_info'] = None
+
+            # Return a DataFrame if time column changes
+            # TODO: Handle all the case where time column changes
             if name is 'withColumn':
                 # Get col argument from withColumn(colName, col)
-                col = args[1]
-                tsdf_args['is_sorted'] = self._is_sorted and self._jpkg.ColumnWhitelist.preservesOrdering(col._jc)
-            else:
-                tsdf_args['is_sorted'] = self._is_sorted and name in _ORDER_PRESERVING_METHODS
-
-            if tsdf_args['is_sorted'] and self._tsrdd_part_info:
-                tsdf_args['tsrdd_part_info'] = self._tsrdd_part_info
+                col_name = args[0]
+                if col_name is self._time_column:
+                    return df
 
             return TimeSeriesDataFrame(**tsdf_args)
         return _new_method
@@ -217,30 +220,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         '''
         return self._call_dual_function('count')
 
-    @staticmethod
-    def _get_deps(tsrdd):
-        """
-        Helper function.
-        Get scala dependencies from a TimeSeriesRDD
-        """
-        return tsrdd.orderedRdd().getDependencies()
-
-    @staticmethod
-    def _get_range_splits(tsrdd):
-        """
-        Helper function.
-        Get scala rangeSplits from a TimeSeriesRDD
-        """
-        return tsrdd.orderedRdd().rangeSplits()
-
-    @staticmethod
-    def _get_tsrdd_part_info(tsrdd):
-        """
-        Helper function.
-        Get partitions info (dependencies and rangeSplits) from a TimeSeriesRDD
-        """
-        return TimeSeriesRDDPartInfo(TimeSeriesDataFrame._get_deps(tsrdd),
-                                     TimeSeriesDataFrame._get_range_splits(tsrdd))
 
     @staticmethod
     def _from_df(df, *, time_column, is_sorted, unit):
@@ -251,8 +230,8 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                                    unit=unit)
 
     @staticmethod
-    def _from_pandas(df, sql_ctx, *, time_column, is_sorted, unit):
-        df = sql_ctx.createDataFrame(df)
+    def _from_pandas(df, schema, sql_ctx, *, time_column, is_sorted, unit):
+        df = sql_ctx.createDataFrame(df, schema)
         return TimeSeriesDataFrame(df,
                                    sql_ctx,
                                    time_column=time_column,
@@ -287,34 +266,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         """
         sc = sql_ctx._sc
         df = pyspark.sql.DataFrame(tsrdd.toDF(), sql_ctx)
-
-        # TODO: Change ValueError to FlintError or FlintInternalError
-        # because this isn't something we expect user to deal with
-        if tsrdd.orderedRdd().partitions()[0].index() != 0:
-            raise ValueError("Cannot take a tsrdd whose partition index doesn't start with 0")
-
-        # In the general case, if we create a tsdf from a regular df,
-        # we run the normalization procedure and change
-        # partitioning. However, here because we are creating a a tsdf
-        # from a tsrdd, we already know the time ranges of partitions
-        # and can avoid normalization.
-        jrange_splits = TimeSeriesDataFrame._get_tsrdd_part_info(tsrdd).jrange_splits
-
-
-        # We can only reuse dependency from tsrdd A to create a tsdf B
-        # iff:
-        # (1) We know tsrdd A is part of a tsdf A and
-        # (2) tsdf A -> tsdf B is partition preserving
-        # They don't hold here. tsrdd A -> tsdf B -> tsrdd B all have
-        # one to one dependency, so we explictly create one.
-
-        # df.rdd is just a place holder. It doesn't matter which rdd
-        # we use to create the dependency here, because fromDFUnsafe
-        # will always recreate a dependency with the correct rdd.
-        jdep = sc._jvm.org.apache.spark.OneToOneDependency(df.rdd._jrdd.rdd())
-        jdeps = utils.list_to_seq(sc, [jdep])
-        tsrdd_part_info = TimeSeriesRDDPartInfo(jdeps, jrange_splits)
-
+        tsrdd_part_info = tsrdd.partInfo()
         return TimeSeriesDataFrame(df,
                                    sql_ctx,
                                    tsrdd_part_info=tsrdd_part_info)

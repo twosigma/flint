@@ -16,6 +16,7 @@
 
 package org.apache.spark.sql
 
+@deprecated("This class is deprecated. Should use [[PartitionPreservingOperation]]")
 class ColumnWrapper(column: Column) extends Column(column.expr) {
   val expression = expr
 }

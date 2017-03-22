@@ -40,11 +40,6 @@ class Packages:
 
     @property
     @functools.lru_cache()
-    def WaiterClient(self):
-        return utils.jvm(self.sc).com.twosigma.gatito.WaiterClient
-
-    @property
-    @functools.lru_cache()
     def Summarizers(self):
         return utils.jvm(self.sc).com.twosigma.flint.timeseries.Summarizers
 
@@ -55,10 +50,10 @@ class Packages:
 
     @property
     @functools.lru_cache()
-    def alf(self):
-        return utils.scala_package_object(utils.jvm(self.sc).com.twosigma.gatito.alf)
+    def PartitionPreservingOperation(self):
+        return utils.jvm(self.sc).org.apache.spark.sql.PartitionPreservingOperation
 
     @property
     @functools.lru_cache()
-    def ColumnWhitelist(self):
-        return utils.jvm(self.sc).org.apache.spark.sql.ColumnWhitelist
+    def OrderPreservingOperation(self):
+        return utils.jvm(self.sc).org.apache.spark.sql.OrderPreservingOperation
