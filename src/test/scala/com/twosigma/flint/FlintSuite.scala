@@ -16,11 +16,11 @@
 
 package com.twosigma.flint
 
-import java.io.{ InputStream, File }
-import java.nio.file.{ StandardCopyOption, Files, Path }
+import java.io.{ File, InputStream }
+import java.nio.file.{ Files, Path, StandardCopyOption }
 
-import org.scalatest.FlatSpec
-import play.api.libs.json.{ Json, JsValue }
+import org.scalatest.{ FlatSpec, PropSpec }
+import play.api.libs.json.{ JsValue, Json }
 
 import scala.io.Source
 

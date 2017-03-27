@@ -66,8 +66,10 @@ private[flint] trait TimeSeriesTestData {
     TimeSeriesRDD.fromDF(changeTimeNotNull(df))(isSorted = true, timeUnit = NANOSECONDS)
   }
 
-  protected lazy val cycleData1: (TimeSeriesRDD, CycleMetaData) = generateCycleData(0)
-  protected lazy val cycleData2: (TimeSeriesRDD, CycleMetaData) = generateCycleData(1)
+  protected lazy val cycleMetaData1 = CycleMetaData(1000000L, 1000000L * 10)
+  protected lazy val cycleMetaData2 = CycleMetaData(1000000L, 1000000L * 10)
+  protected lazy val cycleData1: TimeSeriesRDD = generateCycleData(0, cycleMetaData1)
+  protected lazy val cycleData2: TimeSeriesRDD = generateCycleData(1, cycleMetaData2)
 
   /**
    * Meta data for the generated cycle data. Metadata is used by test to decide arguments for various functions.
@@ -87,14 +89,13 @@ private[flint] trait TimeSeriesTestData {
    * ...
    *
    */
-  private def generateCycleData(salt: Long): (TimeSeriesRDD, CycleMetaData) = {
+  private def generateCycleData(salt: Long, metadata: CycleMetaData): TimeSeriesRDD = {
     val begin = 0L
     val numIntervals = 13
-    val cyclesPerInterval = 10
     val beginCycleOffset = 3
     val endCycleOffset = 8
-    val cycleWidth = 1000000L // 1 millis
-    val intervalWitdh = cycleWidth * cyclesPerInterval
+    val cycleWidth = metadata.cycleWidth
+    val intervalWitdh = metadata.intervalWidth
     val seed = 123456789L
 
     var df = new TimeSeriesGenerator(
@@ -125,8 +126,7 @@ private[flint] trait TimeSeriesTestData {
       case index =>
         CloseOpen(index * intervalWitdh, Some((index + 1) * intervalWitdh))
     }
-    val tsrdd = TimeSeriesRDD.fromDFWithRanges(DFConverter.toDataFrame(sqlContext, df.schema, rdd), ranges)
-    (tsrdd, CycleMetaData(cycleWidth, intervalWitdh))
+    TimeSeriesRDD.fromDFWithRanges(DFConverter.toDataFrame(sqlContext, df.schema, rdd), ranges)
   }
 }
 

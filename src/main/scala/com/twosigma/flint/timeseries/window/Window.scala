@@ -75,4 +75,6 @@ trait RowCountWindow extends Window with CountWindow
 case class AbsoluteTimeWindow(override val name: String, val length: Long, override val backward: Boolean = true)
   extends ShiftTimeWindow {
   def length(t: Long): Long = length
+
+  override def toString(): String = s"${this.getClass.getSimpleName}(${name})"
 }

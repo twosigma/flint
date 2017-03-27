@@ -111,7 +111,7 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
     }
 
     // Iterate rows until just before the core partition and initialize `windows` and `summarizerStates`
-    while (iter.hasNext && ord.lt(iter.head._1, coreRange.begin)) {
+    while (iter.hasNext && coreRange.beginGt(iter.head._1)) {
       val (k, v) = iter.next
       val sk = skFn(v)
       logger.debug(s"rampUp: reading: ($k, $sk, $v)")
@@ -131,11 +131,12 @@ private[rdd] class WindowSummarizerIterator[K, SK, V, U, V2](
 
   override def hasNext: Boolean = {
     // rampUp is only invoke once.
+    // rampUp read all the rows before the coreRange and initialize windows
     rampUp
-    coreRowBuffer.nonEmpty || (iter.hasNext && coreRange.endGteq(iter.head._1))
+    coreRowBuffer.nonEmpty || (iter.hasNext && coreRange.contains(iter.head._1))
   }
 
-  override def next(): (K, (V, V2)) = if (hasNext) computeNext else Iterator.empty.next
+  override def next(): (K, (V, V2)) = if (hasNext) computeNext() else Iterator.empty.next
 
   private def computeNext(): (K, (V, V2)) = {
     // This is a little bit tricky. After `rampUp`, `iter.head` is guaranteed to point

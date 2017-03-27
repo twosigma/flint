@@ -18,16 +18,17 @@ package com.twosigma.flint.timeseries
 
 import java.util.concurrent.TimeUnit
 
-import com.twosigma.flint.timeseries.PartitionStrategy.MultiTimestampUnnormailzed
+import com.twosigma.flint.timeseries.PartitionStrategy.{ ExtendEnd, MultiTimestampUnnormailzed, OneTimestampTightBound }
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.window.ShiftTimeWindow
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 import org.scalatest.tagobjects.Slow
+import org.scalatest.prop.PropertyChecks
 
 import scala.util.Random
 
-class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData {
+class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData with PropertyChecks {
 
   override val defaultResourceDir: String = "/timeseries/summarizewindows"
 
@@ -155,7 +156,7 @@ class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData {
       val results = clock.map {
         t1 =>
           val (b, e) = window.of(t1.toLong)
-          clock.count{ t2 => t2 >= b && t2 <= e }
+          clock.count { t2 => t2 >= b && t2 <= e }
       }
       assert(summarized1.collect().deep == results.toArray.deep)
       assert(summarized2.collect().deep == results.toArray.deep)
@@ -181,39 +182,39 @@ class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData {
       val results = clock1.map {
         t1 =>
           val (b, e) = window.of(t1.toLong)
-          clock2.count{ t2 => t2 >= b && t2 <= e }
+          clock2.count { t2 => t2 >= b && t2 <= e }
       }
       assert(summarized.collect().deep == results.toArray.deep)
     }
   }
 
-  // TODO: Fix this!
-  it should "pass cycle data property test" ignore {
-    val (testData1, CycleMetaData(cycleWidth, intervalWidth)) = cycleData1
-
-    def addWindows(
-      windowFn: (String) => ShiftTimeWindow,
-      windowSize: Long,
-      key: Seq[String]
-    )(rdd1: TimeSeriesRDD): TimeSeriesRDD = {
-      val window = windowFn(s"${windowSize}ns")
-      rdd1.addWindows(window, key = key)
-    }
-
-    for (
+  {
+    val cycleWidth = cycleMetaData1.cycleWidth
+    val intervalWidth = cycleMetaData1.intervalWidth
+    val params = for (
       windowFn <- Seq(Windows.pastAbsoluteTime _, Windows.futureAbsoluteTime _);
       width <- Seq(
         0, cycleWidth / 2, cycleWidth, cycleWidth * 2, intervalWidth / 2, intervalWidth, intervalWidth * 2
-      );
+      ).map(w => s"${w}ns");
       key <- Seq(Seq.empty, Seq("id"))
-    ) {
-      withPartitionStrategyCompare(testData1)(DEFAULT)(addWindows(windowFn, width, key))
+    ) yield Seq(windowFn(width), key)
+
+    def addWindows(rdd: TimeSeriesRDD, param: Seq[Any]): TimeSeriesRDD = {
+      val window = param(0).asInstanceOf[ShiftTimeWindow]
+      val key = param(1).asInstanceOf[Seq[String]]
+      rdd.addWindows(window, key)
     }
+
+    def gen(): TimeSeriesRDD = cycleData1
+
+    withPartitionStrategyAndParams(gen)(DEFAULT)(params)(addWindows)
   }
 
   it should "pass cycle data property test with other rdd" in {
-    val (testData1, CycleMetaData(cycleWidth, intervalWidth)) = cycleData1
-    val testData2 = cycleData2._1
+    val testData1 = cycleData1
+    val testData2 = cycleData2
+    val cycleWidth = cycleMetaData1.cycleWidth
+    val intervalWidth = cycleMetaData1.intervalWidth
 
     def addWindows(
       windowFn: (String) => ShiftTimeWindow,

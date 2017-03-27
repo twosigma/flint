@@ -85,6 +85,7 @@ lazy val versions = new {
   val httpclient = "4.3.2" // Note that newer versions need to be configured differently
   val spark = sys.props.getOrElse("spark.version", default = "2.1.0")
   val scalatest = "2.2.4"
+  val scalacheck = "1.12.6"
   val grizzled_slf4j = "1.3.0"
 }
 
@@ -103,7 +104,8 @@ lazy val dependencySettings = libraryDependencies ++= Seq(
   lazyDependencies.sparkCore,
   lazyDependencies.sparkML,
   lazyDependencies.sparkSQL,
-  "org.scalatest" %% "scalatest" % versions.scalatest % "test"
+  "org.scalatest" %% "scalatest" % versions.scalatest % "test",
+  "org.scalacheck" %% "scalacheck" % versions.scalacheck % "test"
 )
 
 lazy val flint = project

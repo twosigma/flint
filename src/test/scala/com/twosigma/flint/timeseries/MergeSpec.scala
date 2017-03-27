@@ -39,8 +39,8 @@ class MergeSpec extends MultiPartitionSuite with TimeSeriesTestData {
   }
 
   it should "pass generated cycle data test" in {
-    val testData1 = cycleData1._1
-    val testData2 = cycleData2._1
+    val testData1 = cycleData1
+    val testData2 = cycleData2
 
     def merge(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): TimeSeriesRDD = {
       rdd1.merge(rdd2)

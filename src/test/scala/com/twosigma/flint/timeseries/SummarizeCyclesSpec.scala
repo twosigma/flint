@@ -71,7 +71,7 @@ class SummarizeCyclesSpec extends MultiPartitionSuite with TimeSeriesTestData {
   }
 
   it should "pass generated cycle data test" in {
-    val testData = cycleData1._1
+    val testData = cycleData1
 
     def sum(rdd: TimeSeriesRDD): TimeSeriesRDD = {
       rdd.summarizeCycles(Summarizers.compose(Summarizers.count(), Summarizers.sum("v1")))

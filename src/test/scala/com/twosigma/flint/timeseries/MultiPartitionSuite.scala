@@ -19,10 +19,10 @@ package com.twosigma.flint.timeseries
 import com.twosigma.flint.rdd._
 import org.apache.spark.NarrowDependency
 import org.apache.spark.sql.catalyst.InternalRow
+import org.scalatest.prop.PropertyChecks
 
 import scala.collection.SortedMap
 import scala.collection.immutable.TreeMap
-
 import scala.concurrent.duration.NANOSECONDS
 
 private[flint] sealed trait PartitionStrategy {
@@ -353,7 +353,7 @@ private[flint] object PartitionStrategy {
   }
 }
 
-class MultiPartitionSuite extends TimeSeriesSuite {
+class MultiPartitionSuite extends TimeSeriesSuite with PropertyChecks {
   import PartitionStrategy._
   val NONE = Seq(Origin)
   val ALL = Seq(
@@ -407,6 +407,35 @@ class MultiPartitionSuite extends TimeSeriesSuite {
     for (s <- strategiesWithoutOnePartition) {
       val result = fn(s.repartition(rdd))
       assertEquals(result, baseline)
+    }
+  }
+
+  /**
+   * Run tests with different params and partition strategies. Compare the result to OnePartition strategy.
+   * This creates one test for each param/partition combo, so it's easier to find which param/partition fails the test.
+   * However, this removes type information in the test function.
+   */
+  def withPartitionStrategyAndParams(
+    input: () => TimeSeriesRDD
+  )(
+    strategies: Seq[PartitionStrategy]
+  )(
+    params: Seq[Seq[Any]]
+  )(
+    fn: (TimeSeriesRDD, Seq[Any]) => TimeSeriesRDD
+  ): Unit = {
+    val strategiesWithoutOnePartition = strategies.filter(_ != OnePartition)
+    val strategiesTable = Table("strategies", strategiesWithoutOnePartition: _*)
+    val paramsTable = Table("params", params: _*)
+    forAll(paramsTable) { params =>
+      forAll(strategiesTable) { strategy =>
+        it should s"pass with strategy = $strategy and param = $params" in {
+          val rdd = input()
+          val baseline = fn(OnePartition.repartition(rdd), params)
+          val result = fn(strategy.repartition(rdd), params)
+          assertEquals(result, baseline)
+        }
+      }
     }
   }
 

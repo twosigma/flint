@@ -139,7 +139,9 @@ class GroupByIntervalSpec extends MultiPartitionSuite with TimeSeriesTestData {
   }
 
   it should "pass cycle data property test" in {
-    val (testData, CycleMetaData(cycleWidth, intervalWidth)) = cycleData1
+    val testData = cycleData1
+    val cycleWidth = cycleMetaData1.cycleWidth
+    val intervalWidth = cycleMetaData1.intervalWidth
     val clockBegin = "1970-01-01 00:00:00"
     val clockEnd = "1970-01-01 00:00:01"
 

@@ -97,8 +97,10 @@ class LeftJoinSpec extends MultiPartitionSuite with TimeSeriesTestData {
   }
 
   it should "pass cycle data property test" in {
-    val (testData1, CycleMetaData(cycleWidth, intervalWidth)) = cycleData1
-    val (testData2, _) = cycleData2
+    val testData1 = cycleData1
+    val testData2 = cycleData2
+    val cycleWidth = cycleMetaData1.cycleWidth
+    val intervalWidth = cycleMetaData1.intervalWidth
 
     def leftJoin(
       tolerance: Long,
