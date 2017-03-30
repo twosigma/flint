@@ -16,13 +16,16 @@
 
 package com.twosigma.flint.rdd.function.join
 
+import java.util.{ HashMap => JHashMap }
+
 import com.twosigma.flint.rdd._
 import org.apache.spark.NarrowDependency
 
-import scala.collection.mutable
 import scala.reflect.ClassTag
 
 protected[flint] object SymmetricJoin {
+
+  val skMapInitialSize = 1024
 
   def apply[K: ClassTag, SK, V, V2](
     leftRdd: OrderedRDD[K, V],
@@ -89,19 +92,29 @@ protected[flint] object SymmetricJoin {
         val mergedIter = MergeIterator(leftIter, rightIter)
 
         // iterate over the merged iterator and find the matching elements
-        val leftLastSeen = mutable.Map.empty[SK, (K, V)]
-        val rightLastSeen = mutable.Map.empty[SK, (K, V2)]
+        val leftLastSeen = new JHashMap[SK, (K, V)](skMapInitialSize)
+        val rightLastSeen = new JHashMap[SK, (K, V2)](skMapInitialSize)
         mergedIter.map {
           // Catch-up the iterator from the "other" table to match the current key. In the
           // process, we'll have the last-seen row for each SK from the other table.
           case (k, Left(v)) =>
             val sk = leftSk(v)
             LeftJoin.catchUp(k, rightSk, rightIterFull, rightLastSeen)
-            (k, (Option(k, v), rightLastSeen.get(sk).filter { t => ord.gteq(t._1, toleranceFn(k)) }))
+            val lastSeen = rightLastSeen.get(sk)
+            if (lastSeen != null && ord.gteq(lastSeen._1, toleranceFn(k))) {
+              (k, (Some(k, v), Some(lastSeen)))
+            } else {
+              (k, (Some(k, v), None))
+            }
           case (k, Right(v)) =>
             val sk = rightSk(v)
             LeftJoin.catchUp(k, leftSk, leftIterFull, leftLastSeen)
-            (k, (leftLastSeen.get(sk).filter { t => ord.gteq(t._1, toleranceFn(k)) }, Option(k, v)))
+            val lastSeen = leftLastSeen.get(sk)
+            if (lastSeen != null && ord.gteq(lastSeen._1, toleranceFn(k))) {
+              (k, (Some(lastSeen), Some(k, v)))
+            } else {
+              (k, (None, Some(k, v)))
+            }
         }
       }
     )

@@ -18,13 +18,20 @@ package com.twosigma.flint.timeseries.row
 
 import org.apache.spark.sql.CatalystTypeConvertersWrapper
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types.{ ByteType, DataType, DoubleType, FloatType, IntegerType, LongType, NumericType, ShortType, StructField, StructType }
 
 /**
  * A set of functions to manipulate Catalyst InternalRow objects.
  */
 private[timeseries] object InternalRowUtils {
-  private def concatArray(xs: Array[Any]*): InternalRow = concatSeq(xs.map(_.toSeq): _*)
+  private def concat2Array(xs: Array[Any], ys: Array[Any]): InternalRow = {
+    val size = xs.length + ys.length
+    val ret = new Array[Any](size)
+    System.arraycopy(xs, 0, ret, 0, xs.length)
+    System.arraycopy(ys, 0, ret, xs.length, ys.length)
+    new GenericInternalRow(ret)
+  }
 
   private def concatSeq(xs: Seq[Any]*): InternalRow = {
     var size = 0
@@ -33,7 +40,7 @@ private[timeseries] object InternalRowUtils {
       size += xs(i).size
       i += 1
     }
-    val ret: Array[Any] = Array.fill(size)(null)
+    val ret: Array[Any] = new Array[Any](size)
 
     i = 0
     var index = 0
@@ -48,7 +55,7 @@ private[timeseries] object InternalRowUtils {
       i += 1
     }
 
-    InternalRow.fromSeq(ret)
+    new GenericInternalRow(ret)
   }
 
   // updates existing elements, or appends a new element to the end if index isn't provided
@@ -83,8 +90,15 @@ private[timeseries] object InternalRowUtils {
     InternalRow.fromSeq(ret)
   }
 
-  def selectIndices(columns: Seq[(Int, DataType)])(row: InternalRow): Seq[Any] = columns.map {
-    case (index, dataType) => row.get(index, dataType)
+  def selectIndices(columns: Seq[(Int, DataType)])(row: InternalRow): Array[Any] = {
+    var i = 0
+    val size = columns.length
+    val ret = new Array[Any](size)
+    while (i < size) {
+      ret(i) = row.get(columns(i)._1, columns(i)._2)
+      i += 1
+    }
+    ret
   }
 
   private def selectFn(schema: StructType, columns: Seq[Int]): InternalRow => Array[Any] = {
@@ -99,9 +113,8 @@ private[timeseries] object InternalRowUtils {
   private def selectFn(columns: Seq[(Int, DataType)]): InternalRow => Array[Any] = {
     (row: InternalRow) =>
       val size = columns.size
-      val newValues: Array[Any] = Array.fill(size)(null)
+      val newValues = new Array[Any](size)
       var i = 0
-
       while (i < size) {
         newValues(i) = row.get(columns(i)._1, columns(i)._2)
         i += 1
@@ -175,12 +188,16 @@ private[timeseries] object InternalRowUtils {
     ((row1: InternalRow, row2: InternalRow) => concatSeq(row1.toSeq(schema1), row2.toSeq(schema2)), newSchema)
   }
 
-  def concat(
-    schemas: IndexedSeq[StructType],
-    aliases: Seq[String],
+  def concat2(
+    schema1: StructType,
+    schema2: StructType,
+    alias1: Option[String],
+    alias2: Option[String],
     duplicates: Set[String]
-  ): (Seq[InternalRow] => InternalRow, StructType) = {
-    require(schemas.length == aliases.length)
+  ): ((InternalRow, InternalRow) => InternalRow, StructType) = {
+
+    val schemas = Seq(schema1, schema2)
+    val aliases = Seq(alias1, alias2)
 
     val (firstFields, firstIndex) = (schemas, aliases).zipped.head match {
       case (s, alias) =>
@@ -211,17 +228,12 @@ private[timeseries] object InternalRowUtils {
     }
 
     Schema.requireUniqueColumnNames(schema)
-    val size = schemas.size
 
     val fn = {
-      rows: Seq[InternalRow] =>
-        val values: Array[Array[Any]] = Array.fill(size)(null)
-        var i = 0
-        while (i < size) {
-          values(i) = selectFns(i)(rows(i))
-          i += 1
-        }
-        concatArray(values: _*)
+      (r1: InternalRow, r2: InternalRow) =>
+        val v1 = selectFns(0)(r1)
+        val v2 = selectFns(1)(r2)
+        concat2Array(v1, v2)
     }
 
     (fn, schema)

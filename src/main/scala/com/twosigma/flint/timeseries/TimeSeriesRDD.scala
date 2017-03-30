@@ -379,17 +379,17 @@ object TimeSeriesRDD {
     _: InternalRow => Seq[Any]()
   }
 
-  private[flint] def getAsAny(schema: StructType, cols: Seq[String])(row: InternalRow): Seq[Any] = {
-    val columns = cols.map(column => (schema.fieldIndex(column), schema(column).dataType))
-    InternalRowUtils.selectIndices(columns)(row)
+  private[flint] def createSafeGetAsAny(schema: StructType): Seq[String] => (InternalRow => Seq[Any]) = {
+    (cols: Seq[String]) =>
+      {
+        if (cols.isEmpty) {
+          emptyKeyFn
+        } else {
+          val columns = cols.map(column => (schema.fieldIndex(column), schema(column).dataType))
+          (row: InternalRow) => InternalRowUtils.selectIndices(columns)(row)
+        }
+      }
   }
-
-  private[flint] def safeGetAsAny(schema: StructType, cols: Seq[String]): InternalRow => Seq[Any] =
-    if (cols.isEmpty) {
-      emptyKeyFn
-    } else {
-      getAsAny(schema, cols)
-    }
 
   private[timeseries] def prependTimeAndKey(t: Long, inputRow: InternalRow, inputSchema: StructType,
     outputRow: InternalRow, outputSchema: StructType, key: Seq[String]): InternalRow =
@@ -428,18 +428,12 @@ trait TimeSeriesRDD extends Serializable {
    */
   val schema: StructType
 
+  private[flint] val safeGetAsAny: Seq[String] => (InternalRow => Seq[Any])
+
   /**
    * Partition info of this [[TimeSeriesRDD]]
    */
   private[flint] def partInfo: Option[PartitionInfo]
-
-  /**
-   * Get a key function from a list of column names.
-   */
-  // TODO: This should return an object that is associated with this TimeSeriesRDD, this can
-  //       help us catch bugs where we are passing key function to the wrong OrderedRDD
-  private[flint] def safeGetAsAny(cols: Seq[String]): InternalRow => Seq[Any] =
-    TimeSeriesRDD.safeGetAsAny(schema, cols)
 
   /**
    * An [[org.apache.spark.rdd.RDD RDD]] representation of this [[TimeSeriesRDD]].
@@ -1128,7 +1122,13 @@ class TimeSeriesRDDImpl private[timeseries] (
 ) extends TimeSeriesRDD {
 
   override val schema: StructType = dataStore.schema
+  override val safeGetAsAny: Seq[String] => (InternalRow => Seq[Any]) = TimeSeriesRDD.createSafeGetAsAny(schema)
 
+  /**
+   * Get a key function from a list of column names.
+   */
+  // TODO: This should return a object that is associated with this TimeSeriesRDD, this can
+  //       help us catch bugs where we are passing key function to the wrong OrderedRDD
   override def partInfo: Option[PartitionInfo] = dataStore.partInfo
 
   private[flint] override def orderedRdd = dataStore.orderedRdd
@@ -1297,17 +1297,17 @@ class TimeSeriesRDDImpl private[timeseries] (
       right.orderedRdd, toleranceFn, safeGetAsAny(key), right.safeGetAsAny(key)
     )
 
-    val (concat, newSchema) = InternalRowUtils.concat(
-      IndexedSeq(this.schema, right.schema),
-      Seq(leftAlias, rightAlias),
+    val (concat, newSchema) = InternalRowUtils.concat2(
+      this.schema, right.schema,
+      Option(leftAlias), Option(rightAlias),
       (key :+ TimeSeriesRDD.timeColumnName).toSet
     )
 
     val rightNullRow = InternalRow.fromSeq(Array.fill[Any](right.schema.size)(null))
 
     val newRdd = joinedRdd.collectOrdered {
-      case (k, (r1, Some((_, r2)))) => concat(Seq(r1, r2))
-      case (k, (r1, None)) => concat(Seq(r1, rightNullRow))
+      case (_, (r1, Some((_, r2)))) => concat(r1, r2)
+      case (_, (r1, None)) => concat(r1, rightNullRow)
     }
     TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
   }
@@ -1327,16 +1327,16 @@ class TimeSeriesRDDImpl private[timeseries] (
       right.safeGetAsAny(key), strictForward = strictLookahead
     )
 
-    val (concat, newSchema) = InternalRowUtils.concat(
-      IndexedSeq(this.schema, right.schema),
-      Seq(leftAlias, rightAlias),
+    val (concat, newSchema) = InternalRowUtils.concat2(
+      this.schema, right.schema,
+      Option(leftAlias), Option(rightAlias),
       (key :+ TimeSeriesRDD.timeColumnName).toSet
     )
 
     val rightNullRow = InternalRow.fromSeq(Array.fill[Any](right.schema.size)(null))
     val newRdd = joinedRdd.collectOrdered {
-      case (k, (r1, Some((_, r2)))) => concat(Seq(r1, r2))
-      case (k, (r1, None)) => concat(Seq(r1, rightNullRow))
+      case (_, (r1, Some((_, r2)))) => concat(r1, r2)
+      case (_, (r1, None)) => concat(r1, rightNullRow)
     }
     TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
   }
@@ -1423,7 +1423,6 @@ class TimeSeriesRDDImpl private[timeseries] (
     val pruned = TimeSeriesRDD.pruneColumns(this, summarizerFactory.requiredColumns(), key)
     val summarizer = summarizerFactory(pruned.schema)
     val keyGetter = pruned.safeGetAsAny(key)
-
     val summarized = summarizerFactory match {
       case factory: OverlappableSummarizerFactory =>
         pruned.orderedRdd.summarize(

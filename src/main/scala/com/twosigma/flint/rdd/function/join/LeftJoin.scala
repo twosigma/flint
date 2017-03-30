@@ -16,16 +16,17 @@
 
 package com.twosigma.flint.rdd.function.join
 
-import com.twosigma.flint.rdd.{ PeekableIterator, PartitionsIterator }
+import com.twosigma.flint.rdd.{ PartitionsIterator, PeekableIterator }
 import org.apache.spark.{ NarrowDependency, OneToOneDependency }
-
 import com.twosigma.flint.rdd.OrderedRDD
 
 import scala.collection.immutable.TreeMap
-import scala.collection.mutable
 import scala.reflect.ClassTag
+import java.util.{ HashMap => JHashMap }
 
 protected[flint] object LeftJoin {
+
+  val skMapInitialSize = 1024
 
   def apply[K: ClassTag, SK, V, V2](
     leftRdd: OrderedRDD[K, V],
@@ -57,14 +58,19 @@ protected[flint] object LeftJoin {
       (part, context) => {
         val parts = rightPartitions.value(part.index)
         val rightIter = PeekableIterator(PartitionsIterator(rightRdd, parts, context))
-        val lastSeen = mutable.Map.empty[SK, (K, V2)]
+        val lastSeen = new JHashMap[SK, (K, V2)](skMapInitialSize)
         leftRdd.iterator(part, context).map {
           case (k, v) =>
             // Catch-up the iterator for the right table to match the left key. In the
             // process, we'll have the last-seen row for each SK in the right table.
             val sk = leftSk(v)
             catchUp(k, rightSk, rightIter, lastSeen)
-            (k, (v, lastSeen.get(sk).filter { t => ord.gteq(t._1, toleranceFn(k)) }))
+            val lastSeenRight = lastSeen.get(sk)
+            if (lastSeenRight != null && ord.gteq(lastSeenRight._1, toleranceFn(k))) {
+              (k, (v, Some(lastSeenRight)))
+            } else {
+              (k, (v, None))
+            }
         }
       }
     )
@@ -79,13 +85,13 @@ protected[flint] object LeftJoin {
     cur: K,
     skFn: V => SK,
     iter: PeekableIterator[(K, V)],
-    lastSeen: mutable.Map[SK, (K, V)]
+    lastSeen: JHashMap[SK, (K, V)]
   )(implicit ord: Ordering[K]) {
     val peek = iter.peek
     if (peek.nonEmpty && ord.lteq(peek.get._1, cur)) {
       val (k, v) = iter.next
       val sk = skFn(v)
-      lastSeen += (sk -> (k, v))
+      lastSeen.put(sk, (k, v))
       catchUp(cur, skFn, iter, lastSeen)
     }
   }

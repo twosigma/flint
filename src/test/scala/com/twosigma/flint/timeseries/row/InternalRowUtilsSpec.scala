@@ -156,19 +156,34 @@ class InternalRowUtilsSpec extends FlatSpec with TableDrivenPropertyChecks {
     }
   }
 
+  it should "concat2 array correctly" in {
+    testTemplate { (data: Row, schema: StructType, row: InternalRow) =>
+      val schemaToAdd = Schema.of("uniqueColumnName1" -> LongType, "uniqueColumnName2" -> DoubleType)
+      val rowToAdd = InternalRow.fromSeq(Seq[Any](5L, 3.0))
+      val (concatFn, concatenatedSchema) =
+        InternalRowUtils.concat2(schema, schemaToAdd, None, None, Set.empty)
+
+      val expectedSchema = new StructType(schema.fields ++ schemaToAdd.fields)
+      assert(concatenatedSchema == expectedSchema)
+
+      val updatedRow = concatFn(row, rowToAdd)
+      val converted = CatalystTypeConvertersWrapper.toScalaRowConverter(concatenatedSchema)(updatedRow)
+      val expected = data.toSeq ++ rowToAdd.toSeq(schemaToAdd)
+      assert(converted.toSeq == expected)
+    }
+  }
+
   it should "concat2 correctly" in {
     testTemplate { (data: Row, schema: StructType, row: InternalRow) =>
       val schemaToAdd = Schema.of("uniqueColumnName1" -> LongType, "uniqueColumnName2" -> DoubleType)
       val rowToAdd = InternalRow.fromSeq(Seq[Any](5L, 3.0))
       val (concatFn, concatenatedSchema) = InternalRowUtils.concat2(schema, schemaToAdd)
 
-      val expectedFileds = schema.fields ++ schemaToAdd.fields
-      val newSchema = new StructType(expectedFileds)
-      assert(concatenatedSchema.fields sameElements expectedFileds)
+      val expectedSchema = new StructType(schema.fields ++ schemaToAdd.fields)
+      assert(concatenatedSchema == expectedSchema)
 
       val updatedRow = concatFn(row, rowToAdd)
-      val converted = CatalystTypeConvertersWrapper.toScalaRowConverter(newSchema)(updatedRow)
-
+      val converted = CatalystTypeConvertersWrapper.toScalaRowConverter(concatenatedSchema)(updatedRow)
       val expected = data.toSeq ++ rowToAdd.toSeq(schemaToAdd)
       assert(converted.toSeq == expected)
     }

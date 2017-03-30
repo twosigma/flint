@@ -104,7 +104,9 @@ private[flint] trait TimeSeriesTestData {
       end = numIntervals * cycleWidth, frequency = cycleWidth
     )(
       columns = Seq(
-        "v1" -> { (_: Long, _: Int, r: Random) => r.nextDouble() }
+        "v1" -> { (_: Long, _: Int, r: Random) => r.nextDouble() },
+        "v2" -> { (_: Long, _: Int, r: Random) => r.nextDouble() },
+        "v3" -> { (_: Long, _: Int, r: Random) => r.nextDouble() }
       ),
       ids = 1 to 10,
       ratioOfCycleSize = 0.8,

@@ -19,11 +19,10 @@ package com.twosigma.flint.timeseries.row
 import com.twosigma.flint.timeseries.TimeSeriesRDD
 import org.apache.spark.sql.types._
 
-import scala.collection.mutable
-
 private[timeseries] object Schema {
-  def addColumnPrefix(field: StructField, prefix: String): StructField =
-    if (prefix == null) field else StructField(s"${prefix}_${field.name}", field.dataType)
+  def addColumnPrefix(field: StructField, prefix: Option[String]): StructField =
+    prefix.map(p =>
+      StructField(s"${p}_${field.name}", field.dataType, field.nullable, field.metadata)).getOrElse(field)
 
   /**
    * Check if the names of columns are unique and throw [[IllegalArgumentException]] otherwise.
@@ -34,13 +33,13 @@ private[timeseries] object Schema {
     val duplicates = schema
       .fieldNames
       .groupBy{ name => name }
-      .filter{ case (name, group) => group.size > 1 }
-      .map(_._1)
+      .filter{ case (_, group) => group.length > 1 }
+      .keys
       .toSeq
 
-    if (!duplicates.isEmpty) {
+    if (duplicates.nonEmpty) {
       throw new DuplicateColumnsException(
-        s"Found duplicate columns ${duplicates} in schema $schema",
+        s"Found duplicate columns $duplicates in schema $schema",
         duplicates
       )
     }
@@ -113,7 +112,7 @@ private[timeseries] object Schema {
       (TimeSeriesRDD.timeColumnName, LongType) +: columns
     } else {
       require(
-        columns.exists(_ == (TimeSeriesRDD.timeColumnName, LongType)),
+        columns.contains((TimeSeriesRDD.timeColumnName, LongType)),
         s"The columns doesn't contain a field name ${TimeSeriesRDD.timeColumnName} of LongType"
       )
       columns
@@ -164,8 +163,8 @@ private[timeseries] object Schema {
 
     // If all sanity checks above are passed, it will be safe to cast the columns.
     val patches = updates.toMap
-    val updatedFields = schema.fields.map {
-      case structField => patches.get(structField.name).fold(structField)(StructField(structField.name, _))
+    val updatedFields = schema.fields.map { structField =>
+      patches.get(structField.name).fold(structField)(StructField(structField.name, _))
     }
 
     StructType(updatedFields)
