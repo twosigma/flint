@@ -345,7 +345,13 @@ object TimeSeriesRDD {
     new TimeSeriesRDDImpl(dataStore)
   }
 
-  private[flint] def fromDFWithRanges(
+  /**
+    * Create a [[TimeSeriesRDD]] from a sorted [[DataFrame]] and partition time ranges.
+    * @param dataFrame
+    * @param ranges Time ranges for each partition
+    * @return a [[TimeSeriesRDD]]
+    */
+  def fromDFWithRanges(
     dataFrame: DataFrame,
     ranges: Array[CloseOpen[Long]]
   ): TimeSeriesRDD = {
