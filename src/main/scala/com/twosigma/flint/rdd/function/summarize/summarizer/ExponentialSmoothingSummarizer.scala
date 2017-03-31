@@ -21,19 +21,23 @@ import scala.collection.mutable.{ ArrayBuffer, ListBuffer }
 case class SmoothingRow(time: Long, x: Double)
 
 /**
- * @param primaryESValues    A list of all values in the primary series
- * @param auxiliaryESValues  A list of all values in the auxiliary series
- * @param alphas             A list of all decay parameters used
+ * @param primaryESValue     Current primary smoothing series value (up to prevTime if update has not been called)
+ * @param auxiliaryESValue   Current auxiliary smoothing series value (up to prevTime if update has not been called)
  * @param firstXValue        The first data point in the series
+ * @param lastXValue         The most recently seen data point in the series
  * @param time               Whenever a row is added, time is updated as well.
+ * @param prevTime           The time at the data point prior to that in lastXValue
+ * @param alpha              The decay value for the next update. A function of time - prevTime
  * @param count              The count of rows
  */
 case class ExponentialSmoothingState(
-  var primaryESValues: ListBuffer[Double],
-  var auxiliaryESValues: ListBuffer[Double],
-  var alphas: ListBuffer[Double],
+  var primaryESValue: Double,
+  var auxiliaryESValue: Double,
   var firstXValue: Option[SmoothingRow],
+  var lastXValue: Option[SmoothingRow],
   var time: Long,
+  var prevTime: Long,
+  var alpha: Double,
   var count: Long
 )
 
@@ -60,94 +64,86 @@ class ExponentialSmoothingSummarizer(
   private def getAlpha(periods: Double): Double = math.exp(periods * math.log(1.0 - decayPerPeriod))
 
   override def zero(): ExponentialSmoothingState = ExponentialSmoothingState(
-    primaryESValues = ListBuffer.empty,
-    auxiliaryESValues = ListBuffer.empty,
-    alphas = ListBuffer.empty,
+    primaryESValue = 0.0,
+    auxiliaryESValue = 0.0,
     firstXValue = None,
+    lastXValue = None,
     time = 0L,
+    prevTime = 0L,
+    alpha = 0.0,
     count = 0L
   )
 
-  // TODO when we perform the merge on the driver side, all the data is aggregated onto the driver which may be
-  // inefficient. In the future, we may look to implement this as a two-passes summarizer
   override def merge(
     state1: ExponentialSmoothingState,
     state2: ExponentialSmoothingState
   ): ExponentialSmoothingState = {
-    require(state1.time <= state2.time || state1.count == 0 || state2.count == 0)
+    require(state1.time < state2.time || state1.count == 0 || state2.count == 0)
+    if (state1.count == 0) {
+      return state2
+    }
 
-    val (primaryESDeltas, auxiliaryESDeltas) = if (state1.count > 0) {
-      (
-        state2.alphas.scanLeft(state1.primaryESValues.last)(_ * _).tail,
-        state2.alphas.scanLeft(state1.auxiliaryESValues.last)(_ * _).tail
-      )
+    if (state2.count == 0) {
+      return state1
+    }
+
+    if (state2.count == 1) {
+      require(state2.alpha == 0 && state2.prevTime == 0)
+      add(state1, state2.firstXValue.get)
     } else {
-      (
-        List.fill(state2.count.toInt)(0.0),
-        List.fill(state2.count.toInt)(0.0)
-      )
+      val merged = zero()
+      val updatedState1 = update(state1)
+      val gapPeriods = timestampsToPeriods(updatedState1.time, state2.prevTime)
+      val gapAlpha = getAlpha(gapPeriods)
+      merged.primaryESValue = state2.primaryESValue + gapAlpha * updatedState1.primaryESValue
+      merged.auxiliaryESValue = state2.auxiliaryESValue + gapAlpha * updatedState1.auxiliaryESValue
+      merged.prevTime = state2.prevTime
+      merged.alpha = state2.alpha
+      merged.firstXValue = state1.firstXValue
+      merged.lastXValue = state2.lastXValue
+      merged.time = state2.time
+      merged.count = state1.count + state2.count
+      merged
     }
-    require(primaryESDeltas.length == state2.primaryESValues.length)
-    require(auxiliaryESDeltas.length == state2.auxiliaryESValues.length)
-
-    state2.primaryESValues = state2.primaryESValues.zip(primaryESDeltas).map { v => v._1 + v._2 }
-    state2.auxiliaryESValues = state2.auxiliaryESValues.zip(auxiliaryESDeltas).map { v => v._1 + v._2 }
-
-    val (timePrimaryESDeltas, timeAuxiliaryESDeltas) = if (state1.count > 0 && state2.count > 0) {
-      val alphaDelta = getAlpha(timestampsToPeriods(state1.time, state2.firstXValue.get.time)) - state2.alphas.head
-      (
-        state2.alphas.tail.scanLeft(alphaDelta * (state1.primaryESValues.last - state2.firstXValue.get.x))(_ * _),
-        state2.alphas.tail.scanLeft(alphaDelta * (state1.auxiliaryESValues.last - 1.0))(_ * _)
-      )
-    } else {
-      (
-        List.fill(state2.count.toInt)(0.0),
-        List.fill(state2.count.toInt)(0.0)
-      )
-    }
-    require(timePrimaryESDeltas.length == state2.primaryESValues.length)
-    require(timeAuxiliaryESDeltas.length == state2.auxiliaryESValues.length)
-
-    state2.primaryESValues = state2.primaryESValues.zip(timePrimaryESDeltas).map { v => v._1 + v._2 }
-    state2.auxiliaryESValues = state2.auxiliaryESValues.zip(timeAuxiliaryESDeltas).map { v => v._1 + v._2 }
-
-    val merged = zero()
-    merged.primaryESValues = state1.primaryESValues ++ state2.primaryESValues
-    merged.auxiliaryESValues = state1.auxiliaryESValues ++ state2.auxiliaryESValues
-    merged.alphas = state1.alphas ++ state2.alphas
-    merged.count = state1.count + state2.count
-    merged.time = state1.time max state2.time
-    merged.firstXValue = (state1.count, state2.count) match {
-      case (0, 0) => None
-      case (0, _) => state2.firstXValue
-      case (_, _) => state1.firstXValue
-    }
-
-    merged
   }
 
   override def render(u: ExponentialSmoothingState): ExponentialSmoothingOutput = {
-    if (u.count > 0) {
-      ExponentialSmoothingOutput(u.primaryESValues.last / u.auxiliaryESValues.last)
+    var _u = u.copy()
+    if (_u.count > 0) {
+      // Account for priming periods
+      val periods = timestampsToPeriods(_u.firstXValue.get.time, _u.prevTime) max 0
+      val primingAlpha = getAlpha(primingPeriods)
+      val tuningAlpha = getAlpha(periods)
+      _u.primaryESValue = _u.primaryESValue + tuningAlpha * (1.0 - primingAlpha) * _u.firstXValue.get.x
+      _u.auxiliaryESValue = _u.auxiliaryESValue + tuningAlpha * (1.0 - primingAlpha) * 1.0
+      _u = update(_u)
+      ExponentialSmoothingOutput(_u.primaryESValue / _u.auxiliaryESValue)
     } else {
       ExponentialSmoothingOutput(Double.NaN)
     }
   }
 
-  override def add(u: ExponentialSmoothingState, row: SmoothingRow): ExponentialSmoothingState = {
-    val (alpha, prevPrimaryES, prevAuxiliaryES) = if (u.count == 0) {
-      (getAlpha(primingPeriods), 0.0, 0.0)
-    } else {
-      (getAlpha(timestampsToPeriods(u.time, row.time)), u.primaryESValues.last, u.auxiliaryESValues.last)
-    }
-    u.alphas.append(alpha)
-    u.primaryESValues.append(alpha * prevPrimaryES + (1 - alpha) * row.x)
-    u.auxiliaryESValues.append(alpha * prevAuxiliaryES + (1 - alpha) * 1.0)
-    if (u.firstXValue.isEmpty) {
-      u.firstXValue = Some(row)
-    }
-    u.time = row.time
-    u.count += 1
+  def update(u: ExponentialSmoothingState): ExponentialSmoothingState = {
+    u.primaryESValue = u.alpha * u.primaryESValue + (1.0 - u.alpha) * u.lastXValue.get.x
+    u.auxiliaryESValue = u.alpha * u.auxiliaryESValue + (1.0 - u.alpha) * 1.0
     u
+  }
+
+  override def add(u: ExponentialSmoothingState, row: SmoothingRow): ExponentialSmoothingState = {
+    var newU = u.copy()
+    if (newU.count == 0) {
+      newU.firstXValue = Some(row)
+    } else if (newU.count == 1) {
+      // Don't update here, we will account for priming periods at the end
+      newU.alpha = getAlpha(timestampsToPeriods(newU.time, row.time))
+    } else {
+      newU = update(newU)
+      newU.alpha = getAlpha(timestampsToPeriods(newU.time, row.time))
+    }
+    newU.lastXValue = Some(row)
+    newU.prevTime = newU.time
+    newU.time = row.time
+    newU.count += 1
+    newU
   }
 }
