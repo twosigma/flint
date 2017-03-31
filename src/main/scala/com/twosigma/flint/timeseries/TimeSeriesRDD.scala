@@ -50,12 +50,14 @@ object TimeSeriesRDD {
   /**
    * Checks if the schema has a field "time" with long type
    */
-  private def requireSchema(schema: StructType): Unit = {
+  private def requireSchema(schema: StructType): Unit =
     require(
-      schema.fields.contains(timeField),
-      s"Schema $schema doesn't contain a column $timeField"
+      schema.exists {
+        case StructField("time", LongType, _, _) => true
+        case _ => false
+      },
+      s"Schema $schema doesn't contain a valid time column"
     )
-  }
 
   /**
    * Provides a function to extract the timestamp from [[org.apache.spark.sql.Row]] as NANOSECONDS and convert
@@ -346,11 +348,11 @@ object TimeSeriesRDD {
   }
 
   /**
-    * Create a [[TimeSeriesRDD]] from a sorted [[DataFrame]] and partition time ranges.
-    * @param dataFrame
-    * @param ranges Time ranges for each partition
-    * @return a [[TimeSeriesRDD]]
-    */
+   * Create a [[TimeSeriesRDD]] from a sorted [[DataFrame]] and partition time ranges.
+   * @param dataFrame
+   * @param ranges Time ranges for each partition
+   * @return a [[TimeSeriesRDD]]
+   */
   def fromDFWithRanges(
     dataFrame: DataFrame,
     ranges: Array[CloseOpen[Long]]
