@@ -446,8 +446,8 @@ def test_summarizeCycles(summarizers, tests_utils, vol, vol2):
     tests_utils.assert_same(new_pdf1, expected_pdf1)
 
     expected_pdf2 = make_pdf([
-        (1000, 3, 400.0),
         (1000, 7, 200.0),
+        (1000, 3, 400.0),
         (1050, 3, 600.0),
         (1050, 7, 800.0),
         (1100, 3, 1000.0),
@@ -481,8 +481,8 @@ def test_summarizeIntervals(flintContext, tests_utils, summarizers, vol):
 
     new_pdf2 = vol.summarizeIntervals(clock, summarizers.sum("volume"), key="id").toPandas()
     expected_pdf2 = make_pdf([
-        (1000, 3, 500.0),
         (1000, 7, 500.0),
+        (1000, 3, 500.0),
         (1100, 3, 1200.0),
         (1100, 7, 1400.0),
         (1200, 3, 2000.0),
@@ -958,7 +958,8 @@ def test_df_eager(flintContext):
     df_eager = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
     df_eager.timeSeriesRDD
     assert(df_eager._is_sorted)
-    assert(df_eager._tsrdd_part_info is not None)
+    assert(df_eager._lazy_tsrdd is not None)
+    assert(df_eager._tsrdd_part_info is None)
 
 
 def test_df_joined(flintContext):
@@ -1030,7 +1031,6 @@ def shared_test_partition_preserving(flintContext, func, preserve, create = None
         lambda df: df,
         lambda df: df.withColumn("f2", df.forecast * 2),
         lambda df: df.select("time", "id", "forecast"),
-        lambda df: df.orderBy("time"),
         lambda df: df.filter(df.time % 1000 == 0)
     ]
 
@@ -1042,6 +1042,7 @@ def shared_test_partition_preserving(flintContext, func, preserve, create = None
         assert_partition_preserving(transform(df_cached_joined), func, preserve)
 
     df_cached.unpersist()
+
 
 def assert_partition_preserving(input_df, func, preserve):
     output_df = func(input_df)

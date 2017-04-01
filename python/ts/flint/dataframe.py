@@ -131,8 +131,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                 # This will scan ranges
                 self._lazy_tsrdd = self._jpkg.TimeSeriesRDD.fromDF(
                     self._jdf, self._is_sorted, self._junit, self._time_column)
-                if self._jpkg.PartitionPreservingOperation.isPartitionPreservingDataFrame(self._jdf):
-                    self._tsrdd_part_info = self._lazy_tsrdd.partInfo()
             else:
                 # TODO: Ideally we should use fromDFWithPartInfo, but
                 # fromDFWithPartInfo doesn't take unit and time column
