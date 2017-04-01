@@ -167,7 +167,8 @@ private[timeseries] class NormalizedDataFrameStore(
   private val internalDf: DataFrame,
   private var internalPartInfo: PartitionInfo
 ) extends TimeSeriesStore {
-
+  require(internalPartInfo.deps.size == 1)
+  require(internalPartInfo.deps.head.isInstanceOf[OneToOneDependency[_]])
   require(
     PartitionPreservingOperation.isPartitionPreservingDataFrame(internalDf),
     s"df is not a PartitionPreservingRDDScanDataFrame. " +

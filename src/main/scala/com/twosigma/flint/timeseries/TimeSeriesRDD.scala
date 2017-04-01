@@ -454,6 +454,14 @@ trait TimeSeriesRDD extends Serializable {
   def toDF: DataFrame
 
   /**
+   * Validate the data is ordered and within each partition range.
+   *
+   * @note This is an expensive operation and should not be called unless for debugging.
+   * @throws Exception if data is not ordered or not in partition range
+   */
+  def validate(): Unit
+
+  /**
    * @return the number of rows.
    */
   def count(): Long
@@ -1123,6 +1131,8 @@ class TimeSeriesRDDImpl private[timeseries] (
   val dataStore: TimeSeriesStore
 ) extends TimeSeriesRDD {
 
+  import TimeSeriesRDD.timeColumnName
+
   override val schema: StructType = dataStore.schema
   override val safeGetAsAny: Seq[String] => (InternalRow => Seq[Any]) = TimeSeriesRDD.createSafeGetAsAny(schema)
 
@@ -1192,9 +1202,9 @@ class TimeSeriesRDDImpl private[timeseries] (
     }, schema)
 
   def keepColumns(columns: String*): TimeSeriesRDD = withUnshuffledDataFrame {
-    val nonTimeColumns = columns.filterNot(_ == TimeSeriesRDD.timeColumnName)
+    val nonTimeColumns = columns.filterNot(_ == timeColumnName)
 
-    val newColumns = (TimeSeriesRDD.timeColumnName +: nonTimeColumns).map {
+    val newColumns = (timeColumnName +: nonTimeColumns).map {
       // We need to escape the column name to ensure that columns with names like "a.b" are handled well.
       columnName => dataStore.dataFrame.col(s"`$columnName`")
     }
@@ -1203,7 +1213,7 @@ class TimeSeriesRDDImpl private[timeseries] (
   }
 
   def deleteColumns(columns: String*): TimeSeriesRDD = withUnshuffledDataFrame {
-    require(!columns.contains(TimeSeriesRDD.timeColumnName), "You can't delete the time column!")
+    require(!columns.contains(timeColumnName), "You can't delete the time column!")
 
     val columnSet = columns.toSet
     val remainingColumns = schema.fields.map(_.name).filterNot(name => columnSet.contains(name))
@@ -1212,7 +1222,7 @@ class TimeSeriesRDDImpl private[timeseries] (
 
   def renameColumns(fromTo: (String, String)*): TimeSeriesRDD = withUnshuffledDataFrame {
     val fromToMap = fromTo.toMap
-    require(!fromToMap.contains(TimeSeriesRDD.timeColumnName), "You can't rename the time column!")
+    require(!fromToMap.contains(timeColumnName), "You can't rename the time column!")
     require(fromToMap.size == fromTo.size, "Repeating column names are not allowed!")
 
     val newColumns = dataStore.dataFrame.schema.fieldNames.map {
@@ -1302,7 +1312,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     val (concat, newSchema) = InternalRowUtils.concat2(
       this.schema, right.schema,
       Option(leftAlias), Option(rightAlias),
-      (key :+ TimeSeriesRDD.timeColumnName).toSet
+      (key :+ timeColumnName).toSet
     )
 
     val rightNullRow = InternalRow.fromSeq(Array.fill[Any](right.schema.size)(null))
@@ -1332,7 +1342,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     val (concat, newSchema) = InternalRowUtils.concat2(
       this.schema, right.schema,
       Option(leftAlias), Option(rightAlias),
-      (key :+ TimeSeriesRDD.timeColumnName).toSet
+      (key :+ timeColumnName).toSet
     )
 
     val rightNullRow = InternalRow.fromSeq(Array.fill[Any](right.schema.size)(null))
@@ -1459,7 +1469,7 @@ class TimeSeriesRDDImpl private[timeseries] (
 
   def cast(updates: (String, DataType)*): TimeSeriesRDD = withUnshuffledDataFrame {
     val columnsToCastMap = updates.toMap
-    require(!columnsToCastMap.contains(TimeSeriesRDD.timeColumnName), "You can't cast the time column!")
+    require(!columnsToCastMap.contains(timeColumnName), "You can't cast the time column!")
 
     val newColumns = dataStore.dataFrame.schema.fieldNames.map {
       columnName =>
@@ -1476,7 +1486,7 @@ class TimeSeriesRDDImpl private[timeseries] (
   @Experimental
   def setTime(fn: Row => Long, window: String): TimeSeriesRDD = {
     if (window == null) {
-      val timeIndex = schema.fieldIndex(TimeSeriesRDD.timeColumnName)
+      val timeIndex = schema.fieldIndex(timeColumnName)
       TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.mapOrdered {
         case (t: Long, r: InternalRow) =>
           val timeStamp = fn(toExternalRow(r))
@@ -1488,7 +1498,7 @@ class TimeSeriesRDDImpl private[timeseries] (
   }
 
   def shift(window: ShiftTimeWindow): TimeSeriesRDD = {
-    val timeIndex = schema.fieldIndex(TimeSeriesRDD.timeColumnName)
+    val timeIndex = schema.fieldIndex(timeColumnName)
 
     // Note: Don't change this to unsafeOrderedRdd, it might cause data corruption and there is no test for this now
     //
@@ -1508,5 +1518,28 @@ class TimeSeriesRDDImpl private[timeseries] (
   @inline private def withUnshuffledDataFrame(dataFrame: => DataFrame): TimeSeriesRDD = {
     val newDataStore = TimeSeriesStore(dataFrame, dataStore.partInfo)
     new TimeSeriesRDDImpl(newDataStore)
+  }
+
+  def validate(): Unit = {
+    val ranges = orderedRdd.rangeSplits.map { _.range }
+
+    rdd.mapPartitionsWithIndex {
+      case (index, rows) =>
+        val range = ranges(index)
+        var lastTimestamp = Long.MinValue
+        for (row <- rows) {
+          val timestamp = row.getAs[Long](timeColumnName)
+          assert(
+            range.contains(timestamp),
+            s"Timestamp $timestamp is not in range $range of partition $index"
+          )
+          assert(
+            timestamp >= lastTimestamp,
+            s"Timestamp $timestamp is smaller than the previous timestamp $lastTimestamp"
+          )
+          lastTimestamp = timestamp
+        }
+        Iterator.empty
+    }.count()
   }
 }

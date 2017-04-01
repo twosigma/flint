@@ -1027,21 +1027,33 @@ def shared_test_partition_preserving(flintContext, func, preserve, create = None
 
     df_cached_joined = df_cached.leftJoin(df_cached, right_alias="right")
 
-    input_tranforms = [
+    partition_preserving_input_tranforms = [
         lambda df: df,
         lambda df: df.withColumn("f2", df.forecast * 2),
         lambda df: df.select("time", "id", "forecast"),
         lambda df: df.filter(df.time % 1000 == 0)
     ]
 
-    for transform in input_tranforms:
-        assert_partition_preserving(transform(df_lazy), func, preserve)
-        assert_partition_preserving(transform(df_eager), func, preserve)
-        assert_partition_preserving(transform(df_joined), func, preserve)
-        assert_partition_preserving(transform(df_cached), func, preserve)
-        assert_partition_preserving(transform(df_cached_joined), func, preserve)
+    order_preserving_input_tranforms = [
+        lambda df: df.orderBy("time")
+    ]
+
+    input_dfs = [df_lazy, df_eager, df_joined, df_cached, df_cached_joined]
+
+    for transform in partition_preserving_input_tranforms:
+        for input_df in input_dfs:
+            assert_partition_preserving(transform(input_df), func, preserve)
+
+    for tranform in order_preserving_input_tranforms:
+        for input_df in input_dfs:
+            assert_order_preserving(transform(input_df), func, preserve)
 
     df_cached.unpersist()
+
+
+def assert_sorted(df):
+    pdf = df.toPandas()
+    pdt.assert_frame_equal(pdf, pdf.sort_values('time'))
 
 
 def assert_partition_preserving(input_df, func, preserve):
@@ -1051,6 +1063,22 @@ def assert_partition_preserving(input_df, func, preserve):
         assert(input_df.rdd.getNumPartitions() == output_df.rdd.getNumPartitions())
         assert(input_df._is_sorted == output_df._is_sorted)
         assert(input_df._tsrdd_part_info == output_df._tsrdd_part_info)
+        if output_df._is_sorted:
+            assert_sorted(output_df)
+        if output_df._tsrdd_part_info:
+            output_df.timeSeriesRDD.validate()
+
+    else:
+        assert(output_df._tsrdd_part_info == None)
+
+def assert_order_preserving(input_df, func, preserve):
+    output_df = func(input_df)
+
+    if preserve:
+        assert(input_df._is_sorted == output_df._is_sorted)
+        if output_df._is_sorted:
+            assert_sorted(output_df)
+
     else:
         assert(not output_df._is_sorted)
         assert(output_df._tsrdd_part_info == None)
