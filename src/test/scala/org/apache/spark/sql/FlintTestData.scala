@@ -44,7 +44,7 @@ trait FlintTestData {
   }
 
   protected lazy val testDataCached: DataFrame = {
-    val df = new DataFrame(sqlContext, testData.logicalPlan)
+    val df = DFConverter.newDataFrame(testData)
     df.cache
     df.count
     df

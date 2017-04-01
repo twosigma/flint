@@ -213,7 +213,7 @@ private[timeseries] class NormalizedDataFrameStore(
    * We create a new DataFrame object to force reevaluation of 'lazy val' fields
    * in [[org.apache.spark.sql.execution.QueryExecution]].
    */
-  private def newDf: DataFrame = new DataFrame(internalDf.sqlContext, internalDf.queryExecution.logical)
+  private def newDf: DataFrame = DFConverter.newDataFrame(internalDf)
 }
 
 private[timeseries] case class PartitionInfo(

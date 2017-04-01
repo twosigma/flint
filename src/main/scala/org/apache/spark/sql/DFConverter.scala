@@ -19,12 +19,18 @@ package org.apache.spark.sql
 import com.twosigma.flint.rdd.OrderedRDD
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.StructType
 
 /**
  * Functions to convert an RDD with internal rows to DataFrame.
  */
 object DFConverter {
+
+  def newDataFrame(df: DataFrame): DataFrame = {
+    new DataFrame(df.sparkSession, df.logicalPlan, RowEncoder(df.schema))
+  }
+
   def toDataFrame(sqlContext: SQLContext, schema: StructType, rdd: OrderedRDD[Long, InternalRow]): DataFrame = {
     val internalRows = rdd.values
 

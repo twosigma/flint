@@ -28,7 +28,7 @@ object OrderPreservingOperation {
   // Accessing analyzedPlan will force the cause it to be evaluated and change the original df
   // Create a new df to ensure the original df is not changed
   def analyzedPlan(df: DataFrame): LogicalPlan =
-    new DataFrame(df.sqlContext, df.logicalPlan).queryExecution.analyzed
+    DFConverter.newDataFrame(df).queryExecution.analyzed
 
   private def isOrderPreservingLogicalNode(node: LogicalPlan): Boolean = node match {
     case _: Project => true

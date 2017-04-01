@@ -17,9 +17,9 @@
 package org.apache.spark.sql
 
 import com.twosigma.flint.FlintSuite
-import PartitionPreservingOperation.{ isPartitionPreserving, executedPlan }
-import org.apache.spark.sql.execution.{ PhysicalRDD, Sort }
-import org.apache.spark.sql.execution.columnar.InMemoryColumnarTableScan
+import PartitionPreservingOperation.{ executedPlan, isPartitionPreserving }
+import org.apache.spark.sql.execution.RDDScanExec
+import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
 
 class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
 
@@ -77,7 +77,7 @@ class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
   }
 
   it should "test cache" in {
-    val data = new DataFrame(sqlContext, testData.logicalPlan)
+    val data = DFConverter.newDataFrame(testData)
     val op = cache
     val expected = true
     assert(isPartitionPreserving(data, op(data)) == expected)
@@ -85,7 +85,7 @@ class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
   }
 
   it should "test cache and select" in {
-    val data = new DataFrame(sqlContext, testData.logicalPlan)
+    val data = DFConverter.newDataFrame(testData)
     val op = cache.andThen(selectV)
     val expected = true
     assert(isPartitionPreserving(data, op(data)) == expected)
@@ -93,17 +93,17 @@ class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
   }
 
   it should "get executedPlan of cached DataFrame" in {
-    val data = new DataFrame(sqlContext, testData.logicalPlan)
-    assert(executedPlan(data).isInstanceOf[PhysicalRDD])
+    val data = DFConverter.newDataFrame(testData)
+    assert(executedPlan(data).isInstanceOf[RDDScanExec])
     data.cache()
     data.count()
-    assert(executedPlan(data).isInstanceOf[InMemoryColumnarTableScan])
+    assert(executedPlan(data).isInstanceOf[InMemoryTableScanExec])
     data.unpersist()
 
     val orderedData = data.orderBy("time")
     orderedData.cache()
     orderedData.count()
-    assert(executedPlan(orderedData).isInstanceOf[InMemoryColumnarTableScan])
+    assert(executedPlan(orderedData).isInstanceOf[InMemoryTableScanExec])
     orderedData.unpersist()
   }
 

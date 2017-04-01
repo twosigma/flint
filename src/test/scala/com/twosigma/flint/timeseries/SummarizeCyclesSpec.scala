@@ -23,7 +23,7 @@ class SummarizeCyclesSpec extends MultiPartitionSuite with TimeSeriesTestData {
 
   override val defaultResourceDir: String = "/timeseries/summarizecycles"
   private val volumeSchema = Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
-  private val volume2Schema = volumeSchema
+  private val volume2Schema = Schema("id" -> IntegerType, "volume" -> LongType)
   private val volumeWithGroupSchema = Schema(
     "id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType
   )

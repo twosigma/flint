@@ -28,7 +28,9 @@ class OrderPreservingOperationSpec extends FlintSuite with FlintTestData {
     transformations.reduce((x, y) => x.andThen(y))
   }.toList
 
-  def withInputTransform(transformations: Seq[(DataFrame) => DataFrame])(df: DataFrame)(test: (DataFrame) => Unit): Unit = {
+  def withInputTransform(
+    transformations: Seq[(DataFrame) => DataFrame]
+  )(df: DataFrame)(test: (DataFrame) => Unit): Unit = {
     for (ts <- transformations) {
       test(ts(df))
     }
@@ -91,14 +93,14 @@ class OrderPreservingOperationSpec extends FlintSuite with FlintTestData {
   }
 
   it should "test cache" in {
-    val data = new DataFrame(sqlContext, testData.logicalPlan)
+    val data = DFConverter.newDataFrame(testData)
     val op = cache
     assert(OrderPreservingOperation.isOrderPreserving(data, op(data)))
     data.unpersist
   }
 
   it should "test cache and select" in {
-    val data = new DataFrame(sqlContext, testData.logicalPlan)
+    val data = DFConverter.newDataFrame(testData)
     val op = cache.andThen(selectV)
     assert(OrderPreservingOperation.isOrderPreserving(data, op(data)))
     data.unpersist

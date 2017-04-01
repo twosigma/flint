@@ -31,7 +31,7 @@ object PartitionPreservingOperation {
   // Accessing executedPlan will force the cause it to be evaluated and change the original df
   // Create a new df to ensure the original df is not changed
   def executedPlan(df: DataFrame): SparkPlan =
-    new DataFrame(df.sqlContext, df.logicalPlan).queryExecution.executedPlan
+    DFConverter.newDataFrame(df).queryExecution.executedPlan
 
   private def isPartitionPreservingUnaryNode(node: SparkPlan): Boolean = {
     node match {

@@ -27,7 +27,7 @@ import com.twosigma.flint.timeseries.window.{ ShiftTimeWindow, TimeWindow, Windo
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ Dependency, OneToOneDependency, SparkContext }
-import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DataFrame, Row, SQLContext }
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ERow }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.functions._
@@ -425,6 +425,8 @@ object TimeSeriesRDD {
 }
 
 trait TimeSeriesRDD extends Serializable {
+
+  val sparkSession: SparkSession
 
   /**
    * The schema of this [[TimeSeriesRDD]].
@@ -1134,6 +1136,8 @@ class TimeSeriesRDDImpl private[timeseries] (
   val dataStore: TimeSeriesStore
 ) extends TimeSeriesRDD {
 
+  val sparkSession = dataStore.dataFrame.sparkSession
+  import sparkSession.implicits._
   import TimeSeriesRDD.timeColumnName
 
   override val schema: StructType = dataStore.schema
@@ -1389,7 +1393,7 @@ class TimeSeriesRDDImpl private[timeseries] (
   ): TimeSeriesRDD = {
     val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns, key)
     val sum = summarizer(pruned.schema)
-    val clockLocal = clock.toDF.map{ row => row.getAs[Long]("time") }.collect()
+    val clockLocal = clock.toDF.select("time").as[(Long)].collect()
     val intervalized = pruned.orderedRdd.intervalize(clockLocal, beginInclusive).mapValues {
       case (_, v) => v._2
     }
