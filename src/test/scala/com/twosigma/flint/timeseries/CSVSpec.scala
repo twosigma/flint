@@ -16,11 +16,12 @@
 
 package com.twosigma.flint.timeseries
 
+import java.time.LocalDate
 import java.util.TimeZone
+import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.timeseries.row.Schema
 import org.scalatest.FlatSpec
-
 import org.apache.spark.sql.types._
 import com.twosigma.flint.SharedSparkContext
 import com.twosigma.flint.SpecUtils
@@ -116,5 +117,19 @@ class CSVSpec extends FlatSpec with SharedSparkContext {
 
       assert(first.getAs[Long]("time") == format.parse("2008-01-02 00:00:00.000").getTime * 1000000L)
     }
+  }
+
+  it should "correct read unsorted CSV with header, time column not called time in a specific format" in {
+    SpecUtils.withResource("/timeseries/csv/PriceWithHeaderDateColumn.csv") { source =>
+      val timeseriesRdd = CSV.from(sqlContext, "file://" + source, sorted = false, timeColumnName = "date",
+        dateFormat = "yyyy/MM/dd", header = true)
+      val first = timeseriesRdd.first()
+
+      val format = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.S")
+      assert(first.getAs[Long]("time") == TimeUnit.MILLISECONDS.toNanos(
+        format.parse("2017-01-01 00:00:00.000").getTime
+      ))
+    }
+
   }
 }
