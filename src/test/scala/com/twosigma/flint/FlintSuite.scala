@@ -19,6 +19,7 @@ package com.twosigma.flint
 import java.io.{ File, InputStream }
 import java.nio.file.{ Files, Path, StandardCopyOption }
 
+import org.apache.commons.io.FilenameUtils
 import org.scalatest.{ FlatSpec, PropSpec }
 import play.api.libs.json.{ JsValue, Json }
 
@@ -71,6 +72,8 @@ trait FlintSuite extends FlatSpec with SharedSparkContext {
    * @param codeBlock A function that takes a resource file path as input.
    * @return the return value of `codeBlock`.
    */
-  def withResource[T](resource: String)(codeBlock: String => T): T =
-    FlintSuite.withResource(resource, "", "")(codeBlock)
+  def withResource[T](resource: String)(codeBlock: String => T): T = {
+    val suffix = "." + FilenameUtils.getExtension(resource)
+    FlintSuite.withResource(resource, "", suffix)(codeBlock)
+  }
 }
