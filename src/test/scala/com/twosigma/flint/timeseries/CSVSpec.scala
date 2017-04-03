@@ -119,7 +119,7 @@ class CSVSpec extends FlatSpec with SharedSparkContext {
     }
   }
 
-  it should "correct read unsorted CSV with header, time column not called time in a specific format" in {
+  it should "correctly read CSV with header, time column not called 'time' and in a specific format" in {
     SpecUtils.withResource("/timeseries/csv/PriceWithHeaderDateColumn.csv") { source =>
       val timeseriesRdd = CSV.from(sqlContext, "file://" + source, sorted = false, timeColumnName = "date",
         dateFormat = "yyyy/MM/dd", header = true)
