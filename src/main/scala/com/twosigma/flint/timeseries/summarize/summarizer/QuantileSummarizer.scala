@@ -16,13 +16,11 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.rdd.function.summarize.summarizer.{ QuantileSummarizer => QSummarizer }
+import com.twosigma.flint.rdd.function.summarize.summarizer.{ QuantileState => QState, QuantileSummarizer => QSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, anyToDouble }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
-
-import scala.collection.mutable.ArrayBuffer
 
 case class QuantileSummarizerFactory(column: String, p: Array[Double]) extends SummarizerFactory {
   override def apply(inputSchema: StructType): QuantileSummarizer =
@@ -41,7 +39,7 @@ case class QuantileSummarizer(
   private val toDouble = anyToDouble(inputSchema(columnIndex).dataType)
 
   override type T = Double
-  override type U = ArrayBuffer[Double]
+  override type U = QState[Double]
   override type V = Array[Double]
 
   override val summarizer = QSummarizer(p)
