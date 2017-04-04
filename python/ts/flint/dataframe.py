@@ -166,29 +166,31 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                 return return_value
 
             df = return_value
+            if self._jpkg.OrderPreservingOperation.isDerivedFrom(self._jdf, df._jdf):
+                tsdf_args = {
+                    "df": df,
+                    "sql_ctx": df.sql_ctx,
+                    "time_column": self._time_column,
+                    "unit": self._junit
+                }
 
-            tsdf_args = {
-                "df": df,
-                "sql_ctx": df.sql_ctx,
-                "time_column": self._time_column,
-                "unit": self._junit
-            }
+                tsdf_args['is_sorted'] = self._is_sorted and self._jpkg.OrderPreservingOperation.isOrderPreserving(self._jdf, df._jdf)
+                if self._tsrdd_part_info and self._jpkg.PartitionPreservingOperation.isPartitionPreserving(self._jdf, df._jdf):
+                    tsdf_args['tsrdd_part_info'] = self._tsrdd_part_info
+                else:
+                    tsdf_args['tsrdd_part_info'] = None
 
-            tsdf_args['is_sorted'] = self._is_sorted and self._jpkg.OrderPreservingOperation.isOrderPreserving(self._jdf, df._jdf)
-            if self._tsrdd_part_info and self._jpkg.PartitionPreservingOperation.isPartitionPreserving(self._jdf, df._jdf):
-                tsdf_args['tsrdd_part_info'] = self._tsrdd_part_info
+                # Return a DataFrame if time column changes
+                # TODO: Handle all the case where time column changes
+                if name == 'withColumn':
+                    # Get col argument from withColumn(colName, col)
+                    col_name = args[0]
+                    if col_name == self._time_column:
+                        return df
+                return TimeSeriesDataFrame(**tsdf_args)
             else:
-                tsdf_args['tsrdd_part_info'] = None
+                return df
 
-            # Return a DataFrame if time column changes
-            # TODO: Handle all the case where time column changes
-            if name is 'withColumn':
-                # Get col argument from withColumn(colName, col)
-                col_name = args[0]
-                if col_name is self._time_column:
-                    return df
-
-            return TimeSeriesDataFrame(**tsdf_args)
         return _new_method
 
     @staticmethod

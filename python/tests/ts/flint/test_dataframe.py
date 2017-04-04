@@ -1006,6 +1006,14 @@ def test_withColumn_time(flintContext):
     assert(isinstance(df, DataFrame))
 
 
+def test_describe(flintContext):
+    from ts.flint import TimeSeriesDataFrame
+    from pyspark.sql import DataFrame
+
+    df = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
+    df.describe()
+
+
 def shared_test_partition_preserving(flintContext, func, preserve, create = None):
     def create_dataframe():
         return flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
