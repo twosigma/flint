@@ -158,7 +158,9 @@ object Summarizers {
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate correlation
    *         between all different columns.
    */
-  def correlation(columns: String*): SummarizerFactory = MultiCorrelationSummarizerFactory(columns.toArray, None)
+  def correlation(columns: String*): SummarizerFactory = columns.combinations(2).map {
+    case Seq(colX, colY) => CorrelationSummarizerFactory(colX, colY).asInstanceOf[SummarizerFactory]
+  }.reduce(Summarizers.compose(_, _))
 
   /**
    * Compute correlations between all possible pairs of columns where the left is one of `columns` and the right is
@@ -175,8 +177,13 @@ object Summarizers {
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate correlation
    *         between all different columns.
    */
-  def correlation(xColumns: Seq[String], yColumns: Seq[String]): SummarizerFactory =
-    MultiCorrelationSummarizerFactory(xColumns.toArray, Some(yColumns.toArray))
+  def correlation(xColumns: Seq[String], yColumns: Seq[String]): SummarizerFactory = {
+    val duplicateColumns = xColumns.intersect(yColumns)
+    require(duplicateColumns.isEmpty, s"Found duplicate input columns: ${duplicateColumns}")
+    (for (xColumn <- xColumns; yColumn <- yColumns)
+      yield CorrelationSummarizerFactory(xColumn, yColumn).asInstanceOf[SummarizerFactory])
+      .reduce(Summarizers.compose(_, _))
+  }
 
   /**
    * Performs a weighted multiple OLS linear regression of the values in several columns against values
