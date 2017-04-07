@@ -40,7 +40,7 @@ class LeftJoinSpec extends MultiPartitionSuite with TimeSeriesTestData {
   it should "pass `JoinOnTime` with tolerance test" in {
     val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
     val resultsTSRdd = fromCSV(
-      "JoinOnTime.results", Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
+      "JoinOnTimeWithTolerance.results", Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
     )
 
     def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
