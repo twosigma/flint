@@ -393,14 +393,6 @@ object TimeSeriesRDD {
       }
   }
 
-  private[timeseries] def prependTimeAndKey(t: Long, inputRow: InternalRow, inputSchema: StructType,
-    outputRow: InternalRow, outputSchema: StructType, key: Seq[String]): InternalRow =
-    InternalRowUtils.prepend(outputRow, outputSchema, t +: key.map {
-      fieldName =>
-        val fieldIndex = inputSchema.fieldIndex(fieldName)
-        inputRow.get(fieldIndex, inputSchema.fields(fieldIndex).dataType)
-    }: _*)
-
   // this function is used to select only the columns that are required by an operation
   private[timeseries] def pruneColumns(
     input: TimeSeriesRDD,
@@ -1356,19 +1348,15 @@ class TimeSeriesRDDImpl private[timeseries] (
   def summarizeCycles(summarizer: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {
     val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns(), key)
     val sum = summarizer(pruned.schema)
-    val groupByRdd = pruned.orderedRdd.groupByKey(pruned.safeGetAsAny(key))
-
     val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)))
-
-    val newRdd: OrderedRDD[Long, InternalRow] = groupByRdd.collectOrdered{
-      case (t: Long, rows: Array[InternalRow]) if !rows.isEmpty =>
-        val result = rows.foldLeft(sum.zero()) {
-          case (state, r) => sum.add(state, r)
-        }
-        val row = sum.render(result)
-        TimeSeriesRDD.prependTimeAndKey(t, rows.head, pruned.schema, row, sum.outputSchema, key)
-    }
-    TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
+    val numColumns = newSchema.length
+    TimeSeriesRDD.fromInternalOrderedRDD(
+      pruned.orderedRdd.summarizeByKey(pruned.safeGetAsAny(key), sum)
+        .mapValues { (k, v) =>
+          InternalRowUtils.concatTimeWithValues(k, numColumns, v._1, v._2.toSeq(pruned.schema))
+        },
+      newSchema
+    )
   }
 
   def summarizeIntervals(
@@ -1383,19 +1371,14 @@ class TimeSeriesRDDImpl private[timeseries] (
     val intervalized = pruned.orderedRdd.intervalize(clockLocal, beginInclusive).mapValues {
       case (_, v) => v._2
     }
-    val grouped = intervalized.groupByKey(pruned.safeGetAsAny(key))
-    val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)))
 
+    val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)))
+    val numColumns = newSchema.length
     TimeSeriesRDD.fromInternalOrderedRDD(
-      grouped.collectOrdered {
-        // Rows must have the same key if a key is provided
-        case (t: Long, rows: Array[InternalRow]) if !rows.isEmpty =>
-          val result = rows.foldLeft(sum.zero()) {
-            case (state, row) => sum.add(state, row)
-          }
-          val iRow = sum.render(result)
-          TimeSeriesRDD.prependTimeAndKey(t, rows.head, pruned.schema, iRow, sum.outputSchema, key)
-      },
+      intervalized.summarizeByKey(pruned.safeGetAsAny(key), sum)
+        .mapValues { (k, v) =>
+          InternalRowUtils.concatTimeWithValues(k, numColumns, v._1, v._2.toSeq(pruned.schema))
+        },
       newSchema
     )
   }

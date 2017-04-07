@@ -16,15 +16,17 @@
 
 package com.twosigma.flint.rdd
 
-import com.twosigma.flint.rdd.function.group.{ GroupByKeyIterator, Intervalize }
+import com.twosigma.flint.rdd.function.group.{ Intervalize, SummarizeByKeyIterator }
 import com.twosigma.flint.rdd.function.join._
 import com.twosigma.flint.rdd.function.summarize._
 import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
 import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.OverlappableSummarizer
 import com.twosigma.flint.annotation.PythonApi
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.RowsSummarizer
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.{ RDD, ShuffledRDD }
 import org.apache.spark._
+
 import scala.reflect.ClassTag
 
 private[flint] case class OrderedRDDPartition(override val index: Int) extends Partition
@@ -474,7 +476,28 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    */
   def groupByKey[SK](skFn: V => SK): OrderedRDD[K, Array[V]] = {
     new OrderedRDD[K, Array[V]](sc, rangeSplits, Seq(new OneToOneDependency(this)))(
-      (p, tc) => GroupByKeyIterator(iterator(p, tc), skFn)
+      (p, tc) => SummarizeByKeyIterator(iterator(p, tc), skFn, new RowsSummarizer[V])
+        .map { case (k, (_, v)) => (k, v.toArray) }
+    )
+  }
+
+  /**
+   * Takes an ordered RDD and summarizes it using the summarizer provided
+   * over each key and secondary key (as provided by the secondary key function)
+   *
+   * This is equivalent to calling groupByKey and then applying the summarizer over
+   * the provided array, but is more memory efficient because it processes the summarizer
+   * iteratively during the grouping.
+   * @param skFn A function that extracts a secondary key from a row.
+   * @param summarizer The summarizer to summarize each (key, sk) pair.
+   * @tparam SK the secondary key type.
+   * @tparam U the intermediate type of the summarizer.
+   * @tparam V2 the output type which will determine the value of the summarizer.
+   * @return an [[OrderedRDD]] of summarized rows with the same key. The ordering of each key is preserved.
+   */
+  def summarizeByKey[SK, U, V2: ClassTag](skFn: V => SK, summarizer: Summarizer[V, U, V2]): OrderedRDD[K, (SK, V2)] = {
+    new OrderedRDD[K, (SK, V2)](sc, rangeSplits, Seq(new OneToOneDependency(this)))(
+      (p, tc) => SummarizeByKeyIterator(iterator(p, tc), skFn, summarizer)
     )
   }
 

@@ -16,10 +16,11 @@
 
 package com.twosigma.flint.rdd.function
 
-import com.twosigma.flint.rdd.function.group.GroupByKeyIterator
+import com.twosigma.flint.rdd.function.group.SummarizeByKeyIterator
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.RowsSummarizer
 import org.scalatest.FlatSpec
 
-class GroupByKeySpec extends FlatSpec {
+class SummarizeByKeySpec extends FlatSpec {
 
   val data = Array(
     (1000L, (1, 0.01)),
@@ -36,19 +37,19 @@ class GroupByKeySpec extends FlatSpec {
     (1020L, (1, 0.12))
   )
 
-  "GroupByKeyIterator" should "group key correctly " in {
-    var iter = GroupByKeyIterator(data.iterator, (x: Any) => None).map {
-      case (k, v) => (k, v.toList)
+  "SummarizeByKeyIterator" should "collect rows key correctly " in {
+    var iter = SummarizeByKeyIterator(data.iterator, (x: Any) => None, new RowsSummarizer[(Int, Double)]).map {
+      case (k, (_, v)) => (k, v.toList)
     }
     assert(iter.next == (1000L, List((1, 0.01), (2, 0.02), (1, 0.03), (2, 0.04))))
     assert(iter.next == (1010L, List((1, 0.05), (2, 0.06), (1, 0.07), (2, 0.08))))
     assert(iter.next == (1020L, List((2, 0.09), (1, 0.10), (2, 0.11), (1, 0.12))))
     assert(!iter.hasNext)
 
-    iter = GroupByKeyIterator(data.iterator, (x: Any) => None).map {
-      case (k, v) => (k, v.toList)
+    iter = SummarizeByKeyIterator(data.iterator, (x: Any) => None, new RowsSummarizer[(Int, Double)]).map {
+      case (k, (_, v)) => (k, v.toList)
     }
-    for (i <- 0 to 2) {
+    for (_ <- 0 to 2) {
       assert(iter.hasNext)
       iter.next()
     }
@@ -56,34 +57,35 @@ class GroupByKeySpec extends FlatSpec {
   }
 
   it should "handle one key case correctly " in {
-    val iter = GroupByKeyIterator(data.take(4).iterator, (x: Any) => None).map {
-      case (k, v) => (k, v.toList)
+    val iter = SummarizeByKeyIterator(data.take(4).iterator, (x: Any) => None, new RowsSummarizer[(Int, Double)]).map {
+      case (k, (_, v)) => (k, v.toList)
     }
     assert(iter.next == (1000L, List((1, 0.01), (2, 0.02), (1, 0.03), (2, 0.04))))
     assert(!iter.hasNext)
   }
 
   it should "handle empty iterator case correctly " in {
-    val iter = GroupByKeyIterator(data.take(0).iterator, (x: Any) => None)
+    val iter = SummarizeByKeyIterator(data.take(0).iterator, (x: Any) => None, new RowsSummarizer[(Int, Double)])
     assert(!iter.hasNext)
   }
 
   it should "group key with sk correctly " in {
-    var iter = GroupByKeyIterator(data.iterator, (x: (Int, Double)) => x._1).map {
-      case (k, v) => (k, v.toList)
-    }
+    var iter = SummarizeByKeyIterator(data.iterator, (x: (Int, Double)) => x._1, new RowsSummarizer[(Int, Double)])
+      .map {
+        case (k, (sk, v)) => (k, sk, v.toList)
+      }
 
-    assert(iter.next == (1000L, List((1, 0.01), (1, 0.03))))
-    assert(iter.next == (1000L, List((2, 0.02), (2, 0.04))))
-    assert(iter.next == (1010L, List((1, 0.05), (1, 0.07))))
-    assert(iter.next == (1010L, List((2, 0.06), (2, 0.08))))
-    assert(iter.next == (1020L, List((2, 0.09), (2, 0.11))))
-    assert(iter.next == (1020L, List((1, 0.10), (1, 0.12))))
+    assert(iter.next == (1000L, 1, List((1, 0.01), (1, 0.03))))
+    assert(iter.next == (1000L, 2, List((2, 0.02), (2, 0.04))))
+    assert(iter.next == (1010L, 1, List((1, 0.05), (1, 0.07))))
+    assert(iter.next == (1010L, 2, List((2, 0.06), (2, 0.08))))
+    assert(iter.next == (1020L, 2, List((2, 0.09), (2, 0.11))))
+    assert(iter.next == (1020L, 1, List((1, 0.10), (1, 0.12))))
 
     assert(!iter.hasNext)
 
-    iter = GroupByKeyIterator(data.iterator, (x: (Int, Double)) => x._1).map {
-      case (k, v) => (k, v.toList)
+    iter = SummarizeByKeyIterator(data.iterator, (x: (Int, Double)) => x._1, new RowsSummarizer[(Int, Double)]).map {
+      case (k, (sk, v)) => (k, sk, v.toList)
     }
     for (i <- 0 to 5) {
       assert(iter.hasNext)
@@ -93,9 +95,11 @@ class GroupByKeySpec extends FlatSpec {
   }
 
   it should "group one key with multiple sk correctly " in {
-    val iter = GroupByKeyIterator(data.take(4).iterator, (x: (Int, Double)) => x._1).map {
-      case (k, v) => (k, v.toList)
-    }
+    val iter = SummarizeByKeyIterator(
+      data.take(4).iterator,
+      (x: (Int, Double)) => x._1,
+      new RowsSummarizer[(Int, Double)]
+    ).map { case (k, (sk, v)) => (k, v.toList) }
 
     assert(iter.next == (1000L, List((1, 0.01), (1, 0.03))))
     assert(iter.next == (1000L, List((2, 0.02), (2, 0.04))))

@@ -249,4 +249,30 @@ private[timeseries] object InternalRowUtils {
     }
     InternalRow.fromSeq(values)
   }
+
+  /**
+   * Takes a time and multiple value arrays and creates a row with time and then the values.
+   * This is just a more efficient method to create the row, rather than concatting the seqs
+   *
+   * @param time the value for the first column, which will be a Long time column
+   * @param totalNumColumns the number of columns, including the time column to pull out of the sequences
+   * @param valuesSeqs sequences of values to be concatenated
+   */
+  def concatTimeWithValues(time: Long, totalNumColumns: Int, valuesSeqs: Seq[Any]*): InternalRow = {
+    val array = new Array[Any](totalNumColumns)
+    array(0) = time
+    var currentIndex = 1
+    var seqIndex = 0
+    var seqValueIndex = 0
+    while (seqIndex < valuesSeqs.size) {
+      while (seqValueIndex < valuesSeqs(seqIndex).size) {
+        array(currentIndex) = valuesSeqs(seqIndex)(seqValueIndex)
+        currentIndex += 1
+        seqValueIndex += 1
+      }
+      seqValueIndex = 0
+      seqIndex += 1
+    }
+    InternalRow.fromSeq(array)
+  }
 }
