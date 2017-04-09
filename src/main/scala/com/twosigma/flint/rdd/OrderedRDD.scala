@@ -27,6 +27,7 @@ import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.{ RDD, ShuffledRDD }
 import org.apache.spark._
 
+import scala.collection.mutable
 import scala.reflect.ClassTag
 
 private[flint] case class OrderedRDDPartition(override val index: Int) extends Partition
@@ -253,9 +254,10 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
     }
 
     // dependencies to parent RDD
-    val parents = coalesced.map(x => x._1 -> x._3).toMap
-    val dep = new NarrowDependency(this) {
-      override def getParents(partitionId: Int) = parents(partitionId).map(_.index)
+    val parents = coalesced.map { x => x._1 -> x._3 }.toMap
+    val dep = new NarrowDependency(self) {
+      override def getParents(partitionId: Int): mutable.ArraySeq[Int] =
+        parents(partitionId).map(_.index)
     }
 
     // return new OrderedRDD
@@ -402,7 +404,7 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * @return a new [[OrderedRDD]] by zipping its element indices to all values of this [[OrderedRDD]].
    */
   def zipWithIndexOrdered: OrderedRDD[K, (V, Long)] = {
-    val withIndex = this.zipWithIndex
+    val withIndex = self.zipWithIndex
     val indexToPartition = sc.broadcast(withIndex.partitions.map { p => (p.index, p) }.toMap)
     new OrderedRDD(sc, rangeSplits, Seq(new OneToOneDependency(withIndex)))(
       (p, tc) => withIndex.iterator(indexToPartition.value(p.index), tc).map {
@@ -427,7 +429,7 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * @return a new [[OrderedRDD]] by applying a function to all values of this [[OrderedRDD]].
    */
   def mapValues[V2: ClassTag](fn: (K, V) => V2): OrderedRDD[K, V2] =
-    new OrderedRDD(sc, rangeSplits, Seq(new OneToOneDependency(this)))(
+    new OrderedRDD(sc, rangeSplits, Seq(new OneToOneDependency(self)))(
       (p, tc) => iterator(p, tc).map { case (k, v) => (k, fn(k, v)) }
     )
 
@@ -438,7 +440,7 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    *         flattening the results.
    */
   def flatMapValues[V2: ClassTag](fn: (K, V) => TraversableOnce[V2]): OrderedRDD[K, V2] =
-    new OrderedRDD(sc, rangeSplits, Seq(new OneToOneDependency(this)))(
+    new OrderedRDD(sc, rangeSplits, Seq(new OneToOneDependency(self)))(
       (p, tc) => iterator(p, tc).flatMap { case (k, v) => fn(k, v).map((k, _)) }
     )
 
@@ -448,7 +450,7 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * @return a new [[OrderedRDD]] containing only the elements that satisfy a predicate.
    */
   def filterOrdered(fn: (K, V) => Boolean): OrderedRDD[K, V] =
-    new OrderedRDD(sc, rangeSplits, Seq(new OneToOneDependency(this)))(
+    new OrderedRDD(sc, rangeSplits, Seq(new OneToOneDependency(self)))(
       (p, tc) => iterator(p, tc).filter { case (k, v) => fn(k, v) }
     )
 
@@ -456,12 +458,12 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * Similar to [[org.apache.spark.rdd.RDD]]'s collect, but the ordering of this [[OrderedRDD]] will be preserved.
    */
   def collectOrdered[V2: ClassTag](fn: PartialFunction[(K, V), V2]): OrderedRDD[K, V2] =
-    new OrderedRDD(sc, rangeSplits, Seq(new OneToOneDependency(this)))(
+    new OrderedRDD(sc, rangeSplits, Seq(new OneToOneDependency(self)))(
       (p, tc) =>
         iterator(p, tc).collect(new PartialFunction[(K, V), (K, V2)] {
-          override def apply(d: (K, V)) = (d._1, fn(d._1, d._2))
+          override def apply(d: (K, V)): (K, V2) = (d._1, fn(d._1, d._2))
 
-          override def isDefinedAt(d: (K, V)) = fn.isDefinedAt(d)
+          override def isDefinedAt(d: (K, V)): Boolean = fn.isDefinedAt(d)
         })
     )
 
@@ -475,7 +477,7 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * @return an [[OrderedRDD]] of grouped rows with the same key. The ordering of rows in each group is preserved.
    */
   def groupByKey[SK](skFn: V => SK): OrderedRDD[K, Array[V]] = {
-    new OrderedRDD[K, Array[V]](sc, rangeSplits, Seq(new OneToOneDependency(this)))(
+    new OrderedRDD[K, Array[V]](sc, rangeSplits, Seq(new OneToOneDependency(self)))(
       (p, tc) => SummarizeByKeyIterator(iterator(p, tc), skFn, new RowsSummarizer[V])
         .map { case (k, (_, v)) => (k, v.toArray) }
     )
@@ -488,15 +490,16 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * This is equivalent to calling groupByKey and then applying the summarizer over
    * the provided array, but is more memory efficient because it processes the summarizer
    * iteratively during the grouping.
-   * @param skFn A function that extracts a secondary key from a row.
+   *
+   * @param skFn       A function that extracts a secondary key from a row.
    * @param summarizer The summarizer to summarize each (key, sk) pair.
    * @tparam SK the secondary key type.
-   * @tparam U the intermediate type of the summarizer.
+   * @tparam U  the intermediate type of the summarizer.
    * @tparam V2 the output type which will determine the value of the summarizer.
    * @return an [[OrderedRDD]] of summarized rows with the same key. The ordering of each key is preserved.
    */
   def summarizeByKey[SK, U, V2: ClassTag](skFn: V => SK, summarizer: Summarizer[V, U, V2]): OrderedRDD[K, (SK, V2)] = {
-    new OrderedRDD[K, (SK, V2)](sc, rangeSplits, Seq(new OneToOneDependency(this)))(
+    new OrderedRDD[K, (SK, V2)](sc, rangeSplits, Seq(new OneToOneDependency(self)))(
       (p, tc) => SummarizeByKeyIterator(iterator(p, tc), skFn, summarizer)
     )
   }
