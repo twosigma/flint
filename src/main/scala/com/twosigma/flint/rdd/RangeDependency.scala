@@ -48,8 +48,8 @@ private[rdd] object RangeDependency {
           h2
         } else {
           sys.error(s"Partitions are not sorted. " +
-            s"The partition ${h1.partition} has the first key ${h1.firstKey} and " +
-            s"the partition ${h2.partition} has the first key ${h2.firstKey}.")
+            s"The partition ${h1.partition.index} has the first key ${h1.firstKey} and " +
+            s"the partition ${h2.partition.index} has the first key ${h2.firstKey}.")
         }
     }
 

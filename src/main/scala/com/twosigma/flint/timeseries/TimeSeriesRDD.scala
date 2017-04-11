@@ -48,9 +48,13 @@ object TimeSeriesRDD {
   private[flint] val timeField: StructField = StructField(timeColumnName, LongType)
 
   /**
-   * Checks if the schema has a field "time" with long type
+   * Checks if the schema is legal.
    */
-  private def requireSchema(schema: StructType): Unit =
+  private def requireSchema(schema: StructType): Unit = {
+    require(
+      schema.length == schema.fieldNames.toSet.size,
+      s"Schema $schema contains duplicate field names"
+    )
     require(
       schema.exists {
         case StructField("time", LongType, _, _) => true
@@ -58,6 +62,7 @@ object TimeSeriesRDD {
       },
       s"Schema $schema doesn't contain a valid time column"
     )
+  }
 
   /**
    * Provides a function to extract the timestamp from [[org.apache.spark.sql.Row]] as NANOSECONDS and convert
@@ -245,10 +250,15 @@ object TimeSeriesRDD {
     timeUnit: TimeUnit,
     timeColumn: String = timeColumnName
   ): TimeSeriesRDD = {
-    val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
+    require(
+      !dataFrame.columns.contains(timeColumnName) || timeColumn == timeColumnName,
+      "Cannot use another column as timeColumn while a column with name `time` exists"
+    )
+
+    val df = dataFrame.withColumn(timeColumnName, dataFrame(timeColumn))
     requireSchema(df.schema)
 
-    val convertedDf = convertDfTimestamps(dataFrame, timeUnit)
+    val convertedDf = convertDfTimestamps(df, timeUnit)
     // we want to keep time column first, but no code should rely on that
     val timeFirstDf = if (convertedDf.schema.fieldIndex(timeColumnName) == 0) {
       convertedDf
