@@ -27,7 +27,7 @@ class TreeReduceSpec extends FlatSpec with SharedSparkContext {
     val scale = 5
     val maxDepth = 5
     val rdd = sc.parallelize(1 to numOfPartitions, numOfPartitions).mapPartitionsWithIndex {
-      (idx, iter) => (1 to scale).map { x => idx * scale + x }.toIterator
+      (idx, _) => (1 to scale).map { x => idx * scale + x }.toIterator
     }
 
     // Use -1 as a "bad" state and propagate through the aggregation, otherwise
@@ -50,7 +50,7 @@ class TreeReduceSpec extends FlatSpec with SharedSparkContext {
     val scale = 5
     val maxDepth = 5
     val rdd = sc.parallelize(1 to numOfPartitions, numOfPartitions).mapPartitionsWithIndex {
-      (idx, iter) => (1 to scale).map { x => s"${idx * scale + x}" }.toIterator
+      (idx, _) => (1 to scale).map { x => s"${idx * scale + x}" }.toIterator
     }
 
     val f = (u1: String, u2: String) => u1 + u2
@@ -66,7 +66,7 @@ class TreeReduceSpec extends FlatSpec with SharedSparkContext {
     val scale = 5
     val maxDepth = 5
     val rdd = sc.parallelize(1 to numOfPartitions, numOfPartitions).mapPartitionsWithIndex {
-      (idx, iter) => (1 to scale).map { x => idx * scale + x }.toIterator
+      (idx, _) => (1 to scale).map { x => idx * scale + x }.toIterator
     }
 
     val expectedReducedResult = rdd.sum()

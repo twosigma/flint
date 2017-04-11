@@ -114,6 +114,7 @@ lazy val flint = project
   .settings(compilationSettings)
   .settings(dependencySettings)
   .settings(parallelExecution in Test := false)
+  .settings(testOptions in Test += Tests.Argument("-oDF"))
   .settings(apiMappings ++= DocumentationMapping.mapJarToDocURL(
     (managedClasspath in (Compile, doc)).value,
     Seq(

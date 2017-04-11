@@ -115,7 +115,10 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       case ((k1, isOrdered), (k2, _)) => (k2, isOrdered && k1 <= k2)
     }._2
     )
-    val orderedRDD = OrderedRDD.fromRDD(sc.parallelize(unsortedData, unsortedData.length * 10), KeyPartitioningType.UnSorted)
+    val orderedRDD = OrderedRDD.fromRDD(
+      sc.parallelize(unsortedData, unsortedData.length * 10),
+      KeyPartitioningType.UnSorted
+    )
     assert(orderedRDD.partitions.length <= unsortedData.length)
   }
 
@@ -128,7 +131,10 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       case ((k1, isOrdered), (k2, _)) => (k2, isOrdered && k1 <= k2)
     }._2
     )
-    val orderedRDD = OrderedRDD.fromRDD(sc.parallelize(unsortedData, unsortedData.length * 10), KeyPartitioningType.UnSorted)
+    val orderedRDD = OrderedRDD.fromRDD(
+      sc.parallelize(unsortedData, unsortedData.length * 10),
+      KeyPartitioningType.UnSorted
+    )
     assert(orderedRDD.partitions.length <= unsortedData.length)
   }
 
