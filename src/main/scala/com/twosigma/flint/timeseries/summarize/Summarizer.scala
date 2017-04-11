@@ -98,14 +98,14 @@ trait SummarizerFactory {
    * @param columns A list of columns that will be used as input values for the predicate.
    * @return a new [[SummarizerFactory]] that will be applied only to filtered rows.
    */
-  def where[A1: TypeTag](f: Function1[A1, Boolean])(columns: String*): SummarizerFactory = {
+  def where[A1: TypeTag](f: (A1) => Boolean)(columns: String*): SummarizerFactory = {
     require(columns.size == 1)
     val inputTypes = Try(ScalaReflection.schemaFor(typeTag[A1]).dataType :: Nil).getOrElse(Nil)
     new PredicateSummarizerFactory(this, f, columns.zip(inputTypes))
   }
 
   def where[A1: TypeTag, A2: TypeTag](
-    f: Function2[A1, A2, Boolean]
+    f: (A1, A2) => Boolean
   )(columns: String*): SummarizerFactory = {
     require(columns.size == 2)
     val inputTypes = Try(ScalaReflection.schemaFor(typeTag[A1]).dataType
@@ -114,7 +114,7 @@ trait SummarizerFactory {
   }
 
   def where[A1: TypeTag, A2: TypeTag, A3: TypeTag](
-    f: Function3[A1, A2, A3, Boolean]
+    f: (A1, A2, A3) => Boolean
   )(columns: String*): SummarizerFactory = {
     require(columns.size == 3)
     val inputTypes = Try(ScalaReflection.schemaFor(typeTag[A1]).dataType
@@ -124,7 +124,7 @@ trait SummarizerFactory {
   }
 
   def where[A1: TypeTag, A2: TypeTag, A3: TypeTag, A4: TypeTag](
-    f: Function4[A1, A2, A3, A4, Boolean]
+    f: (A1, A2, A3, A4) => Boolean
   )(columns: String*): SummarizerFactory = {
     require(columns.size == 4)
     val inputTypes = Try(ScalaReflection.schemaFor(typeTag[A1]).dataType

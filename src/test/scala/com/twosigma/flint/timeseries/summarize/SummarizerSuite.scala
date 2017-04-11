@@ -169,7 +169,7 @@ class SummarizerSuite extends TimeSeriesSuite {
       summarizerFactory: SummarizerFactory
     ): Unit = {
       val summarizer = summarizerFactory.apply(timeSeriesRdd.schema)
-      val rows = timeSeriesRdd.toDF.queryExecution.toRdd.take(100)
+      val rows = timeSeriesRdd.toDF.queryExecution.toRdd.map(_.copy).take(100)
       var nonZero = summarizer.zero()
       rows.foreach { row =>
         nonZero = summarizer.add(nonZero, row)
@@ -188,11 +188,74 @@ class SummarizerSuite extends TimeSeriesSuite {
     override def toString(): String = "LeftIdenityProperty"
   }
 
+  // Check if (a + b) + c - a = b + c
+  class LeftSubtractableProperty extends SummarizerProperty {
+    override def test(
+      timeSeriesRdd: TimeSeriesRDD,
+      summarizerFactory: SummarizerFactory
+    ): Unit = {
+      require(
+        summarizerFactory
+        .apply(timeSeriesRdd.schema)
+        .isInstanceOf[LeftSubtractableSummarizer]
+      )
+      val summarizer = summarizerFactory
+        .apply(timeSeriesRdd.schema)
+        .asInstanceOf[LeftSubtractableSummarizer]
+
+      val toExternalRow = CatalystTypeConvertersWrapper.toScalaRowConverter(
+        summarizer.outputSchema
+      )
+
+      val rows = timeSeriesRdd.toDF.queryExecution.toRdd.map(_.copy).take(1000)
+      var window = 11
+      require(rows.length > window)
+
+      while (window < rows.length) {
+        var i = 0
+        var s1 = summarizer.zero()
+
+        // Build up state for the first window
+        while (i < window) {
+          s1 = summarizer.add(s1, rows(i))
+          i += 1
+        }
+
+        while (i < rows.length) {
+          s1 = summarizer.add(s1, rows(i))
+          s1 = summarizer.subtract(s1, rows(i - window))
+
+          // Build up benchmark state
+          var s2 = summarizer.zero()
+          var j = i - window + 1
+          while (j <= i) {
+            s2 = summarizer.add(s2, rows(j))
+            j += 1
+          }
+
+          assertAlmostEquals(
+            toExternalRow(summarizer.render(s1)),
+            toExternalRow(summarizer.render(s2))
+          )
+          i += 1
+        }
+        window *= window
+      }
+
+    }
+
+    override def toString(): String = "LeftSubtractableProperty"
+  }
+
   lazy val AllProperties = Seq(
     new AssociativeLawProperty,
     new RightIdenityProperty,
     new LeftIdenityProperty,
     new IdenityProperty
+  )
+
+  lazy val AllPropertiesAndSubtractable = AllProperties ++ Seq(
+    new LeftSubtractableProperty
   )
 
   def summarizerPropertyTest(properties: Seq[SummarizerProperty])(
@@ -206,4 +269,5 @@ class SummarizerSuite extends TimeSeriesSuite {
       }
     }
   }
+
 }
