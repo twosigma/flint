@@ -53,7 +53,11 @@ trait SharedSparkContext extends BeforeAndAfterAll {
       // By default, Spark provides three codecs: lz4, lzf, and snappy. Here, using lzf is to reduce the dependency
       // of snappy codec for compiling issue with other codebase(s).
       .set("spark.io.compression.codec", "lzf")
-    _sc = new SparkContext("local[4]", "test", conf)
+    val cores = sys.props.getOrElse(
+      "spark.executor.cores",
+      Math.ceil(sys.runtime.availableProcessors() * 0.75).toInt
+    )
+    _sc = new SparkContext(s"local[$cores]", "test", conf)
     _sqlContext = SQLContext.getOrCreate(_sc)
     super.beforeAll()
   }
