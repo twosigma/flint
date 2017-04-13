@@ -22,6 +22,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ IntegerType, LongType, StructField, StructType }
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.functions.{ col, round }
 
 import scala.concurrent.duration.NANOSECONDS
@@ -37,15 +38,6 @@ private[flint] trait TimeSeriesTestData {
 
   import internalImplicits._
   import TimeSeriesTestData._
-
-  private def changeTimeNotNull(df: DataFrame): DataFrame = {
-    val schema = StructType(df.schema.map {
-      case StructField("time", LongType, false, meta) => StructField("time", LongType, true, meta)
-      case t => t
-    })
-
-    sqlContext.createDataFrame(df.rdd, schema)
-  }
 
   protected lazy val testData: TimeSeriesRDD = {
     val df = sqlContext.sparkContext.parallelize(
@@ -63,7 +55,25 @@ private[flint] trait TimeSeriesTestData {
         TestData(5000) ::
         TestData(5000) :: Nil
     ).toDF()
-    TimeSeriesRDD.fromDF(changeTimeNotNull(df))(isSorted = true, timeUnit = NANOSECONDS)
+    TimeSeriesRDD.fromDF(df)(isSorted = true, timeUnit = NANOSECONDS)
+  }
+
+  protected lazy val forecastData: TimeSeriesRDD = {
+    val df = sqlContext.sparkContext.parallelize(
+      ForecastData(1000L, 7, 3.0) ::
+        ForecastData(1000L, 3, 5.0) ::
+        ForecastData(1050L, 3, -1.5) ::
+        ForecastData(1050L, 7, 2.0) ::
+        ForecastData(1100L, 3, -2.4) ::
+        ForecastData(1100L, 7, 6.4) ::
+        ForecastData(1150L, 3, 1.5) ::
+        ForecastData(1150L, 7, -7.9) ::
+        ForecastData(1200L, 3, 4.6) ::
+        ForecastData(1200L, 7, 1.4) ::
+        ForecastData(1250L, 3, -9.6) ::
+        ForecastData(1250L, 7, 6.0) :: Nil
+    ).toDF()
+    TimeSeriesRDD.fromDF(df)(isSorted = true, timeUnit = NANOSECONDS)
   }
 
   protected lazy val cycleMetaData1 = CycleMetaData(1000000L, 1000000L * 10)
@@ -134,4 +144,5 @@ private[flint] trait TimeSeriesTestData {
 
 private[flint] object TimeSeriesTestData {
   case class TestData(time: Long)
+  case class ForecastData(time: Long, id: Int, forecast: Double)
 }

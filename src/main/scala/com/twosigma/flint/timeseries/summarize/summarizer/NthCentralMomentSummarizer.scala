@@ -18,23 +18,24 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ NthCentralMomentOutput, NthCentralMomentState, NthCentralMomentSummarizer => NthCentralMomentSum }
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, anyToDouble }
+import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
+import com.twosigma.flint.timeseries.summarize._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
-case class NthCentralMomentSummarizerFactory(column: String, moment: Int) extends SummarizerFactory {
+case class NthCentralMomentSummarizerFactory(column: String, moment: Int)
+  extends BaseSummarizerFactory(column) {
   override def apply(inputSchema: StructType): NthCentralMomentSummarizer =
-    NthCentralMomentSummarizer(inputSchema, prefixOpt, column, moment)
-
-  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(column))
+    NthCentralMomentSummarizer(inputSchema, prefixOpt, requiredColumns, moment)
 }
 
 case class NthCentralMomentSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
-  column: String,
+  requiredColumns: ColumnList,
   moment: Int
-) extends Summarizer {
+) extends Summarizer with FilterNullInput {
+  private val Sequence(Seq(column)) = requiredColumns
   private val columnIndex = inputSchema.fieldIndex(column)
 
   override type T = Double

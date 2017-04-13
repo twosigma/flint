@@ -23,6 +23,7 @@ import com.twosigma.flint.rdd.function.summarize.summarizer.{ Summarizer => OSum
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.summarizer.PredicateSummarizerFactory
 import com.twosigma.flint.timeseries.window.TimeWindow
+import org.apache.spark.sql.CatalystTypeConvertersWrapper
 import org.apache.spark.sql.catalyst.{ InternalRow, ScalaReflection }
 import org.apache.spark.sql.types.StructType
 
@@ -44,6 +45,11 @@ trait InputOutputSchema {
    * The prefixes of column names in the output schema.
    */
   val prefixOpt: Option[String]
+
+  /**
+   * Required input columns of the summarizer. This is used in column pruning and input filtering.
+   */
+  val requiredColumns: ColumnList
 
   /**
    * The schema of output rows.
@@ -86,10 +92,9 @@ trait SummarizerFactory {
   /**
    * Return a [[ColumnList]] that can be used to optimize computations.
    *
-   * @return [[ColumnList.All]] if the summarizer needs all columns,
-   *         or [[ColumnList.Sequence]] of column names used by the summarizer.
+   * @return [[ColumnList.Sequence]] of column names used by the summarizer.
    */
-  def requiredColumns(): ColumnList
+  val requiredColumns: ColumnList
 
   /**
    * Return a new [[SummarizerFactory]] that skips all rows which don't satisfy the predicate function.
@@ -135,7 +140,55 @@ trait SummarizerFactory {
   }
 }
 
-trait Summarizer extends OSummarizer[InternalRow, Any, InternalRow] with InputOutputSchema {
+/**
+ * A [[SummarizerFactory]] base class that takes a list of input cols and set requiredColumns to them.
+ */
+abstract class BaseSummarizerFactory(cols: String*) extends SummarizerFactory {
+  override val requiredColumns: ColumnList = ColumnList.Sequence(cols)
+}
+
+/**
+ * A trait that defines input row filtering.
+ * Child trait/class can implement it's own input row fitlering, for instance [[FilterNullInput]] and
+ * [[InputAlwaysValid]]
+ */
+trait InputValidation {
+  def isValid(r: InternalRow): Boolean
+}
+
+/**
+ * A trait that implements input row filtering.
+ * An input row is filtered if any of the required columns is null.
+ * If requiredColumns is [[ColumnList.All]], input rows will NOT be filtered.
+ */
+trait FilterNullInput extends InputOutputSchema with InputValidation {
+  // Indices of required input columns. If any of the input column is null, the row will be skipped.
+  final lazy val requiredInputIndices: Array[Int] = requiredColumns match {
+    // If ColumnList.All, it means we are adding the entire row, so we don't want to do any null filtering.
+    case ColumnList.All => Array.empty
+    case ColumnList.Sequence(columns) => columns.map(inputSchema.fieldIndex).toArray
+  }
+
+  @inline
+  def isValid(r: InternalRow): Boolean = {
+    var i = 0
+    var hasNull = false
+    while (!hasNull && i < requiredInputIndices.length) {
+      if (r.isNullAt(requiredInputIndices(i))) {
+        hasNull = true
+      }
+      i += 1
+    }
+    !hasNull
+  }
+}
+
+trait InputAlwaysValid extends InputValidation {
+  @inline
+  def isValid(r: InternalRow): Boolean = true
+}
+
+trait Summarizer extends OSummarizer[InternalRow, Any, InternalRow] with InputValidation with InputOutputSchema {
   // The type of each row expected to
   type T
 
@@ -157,7 +210,7 @@ trait Summarizer extends OSummarizer[InternalRow, Any, InternalRow] with InputOu
 
   final override def zero(): Any = summarizer.zero()
 
-  override def add(u: Any, r: InternalRow): Any = summarizer.add(toU(u), toT(r))
+  final override def add(u: Any, r: InternalRow): Any = if (isValid(r)) summarizer.add(toU(u), toT(r)) else u
 
   final override def merge(u1: Any, u2: Any): Any = summarizer.merge(toU(u1), toU(u2))
 
@@ -168,7 +221,8 @@ trait LeftSubtractableSummarizer extends Summarizer with OLeftSubtractableSummar
 
   override val summarizer: OLeftSubtractableSummarizer[T, U, V]
 
-  final override def subtract(u: Any, r: InternalRow): Any = summarizer.subtract(toU(u), toT(r))
+  final override def subtract(u: Any, r: InternalRow): Any =
+    if (isValid(r)) summarizer.subtract(toU(u), toT(r)) else u
 }
 
 trait OverlappableSummarizerFactory extends SummarizerFactory {
@@ -186,7 +240,7 @@ trait OverlappableSummarizer extends Summarizer
   val summarizer: OOverlappableSummarizer[T, U, V]
 
   final override def addOverlapped(u: Any, r: (InternalRow, Boolean)): Any =
-    summarizer.addOverlapped(toU(u), (toT(r._1), r._2))
+    if (isValid(r._1)) summarizer.addOverlapped(toU(u), (toT(r._1), r._2)) else u
 }
 
 trait LeftSubtractableOverlappableSummarizer extends OverlappableSummarizer
@@ -198,7 +252,7 @@ trait LeftSubtractableOverlappableSummarizer extends OverlappableSummarizer
   val summarizer: OLeftSubtractableOverlappableSummarizer[T, U, V]
 
   final override def subtractOverlapped(u: Any, r: (InternalRow, Boolean)): Any =
-    summarizer.subtractOverlapped(toU(u), (toT(r._1), r._2))
+    if (isValid(r._1)) summarizer.subtractOverlapped(toU(u), (toT(r._1), r._2)) else u
 }
 
 trait LeftSubtractableOverlappableSummarizerFactory extends OverlappableSummarizerFactory {

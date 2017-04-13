@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ OLSRegressionOutput, OLSRegressionState, RegressionRow, OLSRegressionSummarizer => RegressionSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, anyToDouble }
+import com.twosigma.flint.timeseries.summarize._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.GenericArrayData
 import org.apache.spark.sql.types._
@@ -69,32 +69,34 @@ case class OLSRegressionSummarizerFactory(
 ) extends SummarizerFactory {
   type K = Long
 
+  override val requiredColumns: ColumnList = {
+    val weightSeq = if (weightColumn == null) Seq() else Seq(weightColumn)
+    ColumnList.Sequence(Seq(yColumn) ++ xColumns ++ weightSeq)
+  }
+
   override def apply(inputSchema: StructType): OLSRegressionSummarizer =
     OLSRegressionSummarizer(
       inputSchema,
       prefixOpt,
+      requiredColumns,
       yColumn,
       xColumns,
       Option(weightColumn),
       shouldIntercept,
       shouldIgnoreConstants
     )
-
-  override def requiredColumns(): ColumnList = {
-    val weightSeq = if (Option(weightColumn).isEmpty) Seq() else Seq(weightColumn)
-    ColumnList.Sequence(Seq(yColumn) ++ xColumns ++ weightSeq)
-  }
 }
 
 case class OLSRegressionSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
+  override val requiredColumns: ColumnList,
   yColumn: String,
   xColumns: Array[String],
   weightColumn: Option[String],
   shouldIntercept: Boolean,
   shouldIgnoreConstants: Boolean
-) extends Summarizer {
+) extends Summarizer with FilterNullInput {
 
   private val dimensionOfX = xColumns.length
   private val isWeighted = weightColumn != null

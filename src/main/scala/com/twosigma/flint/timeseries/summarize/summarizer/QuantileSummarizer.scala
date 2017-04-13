@@ -18,23 +18,24 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ QuantileState => QState, QuantileSummarizer => QSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, anyToDouble }
+import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
+import com.twosigma.flint.timeseries.summarize._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
-case class QuantileSummarizerFactory(column: String, p: Array[Double]) extends SummarizerFactory {
+case class QuantileSummarizerFactory(column: String, p: Array[Double])
+  extends BaseSummarizerFactory(column) {
   override def apply(inputSchema: StructType): QuantileSummarizer =
-    QuantileSummarizer(inputSchema, prefixOpt, column, p)
-
-  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(column))
+    QuantileSummarizer(inputSchema, prefixOpt, requiredColumns, p)
 }
 
 case class QuantileSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
-  column: String,
+  override val requiredColumns: ColumnList,
   p: Array[Double]
-) extends Summarizer {
+) extends Summarizer with FilterNullInput {
+  private val Sequence(Seq(column)) = requiredColumns
   private val columnIndex = inputSchema.fieldIndex(column)
   private val toDouble = anyToDouble(inputSchema(columnIndex).dataType)
 

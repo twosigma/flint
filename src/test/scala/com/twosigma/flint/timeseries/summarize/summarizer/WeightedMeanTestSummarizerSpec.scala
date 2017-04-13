@@ -18,24 +18,43 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
-import com.twosigma.flint.timeseries.Summarizers
+import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesRDD }
 import org.apache.spark.sql.types._
 
 class WeightedMeanTestSummarizerSpec extends SummarizerSuite {
-
   override val defaultResourceDir: String = "/timeseries/summarize/summarizer/weightedmeantestsummarizer"
 
+  private var priceTSRdd: TimeSeriesRDD = _
+  private var forecastTSRdd: TimeSeriesRDD = _
+  private var joinedRdd: TimeSeriesRDD = _
+
+  private lazy val init = {
+    priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    forecastTSRdd = fromCSV("Forecast.csv", Schema("id" -> IntegerType, "forecast" -> DoubleType))
+    joinedRdd = priceTSRdd.leftJoin(forecastTSRdd, key = Seq("id"))
+  }
+
   "WeightedMeanTestSummarizer" should "compute `WeightedMean` correctly" in {
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val forecastTSRdd = fromCSV("Forecast.csv", Schema("id" -> IntegerType, "forecast" -> DoubleType))
-    val result = priceTSRdd.leftJoin(
-      forecastTSRdd, key = Seq("id")
-    ).summarize(Summarizers.weightedMeanTest("price", "forecast")).first
+    init
+    val result = joinedRdd.summarize(Summarizers.weightedMeanTest("price", "forecast")).first
 
     assert(result.getAs[Double]("price_forecast_weightedMean") === 0.11695906432748544)
     assert(result.getAs[Double]("price_forecast_weightedStandardDeviation") === 4.373623725800579)
     assert(result.getAs[Double]("price_forecast_weightedTStat") === 0.0788230123405099)
     assert(result.getAs[Long]("price_forecast_observationCount") == 12L)
+  }
+
+  it should "ignore null values" in {
+    init
+    assertEquals(
+      joinedRdd.summarize(Summarizers.weightedMeanTest("price", "forecast")),
+      insertNullRows(joinedRdd, "price").summarize(Summarizers.weightedMeanTest("price", "forecast"))
+    )
+
+    assertEquals(
+      joinedRdd.summarize(Summarizers.weightedMeanTest("price", "forecast")),
+      insertNullRows(joinedRdd, "price", "forecast").summarize(Summarizers.weightedMeanTest("price", "forecast"))
+    )
   }
 
   it should "pass summarizer property test" in {

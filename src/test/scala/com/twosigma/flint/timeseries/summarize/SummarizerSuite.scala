@@ -16,10 +16,13 @@
 
 package com.twosigma.flint.timeseries.summarize
 
+import com.sun.prism.PixelFormat.DataType
 import com.twosigma.flint.timeseries._
 import org.apache.commons.math3.primes
-import org.apache.spark.sql.{ DFConverter, CatalystTypeConvertersWrapper, Row }
-import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
+import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DFConverter, Row }
+import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, GenericRowWithSchema }
+import org.apache.spark.sql.types._
+import scala.concurrent.duration.NANOSECONDS
 
 sealed trait SummarizerProperty {
 

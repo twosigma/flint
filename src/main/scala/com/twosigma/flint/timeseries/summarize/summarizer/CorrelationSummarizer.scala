@@ -18,27 +18,27 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ CorrelationOutput, CorrelationState, CorrelationSummarizer => CorrelationSum }
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, anyToDouble }
+import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
+import com.twosigma.flint.timeseries.summarize._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
-case class CorrelationSummarizerFactory(columnX: String, columnY: String) extends SummarizerFactory {
+case class CorrelationSummarizerFactory(columnX: String, columnY: String)
+  extends BaseSummarizerFactory(columnX, columnY) {
   override def apply(inputSchema: StructType): CorrelationSummarizer =
-    new CorrelationSummarizer(inputSchema, prefixOpt, columnX, columnY)
-
-  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(columnX, columnY))
+    new CorrelationSummarizer(inputSchema, prefixOpt, requiredColumns)
 }
 
 abstract class AbstractCorrelationSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
-  columnX: String,
-  columnY: String
-) extends Summarizer {
-  private final val columnXIndex = inputSchema.fieldIndex(columnX)
-  private final val columnYIndex = inputSchema.fieldIndex(columnY)
-  private final val xToDouble = anyToDouble(inputSchema(columnXIndex).dataType)
-  private final val yToDouble = anyToDouble(inputSchema(columnYIndex).dataType)
+  override val requiredColumns: ColumnList
+) extends Summarizer with FilterNullInput {
+  protected final val Sequence(Seq(columnX, columnY)) = requiredColumns
+  protected final val columnXIndex = inputSchema.fieldIndex(columnX)
+  protected final val columnYIndex = inputSchema.fieldIndex(columnY)
+  protected final val xExtractor = asDoubleExtractor(inputSchema(columnXIndex).dataType, columnXIndex)
+  protected final val yExtractor = asDoubleExtractor(inputSchema(columnYIndex).dataType, columnYIndex)
   protected val columnPrefix = s"${columnX}_${columnY}"
   override final type T = (Double, Double)
   override final type U = CorrelationState
@@ -54,13 +54,11 @@ abstract class AbstractCorrelationSummarizer(
 class CorrelationSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
-  columnX: String,
-  columnY: String
-) extends AbstractCorrelationSummarizer(inputSchema, prefixOpt, columnX, columnY) {
+  override val requiredColumns: ColumnList
+) extends AbstractCorrelationSummarizer(inputSchema, prefixOpt, requiredColumns) {
   override val schema = Schema.of(
     s"${columnPrefix}_correlation" -> DoubleType,
     s"${columnPrefix}_correlationTStat" -> DoubleType
   )
-
   override def fromV(v: V): InternalRow = InternalRow(v.correlation, v.tStat)
 }

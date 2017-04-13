@@ -20,9 +20,10 @@ import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.FlintSuite
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.types._
-import org.scalactic.{Equality, TolerantNumerics}
-import play.api.libs.json.{JsValue, Json}
+import org.scalactic.{ Equality, TolerantNumerics }
+import play.api.libs.json.{ JsValue, Json }
 
 import scala.collection.mutable
 import scala.io.Source
@@ -168,18 +169,20 @@ trait TimeSeriesSuite extends FlintSuite {
   }
 
   def fromParquet(
-     filepath: String,
-     sorted: Boolean = true
-   ): TimeSeriesRDD = withResource(s"$defaultResourceDir/$filepath") { source =>
+    filepath: String,
+    sorted: Boolean = true
+  ): TimeSeriesRDD = withResource(s"$defaultResourceDir/$filepath") { source =>
     var codec: String = null
     if (filepath.endsWith(".gz")) {
       codec = "gzip"
     }
     TimeSeriesRDD.fromParquet(
       sc,
-      s"file://$source")(
-      isSorted = sorted,
-      timeUnit = TimeUnit.NANOSECONDS).repartition(defaultPartitionParallelism)
+      s"file://$source"
+    )(
+        isSorted = sorted,
+        timeUnit = TimeUnit.NANOSECONDS
+      ).repartition(defaultPartitionParallelism)
   }
 
   /**
@@ -202,7 +205,7 @@ trait TimeSeriesSuite extends FlintSuite {
   }
 
   /**
-   * Taken from https://github.com/apache/spark/blob/f48461ab2bdb91cd00efa5a5ec4b0b2bc361e7a2/sql/core/src/test/scala/org/apache/spark/sql/QueryTest.scala#L299
+   * Taken from ttps://github.com/apache/spark/blob/f48461ab2bdb91cd00efa5a5ec4b0b2bc361e7a2/sql/core/src/test/scala/org/apache/spark/sql/QueryTest.scala#L299
    */
   def prepareRow(row: Row): Row = {
     Row.fromSeq(row.toSeq.map {
@@ -213,5 +216,18 @@ trait TimeSeriesSuite extends FlintSuite {
       case r: Row => prepareRow(r)
       case o => o
     })
+  }
+
+  protected def insertNullRows(rdd: TimeSeriesRDD, cols: String*): TimeSeriesRDD = {
+    val schema = rdd.schema
+    val newRdd = rdd.rdd.flatMap{
+      case row: Row =>
+        val nullRows = cols.map(rdd.schema.fieldIndex).map {
+          case index =>
+            new GenericRowWithSchema(row.toSeq.updated(index, null).toArray, schema)
+        }
+        row +: nullRows
+    }
+    TimeSeriesRDD.fromRDD(newRdd, schema)(true, scala.concurrent.duration.NANOSECONDS)
   }
 }

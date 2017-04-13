@@ -17,7 +17,7 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.annotation.PythonApi
-import com.twosigma.flint.timeseries.summarize.{LeftSubtractableOverlappableSummarizerFactory, OverlappableSummarizerFactory, SummarizerFactory}
+import com.twosigma.flint.timeseries.summarize.{ LeftSubtractableOverlappableSummarizerFactory, OverlappableSummarizerFactory, SummarizerFactory }
 import com.twosigma.flint.timeseries.summarize.summarizer._
 import org.apache.spark.sql.types._
 
@@ -33,6 +33,16 @@ object Summarizers {
    * @return a [[SummarizerFactory]] which could provide a summarizer to count how many rows.
    */
   def count(): SummarizerFactory = CountSummarizerFactory()
+
+  /**
+   * Counts non null values in a column.
+   *
+   * The output schema is:
+   *   - "<column>_count": [[LongType]], the number of non null values.
+   *
+   * @return a [[SummarizerFactory]]
+   */
+  def count(column: String): SummarizerFactory = CountSummarizerFactory(column)
 
   /**
    * Calculates the summation for a given column.

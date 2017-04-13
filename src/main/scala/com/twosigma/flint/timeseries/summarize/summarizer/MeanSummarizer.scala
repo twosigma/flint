@@ -17,20 +17,21 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, SummarizerFactory }
+import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
+import com.twosigma.flint.timeseries.summarize.{ BaseSummarizerFactory, ColumnList, SummarizerFactory }
 import org.apache.spark.sql.types._
 
-case class MeanSummarizerFactory(column: String) extends SummarizerFactory {
+case class MeanSummarizerFactory(column: String)
+  extends BaseSummarizerFactory(column) {
   override def apply(inputSchema: StructType): MeanSummarizer =
-    new MeanSummarizer(inputSchema, prefixOpt, column)
-
-  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(column))
+    new MeanSummarizer(inputSchema, prefixOpt, requiredColumns)
 }
 
 class MeanSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
-  override val column: String
-) extends NthMomentSummarizer(inputSchema, prefixOpt, column, 1) {
+  override val requiredColumns: ColumnList
+) extends NthMomentSummarizer(inputSchema, prefixOpt, requiredColumns, 1) {
+  private val Sequence(Seq(column)) = requiredColumns
   override val schema = Schema.of(s"${column}_mean" -> DoubleType)
 }

@@ -17,7 +17,7 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.{ OverlappableCompositeSummarizer => OOverlappableCompositeSummarizer }
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, OverlappableSummarizer, OverlappableSummarizerFactory }
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, InputAlwaysValid, OverlappableSummarizer, OverlappableSummarizerFactory }
 import com.twosigma.flint.timeseries.window.TimeWindow
 import org.apache.spark.sql.types.StructType
 
@@ -28,24 +28,24 @@ case class OverlappableCompositeSummarizerFactory(
 
   require(factory1.window == factory2.window, s"Window ${factory1.window} isn't equal to ${factory2.window}.")
   override val window: TimeWindow = factory1.window
+  override val requiredColumns = factory1.requiredColumns ++ factory2.requiredColumns
 
   def apply(inputSchema: StructType): OverlappableSummarizer = {
     val summarizer1 = factory1.apply(inputSchema)
     val summarizer2 = factory2.apply(inputSchema)
 
-    new OverlappableCompositeSummarizer(inputSchema, prefixOpt, summarizer1, summarizer2)
+    new OverlappableCompositeSummarizer(inputSchema, prefixOpt, requiredColumns, summarizer1, summarizer2)
   }
-
-  override def requiredColumns(): ColumnList =
-    factory1.requiredColumns() ++ factory2.requiredColumns()
 }
 
 class OverlappableCompositeSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
+  override val requiredColumns: ColumnList,
   override val summarizer1: OverlappableSummarizer,
   override val summarizer2: OverlappableSummarizer
-) extends CompositeSummarizer(inputSchema, prefixOpt, summarizer1, summarizer2) with OverlappableSummarizer {
+) extends CompositeSummarizer(inputSchema, prefixOpt, requiredColumns, summarizer1, summarizer2)
+  with OverlappableSummarizer {
 
-  override val summarizer = new OOverlappableCompositeSummarizer(summarizer1.summarizer, summarizer2.summarizer)
+  override val summarizer = new OOverlappableCompositeSummarizer(summarizer1, summarizer2)
 }

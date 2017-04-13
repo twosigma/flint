@@ -18,23 +18,23 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, LeftSubtractableSummarizer, SummarizerFactory, anyToDouble }
+import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
+import com.twosigma.flint.timeseries.summarize._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
-case class SumSummarizerFactory(sumColumn: String) extends SummarizerFactory {
-  override def apply(inputSchema: StructType): SumSummarizer = SumSummarizer(inputSchema, prefixOpt, sumColumn)
-
-  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(sumColumn))
-
+case class SumSummarizerFactory(sumColumn: String) extends BaseSummarizerFactory(sumColumn) {
+  override def apply(inputSchema: StructType): SumSummarizer = SumSummarizer(inputSchema, prefixOpt, requiredColumns)
 }
 
 case class SumSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
-  sumColumn: String
-) extends LeftSubtractableSummarizer {
+  requiredColumns: ColumnList
+) extends LeftSubtractableSummarizer with FilterNullInput {
+  private val Sequence(Seq(sumColumn)) = requiredColumns
   private val sumColumnIndex = inputSchema.fieldIndex(sumColumn)
+
   override type T = Double
   override type U = Double
   override type V = Double

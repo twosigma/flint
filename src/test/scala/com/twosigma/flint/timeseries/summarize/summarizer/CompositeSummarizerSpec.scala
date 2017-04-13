@@ -16,16 +16,23 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.{ TimeSeriesSuite, Summarizers, CSV, TimeSeriesRDD }
+import com.twosigma.flint.timeseries.{ CSV, Summarizers, TimeSeriesRDD, TimeSeriesSuite }
 import com.twosigma.flint.timeseries.row.Schema
+import com.twosigma.flint.timeseries.summarize.SummarizerSuite
 import org.apache.spark.sql.types.{ DoubleType, IntegerType, StructType }
 
-class CompositeSummarizerSpec extends TimeSeriesSuite {
+class CompositeSummarizerSpec extends SummarizerSuite {
   // Reuse mean summarizer data
   override val defaultResourceDir: String = "/timeseries/summarize/summarizer/meansummarizer"
 
+  var priceTSRdd: TimeSeriesRDD = _
+
+  lazy val init: Unit = {
+    priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+  }
+
   "CompositeSummarizer" should "compute `mean` and `stddev` correctly" in {
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    init
     val result = priceTSRdd.summarize(
       Summarizers.compose(Summarizers.mean("price"), Summarizers.stddev("price"))
     )
@@ -36,14 +43,14 @@ class CompositeSummarizerSpec extends TimeSeriesSuite {
   }
 
   it should "throw exception for conflicting output columns" in {
+    init
     intercept[Exception] {
-      val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
       priceTSRdd.summarize(Summarizers.compose(Summarizers.mean("price"), Summarizers.mean("price")))
     }
   }
 
   it should "handle conflicting output columns using prefix" in {
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    init
     val result = priceTSRdd.summarize(
       Summarizers.compose(Summarizers.mean("price"), Summarizers.mean("price").prefix("prefix"))
     )
@@ -52,5 +59,22 @@ class CompositeSummarizerSpec extends TimeSeriesSuite {
 
     assert(row.getAs[Double]("price_mean") === 3.25)
     assert(row.getAs[Double]("prefix_price_mean") === 3.25)
+  }
+
+  it should "handle null values" in {
+    init
+    val inputWithNull = insertNullRows(priceTSRdd, "price")
+    val row = inputWithNull.summarize(
+      Summarizers.compose(
+        Summarizers.count(),
+        Summarizers.count("id"),
+        Summarizers.count("price")
+      )
+    ).first()
+
+    val count = priceTSRdd.count()
+    assert(row.getAs[Long]("count") == 2 * count)
+    assert(row.getAs[Long]("id_count") == 2 * count)
+    assert(row.getAs[Long]("price_count") == count)
   }
 }

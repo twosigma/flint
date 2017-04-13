@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.Summarizers
+import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesRDD }
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
 import org.apache.spark.sql.Row
@@ -24,9 +24,14 @@ import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 
 class PredicateSummarizerSpec extends SummarizerSuite {
   override val defaultResourceDir: String = "/timeseries/summarize/summarizer/meansummarizer"
+  var priceTSRdd: TimeSeriesRDD = _
+
+  private lazy val init = {
+    priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+  }
 
   "PredicateSummarizer" should "return the same results as filtering TSRDD first" in {
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    init
     val summarizer = Summarizers.compose(Summarizers.mean("price"), Summarizers.stddev("price"))
 
     val predicate: Int => Boolean = id => id == 3
@@ -39,6 +44,11 @@ class PredicateSummarizerSpec extends SummarizerSuite {
 
     assert(resultWithPredicate.getAs[Double]("price_mean") === filteredResults.getAs[Double]("price_mean"))
     assert(resultWithPredicate.getAs[Double]("price_stddev") === filteredResults.getAs[Double]("price_stddev"))
+
+    assertEquals(
+      priceTSRdd.summarize(summarizer.where(predicate)("id")),
+      insertNullRows(priceTSRdd, "price").summarize(summarizer.where(predicate)("id"))
+    )
   }
 
   it should "pass summarizer property test" in {

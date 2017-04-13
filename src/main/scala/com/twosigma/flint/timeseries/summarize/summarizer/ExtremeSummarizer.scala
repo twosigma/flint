@@ -18,12 +18,13 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.ExtremesSummarizer
 import com.twosigma.flint.timeseries.summarize.summarizer.ExtremeSummarizerType.ExtremeType
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, toClassTag, toOrdering }
+import com.twosigma.flint.timeseries.summarize._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
 
-import scala.collection.mutable.PriorityQueue
+import scala.collection.mutable
 import com.twosigma.flint.timeseries.row.Schema
+import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
 
 import scala.reflect.ClassTag
 
@@ -33,7 +34,8 @@ object ExtremeSummarizerType extends Enumeration {
   val Min = Value("min")
 }
 
-case class ExtremeSummarizerFactory(val column: String, val extremeType: ExtremeType) extends SummarizerFactory {
+case class ExtremeSummarizerFactory(column: String, extremeType: ExtremeType)
+  extends BaseSummarizerFactory(column) {
   override def apply(inputSchema: StructType): Summarizer = {
     val dataType = inputSchema(column).dataType
     val ctag = toClassTag(dataType)
@@ -41,28 +43,27 @@ case class ExtremeSummarizerFactory(val column: String, val extremeType: Extreme
     if (extremeType == ExtremeSummarizerType.Min) {
       order = order.reverse
     }
-    ExtremeSummarizer(inputSchema, prefixOpt, column, ctag, order, extremeType.toString())
+    ExtremeSummarizer(inputSchema, prefixOpt, requiredColumns, ctag, order, extremeType.toString)
   }
-
-  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(column))
 }
 
 case class ExtremeSummarizer[E](
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
-  val column: String,
-  val tag: ClassTag[E],
-  val order: Ordering[_],
-  val outputColumnName: String
-) extends Summarizer {
+  override val requiredColumns: ColumnList,
+  tag: ClassTag[E],
+  order: Ordering[_],
+  outputColumnName: String
+) extends Summarizer with FilterNullInput {
+  private val Sequence(Seq(column)) = requiredColumns
   private val columnIndex = inputSchema.fieldIndex(column)
 
   override type T = E
-  override type U = PriorityQueue[E]
+  override type U = mutable.PriorityQueue[E]
   override type V = Array[E]
 
-  override val summarizer = ExtremesSummarizer[E](1, tag, order.asInstanceOf[Ordering[E]])
-  override val schema = Schema.of(s"${column}_${outputColumnName}" -> inputSchema(column).dataType)
+  override val summarizer: ExtremesSummarizer[E] = ExtremesSummarizer[E](1, tag, order.asInstanceOf[Ordering[E]])
+  override val schema: StructType = Schema.of(s"${column}_$outputColumnName" -> inputSchema(column).dataType)
 
   override def toT(r: InternalRow): T = r.get(columnIndex, inputSchema(columnIndex).dataType).asInstanceOf[E]
 

@@ -18,27 +18,34 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, LeftSubtractableSummarizer, SummarizerFactory }
+import com.twosigma.flint.timeseries.summarize._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
+import com.twosigma.flint.timeseries.TimeSeriesRDD.timeColumnName
+import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
 
-case class CountSummarizerFactory() extends SummarizerFactory {
-  override def apply(inputSchema: StructType): CountSummarizer = CountSummarizer(inputSchema, prefixOpt)
-
-  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq())
+case class CountSummarizerFactory(col: String = timeColumnName) extends BaseSummarizerFactory(col) {
+  override def apply(inputSchema: StructType): CountSummarizer =
+    CountSummarizer(inputSchema, prefixOpt, requiredColumns)
 }
 
 case class CountSummarizer(
   override val inputSchema: StructType,
-  override val prefixOpt: Option[String]
-) extends LeftSubtractableSummarizer {
+  override val prefixOpt: Option[String],
+  override val requiredColumns: ColumnList
+) extends LeftSubtractableSummarizer with FilterNullInput {
   override type T = Any
   override type U = Long
   override type V = Long
   override val summarizer = subtractable.CountSummarizer()
-  override val schema = Schema.of("count" -> LongType)
+  val Sequence(Seq(col)) = requiredColumns
+
+  override val schema = if (col == timeColumnName) {
+    Schema.of("count" -> LongType)
+  } else {
+    Schema.of(s"${col}_count" -> LongType)
+  }
 
   override def toT(r: InternalRow): T = r
-
   override def fromV(v: V): InternalRow = InternalRow(v)
 }

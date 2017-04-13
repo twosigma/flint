@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory }
+import com.twosigma.flint.timeseries.summarize.{ ColumnList, FilterNullInput, Summarizer, SummarizerFactory }
 import org.apache.spark.sql.CatalystTypeConvertersWrapper
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ DataType, StructType }
@@ -26,6 +26,8 @@ class PredicateSummarizerFactory(
   f: AnyRef,
   inputColumns: Seq[(String, DataType)]
 ) extends SummarizerFactory {
+
+  override val requiredColumns: ColumnList = factory.requiredColumns ++ ColumnList.Sequence(inputColumns.map(_._1))
 
   def apply(inputSchema: StructType): Summarizer = {
     inputColumns.foreach {
@@ -39,18 +41,18 @@ class PredicateSummarizerFactory(
 
     val filterFunction = UDFConverter.udfToFilter(f, inputSchema, inputColumns.map(_._1))
     val innerSummarizer = factory(inputSchema)
-    new PredicateSummarizer(inputSchema, prefixOpt, innerSummarizer, filterFunction)
+    new PredicateSummarizer(inputSchema, prefixOpt, requiredColumns, innerSummarizer, filterFunction)
   }
 
-  override def requiredColumns(): ColumnList = factory.requiredColumns() ++ ColumnList.Sequence(inputColumns.map(_._1))
 }
 
 class PredicateSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
+  override val requiredColumns: ColumnList,
   val innnerSummarizer: Summarizer,
   val predicate: InternalRow => Boolean
-) extends Summarizer {
+) extends Summarizer with FilterNullInput {
 
   override val schema: StructType = innnerSummarizer.schema
 
@@ -60,13 +62,7 @@ class PredicateSummarizer(
   override type U = innnerSummarizer.U
   override type V = innnerSummarizer.V
 
-  override def add(u: Any, r: InternalRow): Any = {
-    if (predicate(r)) {
-      summarizer.add(toU(u), toT(r))
-    } else {
-      u
-    }
-  }
+  override def isValid(r: InternalRow): Boolean = super.isValid(r) && predicate(r)
 
   override def toT(r: InternalRow): T = innnerSummarizer.toT(r)
 

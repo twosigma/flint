@@ -68,6 +68,14 @@ class NthMomentSummarizerSpec extends SummarizerSuite {
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_4thCentralMoment") === 21.227285879629633)
   }
 
+  it should "ignore null values" in {
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    assertEquals(
+      priceTSRdd.summarize(Summarizers.nthMoment("price", 0), Seq("id")),
+      insertNullRows(priceTSRdd, "price").summarize(Summarizers.nthMoment("price", 0), Seq("id"))
+    )
+  }
+
   it should "pass summarizer property test" in {
     summarizerPropertyTest(AllProperties)(Summarizers.nthCentralMoment("x1", 1))
     summarizerPropertyTest(AllProperties)(Summarizers.nthCentralMoment("x2", 2))

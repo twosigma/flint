@@ -412,13 +412,13 @@ object TimeSeriesRDD {
     case ColumnList.All => input
     case ColumnList.Sequence(columnSeq) =>
       val columns = input.schema.fieldNames.toSet
-      val neededColumns = Seq(TimeSeriesRDD.timeColumnName) ++ columnSeq ++ keys
+      val neededColumns = (Seq(TimeSeriesRDD.timeColumnName) ++ columnSeq ++ keys).distinct
       neededColumns.foreach(column => require(columns.contains(column), s"Column $column doesn't exist."))
 
       if (neededColumns.toSet.size == input.schema.size) {
         input
       } else {
-        input.keepColumns(neededColumns.distinct: _*)
+        input.keepColumns(neededColumns: _*)
       }
   }
 }
@@ -1356,7 +1356,7 @@ class TimeSeriesRDDImpl private[timeseries] (
   }
 
   def summarizeCycles(summarizer: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {
-    val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns(), key)
+    val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns, key)
     val sum = summarizer(pruned.schema)
     val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)))
     val numColumns = newSchema.length
@@ -1375,7 +1375,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     key: Seq[String] = Seq.empty,
     beginInclusive: Boolean = true
   ): TimeSeriesRDD = {
-    val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns(), key)
+    val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns, key)
     val sum = summarizer(pruned.schema)
     val clockLocal = clock.toDF.map{ row => row.getAs[Long]("time") }.collect()
     val intervalized = pruned.orderedRdd.intervalize(clockLocal, beginInclusive).mapValues {
@@ -1431,7 +1431,7 @@ class TimeSeriesRDDImpl private[timeseries] (
   private[flint] def summarizeInternal(
     summarizerFactory: SummarizerFactory, key: Seq[String] = Seq.empty, depth: Int
   ): TimeSeriesRDD = {
-    val pruned = TimeSeriesRDD.pruneColumns(this, summarizerFactory.requiredColumns(), key)
+    val pruned = TimeSeriesRDD.pruneColumns(this, summarizerFactory.requiredColumns, key)
     val summarizer = summarizerFactory(pruned.schema)
     val keyGetter = pruned.safeGetAsAny(key)
     val summarized = summarizerFactory match {

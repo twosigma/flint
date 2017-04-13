@@ -45,6 +45,14 @@ class ZScoreSummarizerSpec extends SummarizerSuite {
     assert(results.collect().deep == expectedResults.deep)
   }
 
+  it should "ignore null values" in {
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    assertEquals(
+      priceTSRdd.summarize(Summarizers.zScore("price", true)),
+      insertNullRows(priceTSRdd, "price").summarize(Summarizers.zScore("price", true))
+    )
+  }
+
   it should "pass summarizer property test" in {
     summarizerPropertyTest(AllProperties)(Summarizers.zScore("x1", true))
     summarizerPropertyTest(AllProperties)(Summarizers.zScore("x2", false))

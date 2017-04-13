@@ -242,6 +242,20 @@ class OLSRegressionSummarizerSpec extends SummarizerSuite {
     assert(tStat2(2) == tStat1(1))
   }
 
+  it should "ignore null values" in {
+    val tsRdd = fromCSV("data.csv", dateFormat = dateFormat)
+
+    assertEquals(
+      tsRdd.summarize(Summarizers.OLSRegression("y", Seq("x1", "x2"), "w")),
+      insertNullRows(tsRdd, "x1").summarize(Summarizers.OLSRegression("y", Seq("x1", "x2"), "w"))
+    )
+
+    assertEquals(
+      tsRdd.summarize(Summarizers.OLSRegression("y", Seq("x1", "x2"), "w")),
+      insertNullRows(tsRdd, "x1", "w").summarize(Summarizers.OLSRegression("y", Seq("x1", "x2"), "w"))
+    )
+  }
+
   it should "pass summarizer property test" in {
     summarizerPropertyTest(AllProperties)(
       Summarizers.OLSRegression("x0", Seq("x1", "x2"), "x3", shouldIntercept = false)

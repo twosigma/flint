@@ -31,6 +31,14 @@ class MeanSummarizerSpec extends SummarizerSuite {
     assert(result.getAs[Double]("price_mean") === 3.25)
   }
 
+  it should "ignore null values" in {
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    assertEquals(
+      priceTSRdd.summarize(Summarizers.mean("price")),
+      insertNullRows(priceTSRdd, "price").summarize(Summarizers.mean("price"))
+    )
+  }
+
   it should "pass summarizer property test" in {
     summarizerPropertyTest(AllProperties)(Summarizers.mean("x1"))
     summarizerPropertyTest(AllProperties)(Summarizers.mean("x2"))

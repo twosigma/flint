@@ -16,10 +16,11 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, anyToDouble }
+import com.twosigma.flint.timeseries.summarize._
 import org.apache.spark.sql.types._
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ ExponentialSmoothingOutput, ExponentialSmoothingState, SmoothingRow, ExponentialSmoothingSummarizer => ESSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
+import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 
@@ -37,31 +38,27 @@ case class ExponentialSmoothingSummarizerFactory(
   decayPerPeriod: Double,
   primingPeriods: Double,
   timestampsToPeriods: (Long, Long) => Double
-) extends SummarizerFactory {
-
+) extends BaseSummarizerFactory(xColumn, timeColumn) {
   override def apply(inputSchema: StructType): ExponentialSmoothingSummarizer =
     ExponentialSmoothingSummarizer(
       inputSchema,
       prefixOpt,
-      xColumn,
-      timeColumn,
+      requiredColumns,
       decayPerPeriod,
       primingPeriods,
       timestampsToPeriods
     )
-
-  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(xColumn, timeColumn))
 }
 
 case class ExponentialSmoothingSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
-  xColumn: String,
-  timeColumn: String,
+  override val requiredColumns: ColumnList,
   decayPerPeriod: Double,
   primingPeriods: Double,
   timestampsToPeriods: (Long, Long) => Double
-) extends Summarizer {
+) extends Summarizer with FilterNullInput {
+  private val Sequence(Seq(xColumn, timeColumn)) = requiredColumns
   private val xColumnId = inputSchema.fieldIndex(xColumn)
   private val timeColumnId = inputSchema.fieldIndex(timeColumn)
 

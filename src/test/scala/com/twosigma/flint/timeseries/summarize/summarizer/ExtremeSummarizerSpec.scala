@@ -98,4 +98,14 @@ class ExtremeSummarizerSpec extends SummarizerSuite {
     summarizerPropertyTest(AllProperties)(Summarizers.max("x1"))
     summarizerPropertyTest(AllProperties)(Summarizers.min("x2"))
   }
+
+  it should "ignore null values" in {
+    val input = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val inputWithNull = insertNullRows(input, "price")
+
+    assertEquals(
+      input.summarize(Summarizers.min("price")),
+      inputWithNull.summarize(Summarizers.min("price"))
+    )
+  }
 }

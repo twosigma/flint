@@ -33,7 +33,7 @@ class ColumnListSpec extends FlatSpec {
     val rightUnion = ColumnList.All ++ list2
     assert(rightUnion == ColumnList.All)
 
-    val union = list1 ++ list2
-    assert(union == ColumnList.Sequence(Seq("a", "b", "c", "d")))
+    val concat = list1 ++ list2
+    assert(concat == ColumnList.Sequence(Seq("a", "b", "c", "a", "d")))
   }
 }

@@ -22,6 +22,7 @@ import com.twosigma.flint.timeseries.Windows
 import com.twosigma.flint.timeseries.row.Schema
 import org.apache.spark.sql.types._
 import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.{ LagSumSummarizerState, LagSumSummarizer => LSSummarizer }
+import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
 import org.apache.spark.sql.catalyst.InternalRow
 
 /**
@@ -42,24 +43,25 @@ private[flint] case class LagSumSummarizerFactory(column: String, maxLookback: S
   extends OverlappableSummarizerFactory {
   override val window: TimeWindow = Windows.pastAbsoluteTime(maxLookback)
 
+  override val requiredColumns: ColumnList = {
+    ColumnList.Sequence(Seq(column))
+  }
   override def apply(inputSchema: StructType): LagSumSummarizer =
     LagSumSummarizer(
       inputSchema,
       prefixOpt,
-      column
+      requiredColumns
     )
 
-  override def requiredColumns(): ColumnList = {
-    ColumnList.Sequence(Seq(column))
-  }
 }
 
 private[flint] case class LagSumSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
-  column: String
-) extends OverlappableSummarizer {
+  requiredColumns: ColumnList
+) extends OverlappableSummarizer with FilterNullInput {
 
+  private val Sequence(Seq(column)) = requiredColumns
   private val columnId = inputSchema.fieldIndex(column)
 
   private final val columnExtractor = asDoubleExtractor(inputSchema(columnId).dataType, columnId)

@@ -19,14 +19,14 @@ package com.twosigma.flint.rdd.function.summarize
 import java.util
 
 import com.twosigma.flint.rdd._
-import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{LeftSubtractableOverlappableSummarizer, LeftSubtractableSummarizer}
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ LeftSubtractableOverlappableSummarizer, LeftSubtractableSummarizer }
 import org.apache.spark.OneToOneDependency
 
 import scala.reflect.ClassTag
-import java.util.{LinkedList => JList, HashMap => JHMap}
+import java.util.{ LinkedList => JList, HashMap => JHMap }
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
-import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.{DriscollKraayState, OverlappableSummarizer}
+import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.{ DriscollKraayState, OverlappableSummarizer }
 import grizzled.slf4j.Logger
 
 object SummarizeWindows {
@@ -61,8 +61,10 @@ object SummarizeWindows {
 
     val composedWindow: K => (K, K) = { k =>
       val lagWindowRange = lagWindowFn(windowFn(k).begin)
-      require(ord.equiv(lagWindowRange.end.getOrElse(lagWindowRange.begin), windowFn(k).begin),
-        "Lag window and data window must be contiguous")
+      require(
+        ord.equiv(lagWindowRange.end.getOrElse(lagWindowRange.begin), windowFn(k).begin),
+        "Lag window and data window must be contiguous"
+      )
       (lagWindowFn(windowFn(k).begin).begin, windowFn(k).end.get)
     }
     if (otherRdd == null) {
@@ -82,8 +84,10 @@ object SummarizeWindows {
   private[rdd] def getCloseOpenWindowRange[K](windowFn: K => (K, K))(k: K)(implicit ord: Ordering[K]): Range[K] = {
     val (b, e) = windowFn(k)
     val range = Range.closeOpen(b, Some(e))
-    require(range.contains(k) || ord.equiv(k, e),
-      s"The window function produces a window [$b, $e) which doesn't include key $k and $k is not equal to $e.")
+    require(
+      range.contains(k) || ord.equiv(k, e),
+      s"The window function produces a window [$b, $e) which doesn't include key $k and $k is not equal to $e."
+    )
     range
   }
 
@@ -269,7 +273,7 @@ private[rdd] class OverlappableWindowSummarizerIterator[K, SK, V, U, V2](
     // initLagWindowRange must be empty (i.e. [k, k)) or contiguous with the initWindowRange
     require(
       initLagWindowRange.endEquals(Option(initLagWindowRange.begin))
-      || initLagWindowRange.endEquals(Some(initWindowRange.begin))
+        || initLagWindowRange.endEquals(Some(initWindowRange.begin))
     )
     logger.debug(s"Initial window range in rampUp: $initWindowRange")
     logger.debug(s"Initial lag window range in rampUp: $initLagWindowRange")
@@ -344,17 +348,20 @@ private[rdd] class OverlappableWindowSummarizerIterator[K, SK, V, U, V2](
     val currentState: U = summarizer match {
       case lss: LeftSubtractableOverlappableSummarizer[V, U, V2] =>
         // Subtract rows that were dropped from the left side of the lag window
-        val droppedLaggedState = droppedLagWindow.foldLeft(priorState) { case (u, (k, v)) =>
-          lss.subtractOverlapped(u, (v, true))
+        val droppedLaggedState = droppedLagWindow.foldLeft(priorState) {
+          case (u, (k, v)) =>
+            lss.subtractOverlapped(u, (v, true))
         }
         // Subtract rows that have passed from the left side of the window. Since these rows were added
         // as non-overlapped, we set the overlap flag to flase
-        (freshlyLaggedWindow ++ droppedNotLaggedWindow).foldLeft(droppedLaggedState) { case (u, (k, v)) =>
-          lss.subtractOverlapped(u, (v, false))
+        (freshlyLaggedWindow ++ droppedNotLaggedWindow).foldLeft(droppedLaggedState) {
+          case (u, (k, v)) =>
+            lss.subtractOverlapped(u, (v, false))
         }
       case os: OverlappableSummarizer[V, U, V2] =>
-        val withLagged = fullLagWindow.foldLeft(summarizer.zero()) { case (u, (k, v)) =>
-          os.addOverlapped(u, (v, true))
+        val withLagged = fullLagWindow.foldLeft(summarizer.zero()) {
+          case (u, (k, v)) =>
+            os.addOverlapped(u, (v, true))
         }
         currentWindow.foldLeft(withLagged) { case (u, (k, v)) => os.addOverlapped(u, (v, false)) }
     }

@@ -18,23 +18,23 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ WeightedMeanTestOutput, WeightedMeanTestState, WeightedMeanTestSummarizer => WMSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory, anyToDouble }
+import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
+import com.twosigma.flint.timeseries.summarize._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
-case class WeightedMeanTestSummarizerFactory(valueColumn: String, weightColumn: String) extends SummarizerFactory {
+case class WeightedMeanTestSummarizerFactory(valueColumn: String, weightColumn: String)
+  extends BaseSummarizerFactory(valueColumn, weightColumn) {
   override def apply(inputSchema: StructType): WeightedMeanTestSummarizer =
-    WeightedMeanTestSummarizer(inputSchema, prefixOpt, valueColumn, weightColumn)
-
-  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(valueColumn, weightColumn))
+    WeightedMeanTestSummarizer(inputSchema, prefixOpt, requiredColumns)
 }
 
 case class WeightedMeanTestSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
-  valueColumn: String,
-  weightColumn: String
-) extends Summarizer {
+  requiredColumns: ColumnList
+) extends Summarizer with FilterNullInput {
+  val Sequence(Seq(valueColumn, weightColumn)) = requiredColumns
   private val valueColumnIndex = inputSchema.fieldIndex(valueColumn)
   private val weightColumnIndex = inputSchema.fieldIndex(weightColumn)
   private val valueToDouble = anyToDouble(inputSchema(valueColumnIndex).dataType)

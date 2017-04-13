@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries
 
 import java.util.concurrent.TimeUnit
 
-import com.twosigma.flint.timeseries.PartitionStrategy.{ExtendEnd, MultiTimestampUnnormailzed, OneTimestampTightBound}
+import com.twosigma.flint.timeseries.PartitionStrategy.{ ExtendEnd, MultiTimestampUnnormailzed, OneTimestampTightBound }
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.summarizer.LagSumSummarizerFactory
 import com.twosigma.flint.timeseries.window.ShiftTimeWindow
@@ -147,8 +147,10 @@ class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData w
     )
 
     def test(rdd: TimeSeriesRDD): Unit = {
-      val summarizedTSRdd = rdd.summarizeWindows(Windows.pastAbsoluteTime("3ns"),
-        LagSumSummarizerFactory("value", "3ns"))
+      val summarizedTSRdd = rdd.summarizeWindows(
+        Windows.pastAbsoluteTime("3ns"),
+        LagSumSummarizerFactory("value", "3ns")
+      )
       assertEquals(summarizedTSRdd, resultsTSRdd)
     }
 

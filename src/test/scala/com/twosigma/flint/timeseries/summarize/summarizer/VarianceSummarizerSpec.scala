@@ -38,6 +38,14 @@ class VarianceSummarizerSpec extends SummarizerSuite {
     assert(result.getAs[Double]("price_variance") === 3.250000000)
   }
 
+  it should "ignore null values" in {
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    assertEquals(
+      priceTSRdd.summarize(Summarizers.variance("price")),
+      insertNullRows(priceTSRdd, "price").summarize(Summarizers.variance("price"))
+    )
+  }
+
   it should "pass summarizer property test" in {
     summarizerPropertyTest(AllProperties)(Summarizers.variance("x1"))
   }

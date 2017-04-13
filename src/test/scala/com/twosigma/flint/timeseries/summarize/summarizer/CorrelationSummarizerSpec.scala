@@ -18,8 +18,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
-import com.twosigma.flint.timeseries.Summarizers
-
+import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesRDD }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
@@ -27,20 +26,27 @@ class CorrelationSummarizerSpec extends SummarizerSuite {
 
   override val defaultResourceDir: String = "/timeseries/summarize/summarizer/correlationsummarizer"
 
-  "CorrelationSummarizer" should "compute correlation correctly" in {
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val forecastTSRdd = fromCSV("Forecast.csv", Schema("id" -> IntegerType, "forecast" -> DoubleType))
+  private var priceTSRdd: TimeSeriesRDD = null
+  private var forecastTSRdd: TimeSeriesRDD = null
+  private var input: TimeSeriesRDD = null
 
-    val input = priceTSRdd.leftJoin(forecastTSRdd, key = Seq("id")).addColumns(
+  private lazy val init: Unit = {
+    priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    forecastTSRdd = fromCSV("Forecast.csv", Schema("id" -> IntegerType, "forecast" -> DoubleType))
+    input = priceTSRdd.leftJoin(forecastTSRdd, key = Seq("id")).addColumns(
       "price2" -> DoubleType -> { r: Row => r.getAs[Double]("price") },
       "price3" -> DoubleType -> { r: Row => -r.getAs[Double]("price") },
       "price4" -> DoubleType -> { r: Row => r.getAs[Double]("price") * 2 },
       "price5" -> DoubleType -> { r: Row => 0d }
     )
+  }
+
+  "CorrelationSummarizer" should "compute correlation correctly" in {
+    init
 
     var results = input.summarize(Summarizers.correlation("price", "price2"), Seq("id")).collect()
-    assert(results(0).getAs[Double]("price_price2_correlation") === 1.0)
-    assert(results(1).getAs[Double]("price_price2_correlation") === 1.0)
+    assert(results(0).getAs[Double](s"price_price2_correlation") === 1.0)
+    assert(results(1).getAs[Double](s"price_price2_correlation") === 1.0)
 
     results = input.summarize(Summarizers.correlation("price", "price3"), Seq("id")).collect()
     assert(results(0).getAs[Double]("price_price3_correlation") === -1.0)
@@ -92,9 +98,23 @@ class CorrelationSummarizerSpec extends SummarizerSuite {
     }
   }
 
+  it should "ignore null values" in {
+    init
+    val inputWithNull = insertNullRows(input, "price", "forecast")
+
+    assertEquals(
+      inputWithNull.summarize(Summarizers.correlation("price", "forecast")),
+      input.summarize(Summarizers.correlation("price", "forecast"))
+    )
+
+    assertEquals(
+      inputWithNull.summarize(Summarizers.correlation("price", "forecast"), Seq("id")),
+      input.summarize(Summarizers.correlation("price", "forecast"), Seq("id"))
+    )
+  }
+
   it should "pass summarizer property test" in {
     summarizerPropertyTest(AllProperties)(Summarizers.correlation("x1", "x2"))
     summarizerPropertyTest(AllProperties)(Summarizers.correlation("x0", "x3"))
   }
-
 }

@@ -38,6 +38,14 @@ class StandardDeviationSummarizerSpec extends SummarizerSuite {
     assert(result.getAs[Double]("price_stddev") === 1.802775638)
   }
 
+  it should "ignore null values" in {
+    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    assertEquals(
+      priceTSRdd.summarize(Summarizers.stddev("price")),
+      insertNullRows(priceTSRdd, "price").summarize(Summarizers.stddev("price"))
+    )
+  }
+
   it should "pass summarizer property test" in {
     summarizerPropertyTest(AllProperties)(Summarizers.stddev("x1"))
   }

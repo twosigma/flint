@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
-import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesSuite }
+import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesRDD, TimeSeriesSuite }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 
@@ -27,16 +27,23 @@ class CovarianceSummarizerSpec extends SummarizerSuite {
   // It is by intention to reuse the files from correlation summarizer
   override val defaultResourceDir: String = "/timeseries/summarize/summarizer/correlationsummarizer"
 
-  "CovarianceSummarizer" should "`computeCovariance` correctly" in {
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val forecastTSRdd = fromCSV("Forecast.csv", Schema("id" -> IntegerType, "forecast" -> DoubleType))
-    val input = priceTSRdd.leftJoin(forecastTSRdd, key = Seq("id")).addColumns(
+  private var priceTSRdd: TimeSeriesRDD = null
+  private var forecastTSRdd: TimeSeriesRDD = null
+  private var input: TimeSeriesRDD = null
+
+  private lazy val init: Unit = {
+    priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    forecastTSRdd = fromCSV("Forecast.csv", Schema("id" -> IntegerType, "forecast" -> DoubleType))
+    input = priceTSRdd.leftJoin(forecastTSRdd, key = Seq("id")).addColumns(
       "price2" -> DoubleType -> { r: Row => r.getAs[Double]("price") },
       "price3" -> DoubleType -> { r: Row => -r.getAs[Double]("price") },
       "price4" -> DoubleType -> { r: Row => r.getAs[Double]("price") * 2 },
       "price5" -> DoubleType -> { r: Row => 0d }
     )
+  }
 
+  "CovarianceSummarizer" should "`computeCovariance` correctly" in {
+    init
     var results = input.summarize(Summarizers.covariance("price", "price2"), Seq("id")).collect()
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_price2_covariance") === 3.368055556)
     assert(results.find(_.getAs[Int]("id") == 3).head.getAs[Double]("price_price2_covariance") === 2.534722222)
@@ -56,6 +63,21 @@ class CovarianceSummarizerSpec extends SummarizerSuite {
     results = input.summarize(Summarizers.covariance("price", "forecast"), Seq("id")).collect()
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_forecast_covariance") === -0.190277778)
     assert(results.find(_.getAs[Int]("id") == 3).head.getAs[Double]("price_forecast_covariance") === -3.783333333)
+  }
+
+  it should "ignore null values" in {
+    init
+    val inputWithNull = insertNullRows(input, "price", "forecast")
+
+    assertEquals(
+      inputWithNull.summarize(Summarizers.covariance("price", "forecast")),
+      input.summarize(Summarizers.covariance("price", "forecast"))
+    )
+
+    assertEquals(
+      inputWithNull.summarize(Summarizers.covariance("price", "forecast"), Seq("id")),
+      input.summarize(Summarizers.covariance("price", "forecast"), Seq("id"))
+    )
   }
 
   it should "pass summarizer property test" in {

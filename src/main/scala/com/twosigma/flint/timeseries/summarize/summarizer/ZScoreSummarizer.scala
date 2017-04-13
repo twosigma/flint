@@ -18,23 +18,24 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ ZScoreState, ZScoreSummarizer => ZSSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, Summarizer, SummarizerFactory }
+import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
+import com.twosigma.flint.timeseries.summarize.{ BaseSummarizerFactory, ColumnList, FilterNullInput, Summarizer }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
-case class ZScoreSummarizerFactory(column: String, excludeCurrentObservation: Boolean) extends SummarizerFactory {
+case class ZScoreSummarizerFactory(column: String, excludeCurrentObservation: Boolean)
+  extends BaseSummarizerFactory(column) {
   override def apply(inputSchema: StructType): ZScoreSummarizer =
-    ZScoreSummarizer(inputSchema, prefixOpt, column, excludeCurrentObservation)
-
-  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(column))
+    ZScoreSummarizer(inputSchema, prefixOpt, requiredColumns: ColumnList, excludeCurrentObservation)
 }
 
 case class ZScoreSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
-  column: String,
+  override val requiredColumns: ColumnList,
   excludeCurrentObservation: Boolean
-) extends Summarizer {
+) extends Summarizer with FilterNullInput {
+  private val Sequence(Seq(column)) = requiredColumns
   private val columnIndex = inputSchema.fieldIndex(column)
 
   override type T = Double

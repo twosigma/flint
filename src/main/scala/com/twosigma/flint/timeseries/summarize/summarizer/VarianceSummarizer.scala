@@ -17,23 +17,25 @@
 package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.{ ColumnList, SummarizerFactory }
+import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
+import com.twosigma.flint.timeseries.summarize.{ BaseSummarizerFactory, ColumnList }
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types.{ DoubleType, StructType }
 
-case class VarianceSummarizerFactory(column: String, applyBesselCorrection: Boolean = true) extends SummarizerFactory {
+case class VarianceSummarizerFactory(column: String, applyBesselCorrection: Boolean = true)
+  extends BaseSummarizerFactory(column) {
   override def apply(inputSchema: StructType): VarianceSummarizer =
-    new VarianceSummarizer(inputSchema, prefixOpt, column, applyBesselCorrection)
+    new VarianceSummarizer(inputSchema, prefixOpt, requiredColumns, applyBesselCorrection)
 
-  override def requiredColumns(): ColumnList = ColumnList.Sequence(Seq(column))
 }
 
 class VarianceSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
-  override val column: String,
+  override val requiredColumns: ColumnList,
   val applyBesselCorrection: Boolean
-) extends NthCentralMomentSummarizer(inputSchema, prefixOpt, column, 2) {
+) extends NthCentralMomentSummarizer(inputSchema, prefixOpt, requiredColumns, 2) {
+  private val Sequence(Seq(column)) = requiredColumns
   override val schema = Schema.of(s"${column}_variance" -> DoubleType)
   override def fromV(v: V): GenericInternalRow = {
     var variance = v.nthCentralMoment(2)

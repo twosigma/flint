@@ -374,6 +374,11 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
 
     val result2 = volTSRdd.addSummaryColumns(Summarizers.sum("volume"), Seq("id"))
     assert(result2.collect().deep == expectedData2.map(_._2).deep)
+
+    val result3 = insertNullRows(volTSRdd, "volume")
+      .addSummaryColumns(Summarizers.sum("volume"), Seq("id")).keepRows{ row: Row => row.getAs[Any]("volume") != null }
+
+    assertEquals(result2, result3)
   }
 
   it should "`addWindows` correctly" in {

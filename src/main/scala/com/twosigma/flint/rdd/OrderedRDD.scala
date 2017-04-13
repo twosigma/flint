@@ -351,12 +351,12 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
   ): OrderedRDD[K, (Option[(K, V)], Option[(K, V2)])] = SymmetricJoin(self, that, toleranceFn, leftSk, rightSk)
 
   /**
-    * For each row of an [[OrderedRDD]], apply a [[Summarizer]] to all rows of its window.
-    *
-    * @param window     A function defines the window for a given key.
-    * @param summarizer A [[Summarizer]] expects to apply.
-    * @return a [[OrderedRDD]] with windowing summaries.
-    */
+   * For each row of an [[OrderedRDD]], apply a [[Summarizer]] to all rows of its window.
+   *
+   * @param window     A function defines the window for a given key.
+   * @param summarizer A [[Summarizer]] expects to apply.
+   * @return a [[OrderedRDD]] with windowing summaries.
+   */
   def summarizeWindows[SK, V1, U, V2: ClassTag](
      window: K => (K, K),
      summarizer: Summarizer[V, U, V2],

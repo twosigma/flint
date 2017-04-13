@@ -16,18 +16,23 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.timeseries.Summarizers
-import com.twosigma.flint.timeseries.Clocks
+import com.twosigma.flint.timeseries.{ Clocks, Summarizers, TimeSeriesRDD }
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
 import org.apache.commons.math3.stat.descriptive.rank.Percentile
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.types.LongType
 
 class QuantileSummarizerSpec extends SummarizerSuite {
-
-  "QuantileSummarizer" should "compute `quantile` correctly" in {
-    val clockTSRdd = Clocks.uniform(
+  var clockTSRdd: TimeSeriesRDD = _
+  private lazy val init = {
+    clockTSRdd = Clocks.uniform(
       sc,
       frequency = "1d", offset = "0d", beginDateTime = "1970-01-01", endDateTime = "1980-01-01"
     )
+  }
+
+  "QuantileSummarizer" should "compute `quantile` correctly" in {
+    init
     val p = (1 to 100).map(_ / 100.0)
     val results = clockTSRdd.summarize(Summarizers.quantile("time", p)).first()
 
@@ -35,6 +40,15 @@ class QuantileSummarizerSpec extends SummarizerSuite {
     percentileEstimator.setData(clockTSRdd.collect().map(_.getAs[Long]("time").toDouble))
     val expectedResults = p.map { i => percentileEstimator.evaluate(i * 100.0) }
     (1 to 100).foreach { i => assert(results.getAs[Double](s"time_${i / 100.0}quantile") === expectedResults(i - 1)) }
+  }
+
+  it should "ignore null values" in {
+    init
+    val input = clockTSRdd.addColumns("v" -> LongType -> { row: Row => row.getAs[Long]("time") })
+    assertEquals(
+      input.summarize(Summarizers.quantile("v", Seq(0.25, 0.5, 0.75, 0.9, 0.95))),
+      insertNullRows(input, "v").summarize(Summarizers.quantile("v", Seq(0.25, 0.5, 0.75, 0.9, 0.95)))
+    )
   }
 
   it should "pass summarizer property test" in {

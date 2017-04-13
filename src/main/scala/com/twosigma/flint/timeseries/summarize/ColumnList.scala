@@ -20,6 +20,7 @@ package com.twosigma.flint.timeseries.summarize
  * A ColumnList trait represents operation requirements on the input columns.
  */
 sealed trait ColumnList {
+
   /**
    * Combines this [[ColumnList]] with another one.
    *
@@ -44,7 +45,7 @@ object ColumnList {
   case class Sequence(columns: Seq[String]) extends ColumnList {
     def ++(other: ColumnList): ColumnList = other match {
       case All => All
-      case Sequence(seq) => Sequence((columns ++ seq).distinct)
+      case Sequence(seq) => Sequence(columns ++ seq)
     }
   }
 }
