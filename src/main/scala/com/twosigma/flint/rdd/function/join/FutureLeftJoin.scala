@@ -96,7 +96,9 @@ protected[flint] object FutureLeftJoin {
       val sk = forwardSkFn(fV)
       val queueForSk = foreSeen.getOrElse(sk, mutable.Queue.empty[(K, V)])
       // Clean the old data first.
-      queueForSk.dropWhile { case (k, _) => ord.lt(k, referenceK) }
+      while (queueForSk.nonEmpty && ord.lt(queueForSk.head._1, referenceK)) {
+        queueForSk.dequeue()
+      }
       queueForSk.enqueue((fK, fV))
       foreSeen += sk -> queueForSk
     }
