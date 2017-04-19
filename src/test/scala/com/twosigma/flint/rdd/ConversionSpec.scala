@@ -17,13 +17,18 @@
 package com.twosigma.flint.rdd
 
 import java.util.Random
+import java.util.concurrent.LinkedBlockingDeque
 
 import com.twosigma.flint.SharedSparkContext
 import org.apache.spark.NarrowDependency
 import org.apache.spark.rdd.RDD
 import org.scalatest.FlatSpec
+import org.scalatest.concurrent.Timeouts
+import org.scalatest.time.{ Seconds, Span }
 
-class ConversionSpec extends FlatSpec with SharedSparkContext {
+import scala.concurrent.Future
+
+class ConversionSpec extends FlatSpec with SharedSparkContext with Timeouts {
 
   var sortedRDDWithEmptyPartitions: RDD[(Long, (Int, Double))] = _
   var sortedNonNormalizedRDD: RDD[(Long, (Int, Double))] = _
@@ -107,4 +112,59 @@ class ConversionSpec extends FlatSpec with SharedSparkContext {
         assert(parentsC == parentsA, s"Dependencies are not the same. Parents1: $parentsC, Parent2: $parentsA")
     }
   }
+
+  import scala.util.{ Success, Failure }
+
+  it should "be able to be interrupted correctly" in {
+    import scala.concurrent.ExecutionContext.Implicits.global
+    val parallelism = sc.defaultParallelism
+    val rdd = sc.parallelize(1 to 100 * parallelism, 10 * parallelism).map {
+      case i => (i.toLong, 1)
+    }
+
+    val elapse = 3
+
+    val slowOrderedRDD = OrderedRDD.fromRDD(rdd, KeyPartitioningType.Sorted).mapValues {
+      case kv =>
+        Thread.sleep(elapse * 1000L)
+        kv
+    }
+
+    val allowCancellation = new LinkedBlockingDeque[Long](1)
+
+    val future = Future {
+      allowCancellation.push(1L)
+      slowOrderedRDD.count()
+    }
+
+    allowCancellation.take()
+    // Make sure the jobs are actually started.
+    while (sc.statusTracker.getActiveStageIds().isEmpty) {
+      Thread.sleep(100)
+    }
+    val stageIds = sc.statusTracker.getActiveStageIds()
+    assert(stageIds.length == 1)
+    val stageId = stageIds(0)
+
+    // Make sure there are some active tasks.
+    while (sc.statusTracker.getStageInfo(stageId).get.numActiveTasks() < 1) {
+      Thread.sleep(100)
+    }
+
+    // Cancel the slow computation.
+    sc.cancelAllJobs()
+    failAfter(Span(2 * elapse, Seconds)) {
+      while (sc.statusTracker.getStageInfo(stageId).get.numActiveTasks() > 0) {
+        Thread.sleep(500)
+      }
+    }
+
+    future onComplete {
+      case Success(_) =>
+        assert(false, "Should not completed as the job has been killed.")
+      case Failure(_) =>
+    }
+
+  }
 }
+

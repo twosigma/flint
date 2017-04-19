@@ -89,7 +89,7 @@ object Conversion {
     val dependencies = rangeDep.map { d => (d.index, d.parents) }.toMap
 
     val dep = new NarrowDependency(rdd) {
-      override def getParents(partitionId: Int) =
+      override def getParents(partitionId: Int): Seq[Int] =
         dependencies.getOrElse(
           partitionId,
           sys.error(s"Unclear dependency for the parents of partition $partitionId.")
@@ -106,11 +106,12 @@ object Conversion {
           part.index,
           sys.error(s"Unclear dependency for the parents of partition ${part.index}.")
         )
-        PeekableIterator(
+        val iter = PeekableIterator(
           OrderedIterator(
             PartitionsIterator(rdd, thisDep.parents, context)
           ).filterByRange(thisDep.range)
         )
+        new InterruptibleIterator[(K, V)](context, iter)
       }
     )
   }
@@ -155,14 +156,18 @@ object Conversion {
         // We capture this as debug information in case of failure
         // Potentially can use toDebugString but it seems heavyweight.
         val rddString = rdd.toString()
-        rdd.iterator(indexToParentPartition(partition.index), context)
+        val iter = rdd.iterator(indexToParentPartition(partition.index), context)
           .map(rangeValidationFunction(rddString, range))
+        new InterruptibleIterator[(K, V)](context, iter)
       }
     )
   }
 
   private def rangeValidationFunction[K, V](rddString: String, range: CloseOpen[K])(r: (K, V)): (K, V) = {
-    require(range.contains(r._1), s"Key ${r._1} must be in range ${range}) for RDD: ${rddString}")
+    require(
+      range.contains(r._1),
+      s"Key ${r._1} must be in range $range for RDD: $rddString"
+    )
     r
   }
 
@@ -236,7 +241,9 @@ object Conversion {
     // Cannot call rdd.partitions on executors because getPartitions might access transient fields
     val parentParts = rdd.partitions
     new OrderedRDD[K, V](rdd.sparkContext, splits, Seq(new OneToOneDependency(rdd)))({
-      case (part, context) => rdd.iterator(parentParts(part.index), context)
+      case (part, context) =>
+        val iter = rdd.iterator(parentParts(part.index), context)
+        new InterruptibleIterator[(K, V)](context, iter)
     })
   }
 
@@ -299,9 +306,10 @@ object Conversion {
         val index = part.index
         val range = rangeSplits(index).range
         val parentParts = indexToParentParts(index)
-        OrderedIterator(
+        val iter = OrderedIterator(
           PartitionsIterator(rdd, parentParts, context)
         ).filterByRange(range)
+        new InterruptibleIterator[(K, V)](context, iter)
     })
   }
 
