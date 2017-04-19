@@ -201,7 +201,12 @@ trait TimeSeriesSuite extends FlintSuite {
    */
   def assertEquals(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
     assert(rdd1.schema == rdd2.schema)
-    assert(rdd1.rdd.collect.map(prepareRow).toSeq == rdd2.rdd.collect.map(prepareRow).toSeq)
+    val rows1 = rdd1.rdd.collect.map(prepareRow)
+    val rows2 = rdd2.rdd.collect.map(prepareRow)
+    assert(rows1.length == rows2.length)
+    for ((r1, r2) <- rows1 zip rows2) {
+      assert(r1 == r2)
+    }
   }
 
   /**

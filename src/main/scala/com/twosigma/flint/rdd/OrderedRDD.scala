@@ -331,7 +331,7 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
     toleranceFn: K => K,
     leftSk: V => SK1,
     rightSk: V2 => SK2,
-    strictForward: Boolean = false
+    strictForward: Boolean
   )(implicit ev: SK1 =:= SK2): OrderedRDD[K, (V, Option[(K, V2)])] =
     FutureLeftJoin(self, that, toleranceFn, leftSk, rightSk, strictForward)
 
