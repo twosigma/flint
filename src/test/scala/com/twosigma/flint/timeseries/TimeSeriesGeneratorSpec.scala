@@ -34,11 +34,13 @@ class TimeSeriesGeneratorSpec extends TimeSeriesSuite {
   )
   private val seed = 31415926L
 
+  private val nextDouble = (_: Long, _: Int, r: util.Random) => r.nextDouble()
+
   "TimeSeriesGenerator" should "generate TimeSeriesRDD randomly " in {
     val randomTSRdd = new TimeSeriesGenerator(sc, begin, end, frequency)(
       columns = Seq(
-        "x1" -> { (t: Long, id: Int, r: util.Random) => r.nextDouble() },
-        "x2" -> { (t: Long, id: Int, r: util.Random) => r.nextDouble() }
+        "x1" -> nextDouble,
+        "x2" -> nextDouble
       ),
       seed = seed
     ).generate()
@@ -50,18 +52,18 @@ class TimeSeriesGeneratorSpec extends TimeSeriesSuite {
   it should "generate TimeSeriesRDD randomly with fixed ids set for different cycles" in {
     val randomTSRdd = new TimeSeriesGenerator(sc, begin, end, frequency)(
       columns = Seq(
-        "x1" -> { (t: Long, id: Int, r: util.Random) => r.nextDouble() },
-        "x2" -> { (t: Long, id: Int, r: util.Random) => r.nextDouble() }
+        "x1" -> nextDouble,
+        "x2" -> nextDouble
       ),
       seed = seed,
-      ids = (1 to 5)
+      ids = 1 to 5
     ).generate()
 
     assert(randomTSRdd.schema == schema)
     assert(randomTSRdd.groupByCycle().count() == (end - begin) / frequency + 1)
     randomTSRdd.groupByCycle().collect().foreach{
       r =>
-        val ids = r.getAs[mutable.WrappedArray[Row]]("rows").map{
+        val ids = r.getAs[mutable.WrappedArray[Row]]("rows").map {
           r => r.getAs[Int]("id")
         }.sorted
         assert(ids.size == 5)
@@ -74,11 +76,11 @@ class TimeSeriesGeneratorSpec extends TimeSeriesSuite {
       i =>
         val randomTSRdd = new TimeSeriesGenerator(sc, begin, end, frequency)(
           columns = Seq(
-            "x1" -> { (t: Long, id: Int, r: util.Random) => r.nextDouble() },
-            "x2" -> { (t: Long, id: Int, r: util.Random) => r.nextDouble() }
+            "x1" -> nextDouble,
+            "x2" -> nextDouble
           ),
           seed = seed + i,
-          ids = (1 to 5),
+          ids = 1 to 5,
           ratioOfCycleSize = 0.5
         ).generate()
 
@@ -101,16 +103,16 @@ class TimeSeriesGeneratorSpec extends TimeSeriesSuite {
       i =>
         val randomTSRdd = new TimeSeriesGenerator(sc, begin, end, frequency)(
           columns = Seq(
-            "x1" -> { (t: Long, id: Int, r: util.Random) => r.nextDouble() },
-            "x2" -> { (t: Long, id: Int, r: util.Random) => r.nextDouble() }
+            "x1" -> nextDouble,
+            "x2" -> nextDouble
           ),
           seed = seed + i,
           uniform = false
         ).generate()
 
         assert(randomTSRdd.schema == schema)
-        assert(randomTSRdd.groupByCycle().count() > 1.66 * (end - begin) / frequency)
-        assert(randomTSRdd.groupByCycle().count() < 2.33 * (end - begin) / frequency)
+        assert(randomTSRdd.groupByCycle().count() > 1.5 * (end - begin) / frequency)
+        assert(randomTSRdd.groupByCycle().count() < 2.5 * (end - begin) / frequency)
     }
   }
 }
