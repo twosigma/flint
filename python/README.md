@@ -29,13 +29,13 @@ or
 Running in a notebook
 ---------------------
 
-You can also run ts-flint from within a jupyter notebook.  First, create a virtualenv or conda environment containing pandas and jupyter.  
+You can also run ts-flint from within a jupyter notebook.  First, create a virtualenv or conda environment containing pandas and jupyter.
 
     conda create -n flint  python=3.5 pandas notebook
     source activate flint
 
 * Note that this issue https://github.com/numpy/numpy/issues/8958 currently prevents Jupyter notebooks running under pyspark from importing the numpy module in python 3.6.  That's why "python=3.5" is specified above.
-    
+
 Make sure pyspark is in your PATH.
 Then, from the flint project dir, start pyspark with the following options:
 

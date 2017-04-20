@@ -801,7 +801,7 @@ trait TimeSeriesRDD extends Serializable {
 
   /**
    * Merge this [[TimeSeriesRDD]] and the other [[TimeSeriesRDD]] with the same schema. The merged
-   * [[TimeSeriesRDD]] include sall rows from each in temporal order. If there is a timestamp ties,
+   * [[TimeSeriesRDD]] includes all rows from each in temporal order. If there is a timestamp ties,
    * the rows in this [[TimeSeriesRDD]] will be returned earlier than those from the other
    * [[TimeSeriesRDD]].
    *

@@ -339,6 +339,27 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                                    unit=self._junit,
                                    tsrdd_part_info=tsdf._tsrdd_part_info)
 
+    def merge(self, other):
+        """
+        Merge this dataframe and the other dataframe with the same schema.
+        The merged dataframe includes all rows from each in temporal order.
+        If there is a timestamp ties, the rows in this dataframe will be
+        returned earlier than those from the other dataframe.
+
+        Example:
+
+            >>> thisdf.merge(otherdf)
+
+        :param other: The other dataframe to merge. It must have the same schema as this
+                      dataframe.
+        :type other: :class:`TimeSeriesDataFrame`
+        :returns: a new dataframe that results from the merge
+        :rtype: :class:`TimeSeriesDataFrame`
+
+        """
+        tsrdd = self.timeSeriesRDD.merge(other.timeSeriesRDD)
+        return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
+
     def leftJoin(self, right, *, tolerance=None, key=None, left_alias=None, right_alias=None):
         """
         Left join this dataframe with a right dataframe using inexact

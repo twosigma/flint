@@ -325,6 +325,11 @@ def test_addColumnsForCycle(pyspark_types, tests_utils, price, vol3):
         "with key 7"
     )
 
+def test_merge(pyspark_types, tests_utils, price):
+    price1 = price.filter(price.time > 1100)
+    price2 = price.filter(price.time <= 1100)
+    merged_price = price1.merge(price2)
+    tests_utils.assert_same(merged_price.toPandas(), price.toPandas())
 
 def test_leftJoin(pyspark_types, tests_utils, price, vol):
     expected_pdf = make_pdf([
