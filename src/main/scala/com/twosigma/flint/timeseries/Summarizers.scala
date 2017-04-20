@@ -306,6 +306,31 @@ object Summarizers {
   }
 
   /**
+   * Return a summarizer which outputs a single column, `stack`, which contains the results of the summarizer
+   * in the order that they were provided.
+   *
+   * The summarizers must contain identical schemas for this to work.
+   * Each summarizer produces one row in the output array.
+   *
+   * For instance:
+   * {{{
+   * val predicate1: Int => Boolean = id => id == 3
+   * val predicate2: Int => Boolean = id => id == 7
+   * stack(
+   *   Summarizers.sum("price").where(predicate1)("id"),
+   *   Summarizers.sum("price").where(predicate2)("id"),
+   *   Summarizers.sum("price")
+   * )
+   * }}}
+   *
+   * @param summarizers the summarizers to stack into an array..
+   * @return a [[SummarizerFactory]] which produces an Array from the results of the summarizers.
+   */
+  def stack(summarizers: SummarizerFactory*): SummarizerFactory = {
+    StackSummarizerFactory(summarizers)
+  }
+
+  /**
    * Performs single exponential smoothing over a column. Primes the EMA by maintaining two EMAs, one over the series
    * (0.0, x_1, x_2, ...) and one over the series (0.0, 1.0, 1.0, ...). The smoothed series is the result of dividing
    * each element in the EMA of the first series by the element at the same index in the second series.
