@@ -13,3 +13,11 @@ the following example.
 ```bash
 sbt -Dspark.executor.cores=10 test
 ```
+
+## How to skip tests in assembly
+
+As all the tests could take 20+ minutes to run, one could skip tests in assembly process by
+
+```bash
+sbt "set test in Test := {}" assembly
+```

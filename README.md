@@ -1,17 +1,22 @@
 # Flint: A Time Series Library for Apache Spark
 
-The ability to analyze time series data at scale is critical for the success of finance and IoT applications based on Spark. Flint is Two Sigma’s implementation of highly optimized time series operations in Spark. It performs truly parallel and rich analyses on time series data by taking advantage of the natural ordering in time series data to provide locality-based optimizations.
+The ability to analyze time series data at scale is critical for the success of finance and IoT applications based on Spark.
+Flint is Two Sigma's implementation of highly optimized time series operations in Spark.
+It performs truly parallel and rich analyses on time series data by taking advantage of the natural ordering in time series data to provide locality-based optimizations.
 
-Flint is an open source library for Spark based around the `TimeSeriesRDD`, a time series aware data structure, and a collection of time series utility and analysis functions that use `TimeSeriesRDD`s. Unlike `DataFrame` and `Dataset`, Flint’s `TimeSeriesRDD`s can leverage the existing ordering properties of datasets at rest and the fact that almost all data manipulations and analysis over these datasets respect their temporal ordering properties. It differs from other time series efforts in Spark in its ability to efficiently compute across panel data or on large scale high frequency data.
+Flint is an open source library for Spark based around the `TimeSeriesRDD`, a time series aware data structure, and a collection of time series utility and analysis functions that use `TimeSeriesRDD`s.
+Unlike `DataFrame` and `Dataset`, Flint's `TimeSeriesRDD`s can leverage the existing ordering properties of datasets at rest and the fact that almost all data manipulations and analysis over these datasets respect their temporal ordering properties.
+It differs from other time series efforts in Spark in its ability to efficiently compute across panel data or on large scale high frequency data.
 
 [![Documentation Status](https://readthedocs.org/projects/ts-flint/badge/?version=latest)](http://ts-flint.readthedocs.io/en/latest/?badge=latest)
 
 ## Requirements
-Spark version: 2.0 and above
 
-Scala version: 2.11.7 and above
-
-Python version: 3.5 and above
+| Dependency     | Version           |
+| -------------- | ----------------- |
+| Spark version  |  2.0 and above    |
+| Scala version  |  2.11.7 and above |
+| Python version |  3.5 and above    |
 
 ## How to build
 To build this sbt project, one could simply do
@@ -22,7 +27,8 @@ sbt assembly
 
 ## Python bindings
 
-The python bindings for Flint, including quickstart instructions, are documented at [python/README.md](python/README.md).  API documentation is available at https://ts-flint.readthedocs.io/en/latest
+The python bindings for Flint, including quickstart instructions, are documented at [python/README.md](python/README.md).
+API documentation is available at http://ts/ts-flint-doc
 
 ## Getting Started
 
@@ -318,7 +324,7 @@ model.estimateRegressionParameters
 
 ### Compare to org.apache.common.math3 and statsmodels in Python
 
-The followiing table list different implementations cross different packages or libraries.
+The following table list different implementations cross different packages or libraries.
 - flint.math.stat - `flint.math.stat.regression.LinearRegressionModel`
 - apache.commons.math3 - `apache.commons.math3.stat.regression.OLSMultipleLinearRegression`
 - statsmodels - `statsmodels.api` in Python
@@ -355,4 +361,3 @@ In order to accept your code contributions, please fill out the appropriate Cont
 Apache Spark is a trademark of The Apache Software Foundation. The Apache Software Foundation is not affiliated, endorsed, connected, sponsored or otherwise associated in any way to Two Sigma, Flint, or this website in any manner.
 
 © Two Sigma Open Source, LLC
-
