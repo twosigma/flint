@@ -19,10 +19,10 @@ package com.twosigma.flint.rdd.function.summarize.summarizer
 import breeze.linalg.{ DenseVector, DenseMatrix }
 
 case class RegressionRow(
-  val time: Long,
-  val x: Array[Double],
-  val y: Double,
-  val weight: Double
+  time: Long,
+  x: Array[Double],
+  y: Double,
+  weight: Double
 )
 
 object RegressionSummarizer {
@@ -45,9 +45,22 @@ object RegressionSummarizer {
     val sqrtW = Math.sqrt(w)
     if (shouldIntercept) {
       // Prepend the 1.0 at the beginning.
-      (r.x.map(_ * sqrtW).+:(sqrtW), r.y * sqrtW, (r.y, w))
+      val x = new Array[Double](r.x.length + 1)
+      var i = 0
+      while (i < r.x.length) {
+        x(i + 1) = r.x(i) * sqrtW
+        i += 1
+      }
+      x(0) = sqrtW
+      (x, r.y * sqrtW, (r.y, w))
     } else {
-      (r.x.map(_ * sqrtW), r.y * sqrtW, (r.y, w))
+      val x = new Array[Double](r.x.length)
+      var i = 0
+      while (i < r.x.length) {
+        x(i) = r.x(i) * sqrtW
+        i += 1
+      }
+      (x, r.y * sqrtW, (r.y, w))
     }
   }
 

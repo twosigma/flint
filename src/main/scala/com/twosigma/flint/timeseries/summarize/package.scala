@@ -22,11 +22,12 @@ import org.apache.spark.sql.types._
 import scala.reflect.{ ClassTag, classTag }
 
 package object summarize {
-  def anyToDouble(dataType: DataType): Any => Double = dataType match {
-    case IntegerType => { any: Any => any.asInstanceOf[Int].toDouble }
-    case LongType => { any: Any => any.asInstanceOf[Long].toDouble }
-    case FloatType => { any: Any => any.asInstanceOf[Float].toDouble }
-    case DoubleType => { any: Any => any.asInstanceOf[Double] }
+
+  def asDoubleExtractor(dataType: DataType, columnIndex: Int): InternalRow => Double = dataType match {
+    case DoubleType => { row: InternalRow => row.getDouble(columnIndex) }
+    case LongType => { row: InternalRow => row.getLong(columnIndex).toDouble }
+    case IntegerType => { row: InternalRow => row.getInt(columnIndex).toDouble }
+    case FloatType => { row: InternalRow => row.getFloat(columnIndex).toDouble }
     case _ => throw new IllegalArgumentException(s"Cannot cast $dataType to DoubleType")
   }
 

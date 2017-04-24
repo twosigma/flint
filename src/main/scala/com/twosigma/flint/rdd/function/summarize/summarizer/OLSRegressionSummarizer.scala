@@ -33,21 +33,21 @@ case class OLSRegressionState(
 )
 
 case class OLSRegressionOutput(
-  val count: Long,
-  val beta: Array[Double], // beta without intercept
-  val intercept: Double,
-  val hasIntercept: Boolean,
-  val stdErrOfBeta: Array[Double],
-  val stdErrOfIntercept: Double,
-  val rSquared: Double,
-  val r: Double,
-  val tStatOfIntercept: Double,
-  val tStatOfBeta: Array[Double],
-  val logLikelihood: Double,
-  val akaikeIC: Double,
-  val bayesIC: Double,
-  val cond: Double,
-  val constantsCoordinates: Array[Int]
+  count: Long,
+  beta: Array[Double], // beta without intercept
+  intercept: Double,
+  hasIntercept: Boolean,
+  stdErrOfBeta: Array[Double],
+  stdErrOfIntercept: Double,
+  rSquared: Double,
+  r: Double,
+  tStatOfIntercept: Double,
+  tStatOfBeta: Array[Double],
+  logLikelihood: Double,
+  akaikeIC: Double,
+  bayesIC: Double,
+  cond: Double,
+  constantsCoordinates: Array[Int]
 )
 
 /**
@@ -274,10 +274,26 @@ class OLSRegressionSummarizer(
   ): OLSRegressionState = {
     val (xt, yt, yw) =
       RegressionSummarizer.transform(t, shouldIntercept, isWeighted)
-    val vectorOfXt = DenseVector(xt)
-    val matrixOfXt = vectorOfXt.asDenseMatrix
-    u.matrixOfXX += matrixOfXt.t * matrixOfXt
-    u.vectorOfXY += vectorOfXt * yt
+    var i = 0
+    // Update matrixOfXX
+    while (i < xt.length) {
+      var j = i
+      while (j < xt.length) {
+        val xij = xt(i) * xt(j)
+        u.matrixOfXX.update(i, j, u.matrixOfXX(i, j) + xij)
+        u.matrixOfXX.update(j, i, u.matrixOfXX(i, j))
+        j += 1
+      }
+      i += 1
+    }
+
+    // Update vectorOfXY
+    i = 0
+    while (i < xt.length) {
+      u.vectorOfXY.update(i, u.vectorOfXY(i) + xt(i) * yt)
+      i += 1
+    }
+
     u.sumOfYSquared += yt * yt
     u.count += 1L
     u.sumOfWeights += yw._2
@@ -287,7 +303,7 @@ class OLSRegressionSummarizer(
     if (u.rawPrimeConstXt.isEmpty) {
       // Should only be set once if this partition is non-empty.
       u.rawPrimeConstXt = Some(t.x)
-      u.primeConstCoordinates = (0 until t.x.length).toArray
+      u.primeConstCoordinates = t.x.indices.toArray
     } else {
       val rawPrimeConstXt = u.rawPrimeConstXt.get
       var diffFound = false

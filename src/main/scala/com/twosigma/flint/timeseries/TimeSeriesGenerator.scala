@@ -63,7 +63,7 @@ import scala.util.Random
  *                         {{{ sc.defaultParallelism }}}.
  * @param seed             The random seed expected to use. Default current time in milliseconds.
  */
-private[flint] class TimeSeriesGenerator(
+class TimeSeriesGenerator(
   @transient val sc: SparkContext,
   begin: Long,
   end: Long,

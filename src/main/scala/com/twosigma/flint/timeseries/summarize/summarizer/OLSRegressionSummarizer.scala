@@ -104,9 +104,11 @@ case class OLSRegressionSummarizer(
   private val xColumnIds = xColumns.map(inputSchema.fieldIndex)
   private val weightColumnId = weightColumn.map(inputSchema.fieldIndex)
 
-  private val yToDouble = anyToDouble(inputSchema(yColumnId).dataType)
-  private val weightToDouble = weightColumnId.map { id => anyToDouble(inputSchema(id).dataType) }
-  private val xToDouble = xColumnIds.map { id => id -> anyToDouble(inputSchema(id).dataType) }.toMap
+  private final val yExtractor = asDoubleExtractor(inputSchema(yColumnId).dataType, yColumnId)
+  private final val weightExtractor = weightColumnId.map { id => asDoubleExtractor(inputSchema(id).dataType, id) }
+  private final val xExtractors = xColumnIds.map {
+    id => id -> asDoubleExtractor(inputSchema(id).dataType, id)
+  }.toMap
 
   override type T = RegressionRow
   override type U = OLSRegressionState
@@ -115,12 +117,21 @@ case class OLSRegressionSummarizer(
   override val summarizer =
     new RegressionSummarizer(dimensionOfX, shouldIntercept, isWeighted, shouldIgnoreConstants)
 
-  override def toT(r: InternalRow): RegressionRow = RegressionRow(
-    time = 0L,
-    y = yToDouble(r.get(yColumnId, inputSchema(yColumnId).dataType)),
-    x = xColumnIds.map { xi => xToDouble(xi)(r.get(xi, inputSchema(xi).dataType)) },
-    weight = weightToDouble.fold(1.0)(f => f(r.get(weightColumnId.get, inputSchema(weightColumnId.get).dataType)))
-  )
+  override def toT(r: InternalRow): RegressionRow = {
+    val x = new Array[Double](xColumnIds.length)
+    var i = 0
+    while (i < x.length) {
+      x(i) = xExtractors(xColumnIds(i))(r)
+      i += 1
+    }
+
+    RegressionRow(
+      time = 0L,
+      y = yExtractor(r),
+      x = x,
+      weight = weightExtractor.fold(1.0)(f => f(r))
+    )
+  }
 
   override val schema = OLSRegressionSummarizer.outputSchema
 
