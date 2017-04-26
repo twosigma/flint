@@ -182,11 +182,8 @@ private[timeseries] object InternalRowUtils {
   def concat2(
     schema1: StructType,
     schema2: StructType
-  ): ((InternalRow, InternalRow) => InternalRow, StructType) = {
-    val newSchema = StructType(schema1.fields ++ schema2.fields)
-    Schema.requireUniqueColumnNames(newSchema)
-    ((row1: InternalRow, row2: InternalRow) => concatSeq(row1.toSeq(schema1), row2.toSeq(schema2)), newSchema)
-  }
+  ): ((InternalRow, InternalRow) => InternalRow, StructType) =
+    concat2(schema1, schema2, None, None, Set.empty)
 
   def concat2(
     schema1: StructType,
