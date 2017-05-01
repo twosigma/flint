@@ -291,7 +291,7 @@ object TimeSeriesRDD {
   /**
    * Read a parquet file into a [[TimeSeriesRDD]].
    *
-   * @param sc         [[org.apache.spark.SparkContext]].
+   * @param sc         The [[org.apache.spark.SparkContext]].
    * @param paths      The paths of the parquet file.
    * @param isSorted   flag specifies if the rows in the file have been sorted by their timestamps.
    * @param timeUnit   The unit of time under time column which could be NANOSECONDS, MILLISECONDS, etc.
@@ -359,8 +359,9 @@ object TimeSeriesRDD {
 
   /**
    * Create a [[TimeSeriesRDD]] from a sorted [[DataFrame]] and partition time ranges.
-   * @param dataFrame
-   * @param ranges Time ranges for each partition
+   *
+   * @param dataFrame The sorted [[DataFrame]] expected to convert
+   * @param ranges    Time ranges for each partition
    * @return a [[TimeSeriesRDD]]
    */
   def fromDFWithRanges(
@@ -377,7 +378,7 @@ object TimeSeriesRDD {
   /**
    * Creates a [[TimeSeriesRDD]] from a sorted [[DataFrame]] and partition info.
    *
-   * @param dataFrame   A sorted dataframe.
+   * @param dataFrame   A sorted [[DataFrame]].
    * @param partInfo    Partition info.
    * @return a [[TimeSeriesRDD]].
    */
@@ -1195,12 +1196,12 @@ class TimeSeriesRDDImpl private[timeseries] (
 
   def keepRows(fn: Row => Boolean): TimeSeriesRDD =
     TimeSeriesRDD.fromInternalOrderedRDD(unsafeOrderedRdd.filterOrdered {
-      (t: Long, r: InternalRow) => fn(toExternalRow(r))
+      (_: Long, r: InternalRow) => fn(toExternalRow(r))
     }, schema)
 
   def deleteRows(fn: Row => Boolean): TimeSeriesRDD =
     TimeSeriesRDD.fromInternalOrderedRDD(unsafeOrderedRdd.filterOrdered {
-      (t: Long, r: InternalRow) => !fn(toExternalRow(r))
+      (_: Long, r: InternalRow) => !fn(toExternalRow(r))
     }, schema)
 
   def keepColumns(columns: String*): TimeSeriesRDD = withUnshuffledDataFrame {
@@ -1269,7 +1270,7 @@ class TimeSeriesRDDImpl private[timeseries] (
         val eRows = rows.map(toExternalRow)
         val nameWithTypeToRowMaps = Map(columns.map { case (k, fn) => k -> fn(eRows) }: _*)
         (rows zip eRows).map {
-          case (row, eRow) => add(row, columns.map { case (k, m) => nameWithTypeToRowMaps(k)(eRow) })
+          case (row, eRow) => add(row, columns.map { case (k, _) => nameWithTypeToRowMaps(k)(eRow) })
         }
     }
 
@@ -1356,10 +1357,21 @@ class TimeSeriesRDDImpl private[timeseries] (
   }
 
   def summarizeCycles(summarizer: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {
+
+    // TODO: investigate the performance of the following implementation of summarizeCycles for supporting
+    //       OverlappableSummarizer.
+    //       - extract timestamps for each cycle as a new time series
+    //       - summarizeWindows the above time series to this time series with OverlappableSummarizer.
+    require(
+      !summarizer.isInstanceOf[OverlappableSummarizerFactory],
+      s"Function summarizeCycles currently does not support OverlappableSummarizer $summarizer"
+    )
+
     val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns, key)
     val sum = summarizer(pruned.schema)
     val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)))
     val numColumns = newSchema.length
+
     TimeSeriesRDD.fromInternalOrderedRDD(
       pruned.orderedRdd.summarizeByKey(pruned.safeGetAsAny(key), sum)
         .mapValues { (k, v) =>
@@ -1442,7 +1454,7 @@ class TimeSeriesRDDImpl private[timeseries] (
       case _ => pruned.orderedRdd.summarize(summarizer, keyGetter, depth)
     }
     val rows = summarized.map {
-      case (keyValues, row) => InternalRowUtils.prepend(row, summarizer.outputSchema, (0L +: keyValues): _*)
+      case (keyValues, row) => InternalRowUtils.prepend(row, summarizer.outputSchema, 0L +: keyValues: _*)
     }
 
     val newSchema = Schema.prependTimeAndKey(summarizer.outputSchema, key.map(pruned.schema(_)))
@@ -1487,7 +1499,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     if (window == null) {
       val timeIndex = schema.fieldIndex(timeColumnName)
       TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.mapOrdered {
-        case (t: Long, r: InternalRow) =>
+        case (_: Long, r: InternalRow) =>
           val timeStamp = fn(toExternalRow(r))
           (timeStamp, InternalRowUtils.update(r, schema, timeIndex -> timeStamp))
       }, schema)
