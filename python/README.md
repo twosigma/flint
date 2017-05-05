@@ -29,16 +29,21 @@ or
 Running in a notebook
 ---------------------
 
-You can also run ts-flint from within a jupyter notebook.  First, create a virtualenv or conda environment containing pandas and jupyter:
+You can also run ts-flint from within a jupyter notebook.  First, create a virtualenv or conda environment containing pandas and jupyter.  
 
-    conda create -n flint python pandas notebook
+    conda create -n flint  python=3.5 pandas notebook
     source activate flint
+
+* Note that this issue https://github.com/numpy/numpy/issues/8958 currently prevents Jupyter notebooks running under pyspark from importing the numpy module in python 3.6.  That's why "python=3.5" is specified above.
     
-Then, start pyspark with the following options:
+Make sure pyspark is in your PATH.
+Then, from the flint project dir, start pyspark with the following options:
 
     export PYSPARK_DRIVER_PYTHON=jupyter
     export PYSPARK_DRIVER_PYTHON_OPTS="notebook --NotebookApp.open_browser=False --NotebookApp.ip='$(hostname)' --NotebookApp.port=8888"
-    bin/pyspark --master=local --jars /path/to/flint-assembly-0.2.0-SNAPSHOT.jar --py-files /path/to/flint-assembly-0.2.0-SNAPSHOT.jar
+    pyspark --master=local --jars /path/to/flint-assembly-0.2.0-SNAPSHOT.jar --py-files /path/to/flint-assembly-0.2.0-SNAPSHOT.jar
+
+Now, you can open the sample notebook.  Use the Jupyter interface to browse to python/samples/weather.ipnb.
 
 Documentation
 -------------
