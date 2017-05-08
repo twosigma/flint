@@ -92,7 +92,8 @@ object TimeSeriesRDD {
 
   private[flint] def convertDfTimestamps(
     dataFrame: DataFrame,
-    timeUnit: TimeUnit
+    timeUnit: TimeUnit,
+    timeColumn: String = timeColumnName
   ): DataFrame = {
     if (timeUnit == NANOSECONDS) {
       dataFrame
@@ -100,7 +101,7 @@ object TimeSeriesRDD {
       val converter: Long => Long = TimeUnit.NANOSECONDS.convert(_, timeUnit)
       val udfConverter = udf(converter)
 
-      dataFrame.withColumn(timeColumnName, udfConverter(col(timeColumnName)))
+      dataFrame.withColumn(timeColumnName, udfConverter(col(timeColumn)))
     }
   }
 
@@ -246,7 +247,7 @@ object TimeSeriesRDD {
     val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
     requireSchema(df.schema)
 
-    val convertedDf = convertDfTimestamps(dataFrame, timeUnit)
+    val convertedDf = convertDfTimestamps(dataFrame, timeUnit, timeColumn)
     // we want to keep time column first, but no code should rely on that
     val timeFirstDf = if (convertedDf.schema.fieldIndex(timeColumnName) == 0) {
       convertedDf
@@ -270,7 +271,7 @@ object TimeSeriesRDD {
   ): TimeSeriesRDD = {
     val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
     requireSchema(df.schema)
-    val convertedDf = convertDfTimestamps(df, timeUnit)
+    val convertedDf = convertDfTimestamps(df, timeUnit, timeColumn)
 
     val partitionInfo = PartitionInfo(rangeSplits, deps)
     TimeSeriesRDD.fromSortedDfWithPartInfo(convertedDf, Some(partitionInfo))
