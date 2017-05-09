@@ -3,3 +3,31 @@ scala:
   - 2.11.8
 jdk:
   - oraclejdk8
+install:
+  # This work is to Run Conda on travis; based on https://conda.io/docs/travis.html
+  - sudo apt-get update
+  # We do this conditionally because it saves us some downloading if the
+  # version is the same.
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+      wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
+    else
+      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+    fi
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  # Useful for debugging any issues with conda
+  - conda info -a
+env:
+  matrix:
+    - TEST_DIR=. DEPS_CMD=':' TEST_CMD='sbt ++2.11.8 test'
+    - TEST_DIR=python DEPS_CMD='./travis/prepare_python_tests.sh' TEST_CMD='./travis/run_python_tests.sh'
+before_script:
+  # this chmod command is a workaround for a current bug in travis image.
+  # see https://github.com/travis-ci/travis-ci/issues/7703
+  - sudo chmod +x /usr/local/bin/sbt 
+  - (cd $TEST_DIR && $DEPS_CMD)
+script: cd $TEST_DIR && $TEST_CMD
+
