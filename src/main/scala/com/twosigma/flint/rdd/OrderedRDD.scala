@@ -494,7 +494,7 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
   def groupByKey[SK](skFn: V => SK): OrderedRDD[K, Array[V]] = {
     new OrderedRDD[K, Array[V]](sc, rangeSplits, Seq(new OneToOneDependency(self)))(
       (p, tc) => SummarizeByKeyIterator(iterator(p, tc), skFn, new RowsSummarizer[V])
-        .map { case (k, (_, v)) => (k, v.toArray) }
+        .map { case (k, (_, v)) => (k, v) }
     )
   }
 

@@ -24,6 +24,7 @@ import org.scalatest.FlatSpec
 
 class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
   val numSlices = 4
+
   /**
    * There are 9 rows and they are not ordered for the first column (the primary key).
    */
@@ -111,9 +112,12 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
     assert(orderedRDD1.count() == unsortedData.length)
     // Check the ordering.
     assert(
-      orderedRDD1.collect().foldLeft((Long.MinValue, true)) {
-      case ((k1, isOrdered), (k2, _)) => (k2, isOrdered && k1 <= k2)
-    }._2
+      orderedRDD1
+      .collect()
+      .foldLeft((Long.MinValue, true)) {
+        case ((k1, isOrdered), (k2, _)) => (k2, isOrdered && k1 <= k2)
+      }
+      ._2
     )
     val orderedRDD = OrderedRDD.fromRDD(
       sc.parallelize(unsortedData, unsortedData.length * 10),
@@ -127,9 +131,12 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
     assert(orderedRDD1.count() == unsortedData.length)
     // Check the ordering.
     assert(
-      orderedRDD1.collect().foldLeft((Long.MinValue, true)) {
-      case ((k1, isOrdered), (k2, _)) => (k2, isOrdered && k1 <= k2)
-    }._2
+      orderedRDD1
+      .collect()
+      .foldLeft((Long.MinValue, true)) {
+        case ((k1, isOrdered), (k2, _)) => (k2, isOrdered && k1 <= k2)
+      }
+      ._2
     )
     val orderedRDD = OrderedRDD.fromRDD(
       sc.parallelize(unsortedData, unsortedData.length * 10),
@@ -153,8 +160,10 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       (104L, (1, 1))
     )
 
-    val rdd = sc.parallelize(partition1, 1).union(sc.parallelize(partition2, 1))
-    val orderedRDD = OrderedRDD.fromRDD(rdd, KeyPartitioningType.NormalizedSorted)
+    val rdd =
+      sc.parallelize(partition1, 1).union(sc.parallelize(partition2, 1))
+    val orderedRDD =
+      OrderedRDD.fromRDD(rdd, KeyPartitioningType.NormalizedSorted)
     assert(orderedRDD.collect().toList === (partition1 ++ partition2))
   }
 
@@ -173,8 +182,10 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       (103L, (1, 1))
     )
 
-    val rdd = sc.parallelize(partition1, 1).union(sc.parallelize(partition2, 1))
-    val orderedRDD = OrderedRDD.fromRDD(rdd, KeyPartitioningType.NormalizedSorted)
+    val rdd =
+      sc.parallelize(partition1, 1).union(sc.parallelize(partition2, 1))
+    val orderedRDD =
+      OrderedRDD.fromRDD(rdd, KeyPartitioningType.NormalizedSorted)
     val exception = intercept[SparkException] {
       orderedRDD.collect()
     }
@@ -204,27 +215,40 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
   }
 
   it should "`mapValues` correctly" in {
-    val benchmark = unsortedData.sortBy(_._1).map { case (k, v) => (k, Math.sqrt(v._2)) }
-    val test = orderedRDD1.mapValues {
-      case (k, v) => Math.sqrt(v._2)
-    }.collect()
+    val benchmark =
+      unsortedData.sortBy(_._1).map { case (k, v) => (k, Math.sqrt(v._2)) }
+    val test = orderedRDD1
+      .mapValues {
+        case (k, v) => Math.sqrt(v._2)
+      }
+      .collect()
     assert(benchmark.sameElements(test))
   }
 
   it should "`flatMapValues` correctly" in {
     val benchmark = unsortedData.sortBy(_._1).flatMap {
-      case (k, v) => Seq(0.001, 0.002, 0.003).map { x => (k, x + v._2) }
+      case (k, v) =>
+        Seq(0.001, 0.002, 0.003).map { x =>
+          (k, x + v._2)
+        }
     }
-    val test = orderedRDD1.flatMapValues {
-      case (k, v) => Seq(0.001, 0.002, 0.003).map { _ + v._2 }
-    }.collect()
+    val test = orderedRDD1
+      .flatMapValues {
+        case (k, v) =>
+          Seq(0.001, 0.002, 0.003).map {
+            _ + v._2
+          }
+      }
+      .collect()
     assert(benchmark.sameElements(test))
   }
 
   it should "`filterOrdered` correctly" in {
     val mean = unsortedData.map { case (_, (_, v)) => v }.sum / unsortedData.length
-    val benchmark = unsortedData.filter { case (_, (_, v)) => v > mean }.sortBy(_._1)
-    val test = orderedRDD1.filterOrdered { case (k, (_, v)) => v > mean }.collect()
+    val benchmark =
+      unsortedData.filter { case (_, (_, v)) => v > mean }.sortBy(_._1)
+    val test =
+      orderedRDD1.filterOrdered { case (k, (_, v)) => v > mean }.collect()
     // Check there must be some rows filtered and some rows left.
     assert(benchmark.length < unsortedData.length)
     assert(benchmark.length > 0)
@@ -254,11 +278,16 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
     val numPartitions = 5
     val targetNumPartitions = 50
     val data = (1 to 10000) zip (1 to 10000)
-    val rdd = OrderedRDD.fromRDD(
-      sc.parallelize(data, numPartitions), KeyPartitioningType.Sorted
-    ).repartition(targetNumPartitions)
+    val rdd = OrderedRDD
+      .fromRDD(
+        sc.parallelize(data, numPartitions),
+        KeyPartitioningType.Sorted
+      )
+      .repartition(targetNumPartitions)
     assert(rdd.partitions.length == targetNumPartitions)
-    assertResult(data.size) { rdd.count() }
+    assertResult(data.size) {
+      rdd.count()
+    }
     assert(rdd.collect().sameElements(data))
   }
 
@@ -268,7 +297,9 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       case (k, e) => (k, e.fold(l => l, r => r))
     }
     assert(benchmark.sameElements(test1))
-    val benchmark2 = (sortedData1 ++ unsortedData).sortBy { _._1 }
+    val benchmark2 = (sortedData1 ++ unsortedData).sortBy {
+      _._1
+    }
     val test2 = (orderedRDD2 ++ orderedRDD1).collect().map {
       case (k, e) => (k, e.fold(l => l, r => r))
     }
@@ -279,34 +310,59 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
     val lookback = 30
     val benchmark = unsortedData.sortBy(_._1).map {
       case (k1, (sk1, v1)) =>
-        (k1, ((sk1, v1), sortedData1.filter {
-          case (k2, (sk2, v2)) => k2 >= k1 - lookback && k2 <= k1 && sk1 == sk2
-        }.sortBy(_._1).lastOption.map { case (k2, v2) => (k2, v2) }))
+        (k1,
+          ((sk1, v1),
+            sortedData1
+            .filter {
+              case (k2, (sk2, v2)) =>
+                k2 >= k1 - lookback && k2 <= k1 && sk1 == sk2
+            }
+            .sortBy(_._1)
+            .lastOption
+            .map { case (k2, v2) => (k2, v2) }))
     }
 
-    val skFn = { case ((sk, _)) => sk }: ((Int, Double)) => Int
-    val test = orderedRDD1.leftJoin(orderedRDD2, { _ - lookback }, skFn, skFn).collect()
+    val skFn = {
+      case ((sk, _)) => sk
+    }: ((Int, Double)) => Int
+    val test = orderedRDD1
+      .leftJoin(orderedRDD2, {
+        _ - lookback
+      }, skFn, skFn)
+      .collect()
     assert(benchmark.deep == test.deep)
   }
 
   it should "`symmetricJoin` correctly" in {
     val lookback = 30
-    val skFn = { case ((sk, _)) => sk }: ((Int, Double)) => Int
+    val skFn = {
+      case ((sk, _)) => sk
+    }: ((Int, Double)) => Int
 
-    val rddLeft = orderedRDD1.leftJoin(orderedRDD2, { _ - lookback }, skFn, skFn)
-    val rdd1 = rddLeft.mapValues{ case (k, (v, v2)) => (Option(k, v), v2) }
-    val rddRight = orderedRDD2.leftJoin(orderedRDD1, { _ - lookback }, skFn, skFn)
-    val rdd2 = rddRight.mapValues{ case (k, (v, v2)) => (v2, Option(k, v)) }
+    val rddLeft = orderedRDD1.leftJoin(orderedRDD2, {
+      _ - lookback
+    }, skFn, skFn)
+    val rdd1 = rddLeft.mapValues { case (k, (v, v2)) => (Option(k, v), v2) }
+    val rddRight = orderedRDD2.leftJoin(orderedRDD1, {
+      _ - lookback
+    }, skFn, skFn)
+    val rdd2 = rddRight.mapValues { case (k, (v, v2)) => (v2, Option(k, v)) }
     val benchmark = rdd1.merge(rdd2).collect()
 
-    val test = orderedRDD1.symmetricJoin(orderedRDD2, { _ - lookback }, skFn, skFn).collect()
+    val test = orderedRDD1
+      .symmetricJoin(orderedRDD2, {
+        _ - lookback
+      }, skFn, skFn)
+      .collect()
     assert(benchmark.deep == test.deep)
   }
 
   it should "`groupByKey` correctly" in {
     val rdd = sc.parallelize(sortedData3, 4)
     val orderedRDD = OrderedRDD.fromRDD(rdd, KeyPartitioningType.Sorted)
-    val orderedRDD2 = orderedRDD.groupByKey({ _ => None })
+    val orderedRDD2 = orderedRDD.groupByKey({ _ =>
+      None
+    })
     val orderedRDD2Values = orderedRDD2.collect()
 
     val expectedResult = Array(
@@ -339,104 +395,147 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
     val rdd = sc.parallelize(data, 2)
     val orderedRDD = OrderedRDD.fromRDD(rdd, KeyPartitioningType.Sorted)
 
-    val noneSkFn: ((Int, Double)) => Any = { _ => None }
-    val skFn = { case ((sk, _)) => sk }: ((Int, Double)) => Int
+    val noneSkFn: ((Int, Double)) => Any = { _ =>
+      None
+    }
+    val skFn = {
+      case ((sk, _)) => sk
+    }: ((Int, Double)) => Int
     val sum = RowsSummarizer[(Int, Double)]()
 
-    val window1 = { t: Long => (t - 30, t) }
-    val result1 = orderedRDD.summarizeWindows(window1, sum, skFn).collect()
+    def flattenFn(
+      x: (Long, ((Int, Double), Array[(Int, Double)]))
+    ): (Long, (Int, Double), IndexedSeq[(Int, Double)]) =
+      (x._1, x._2._1, x._2._2)
+
+    val window1 = { t: Long =>
+      (t - 30, t)
+    }
+    val result1 = orderedRDD
+      .summarizeWindows(window1, sum, skFn, null, null)
+      .map(flattenFn(_))
+      .collect()
     val expected1 = Array(
-      (1000L, ((7, 9.90), Vector((7, 9.90)))),
-      (1000L, ((3, 9.91), Vector((3, 9.91)))),
-      (1030L, ((3, 9.92), Vector((3, 9.91), (3, 9.92)))),
-      (1030L, ((7, 9.93), Vector((7, 9.90), (7, 9.93)))),
-      (1100L, ((3, 9.94), Vector((3, 9.94)))),
-      (1100L, ((7, 9.95), Vector((7, 9.95)))),
-      (1130L, ((3, 9.96), Vector((3, 9.94), (3, 9.96)))),
-      (1130L, ((7, 9.97), Vector((7, 9.95), (7, 9.97))))
-    )
+      (1000L, ((7, 9.90), Array((7, 9.90)))),
+      (1000L, ((3, 9.91), Array((3, 9.91)))),
+      (1030L, ((3, 9.92), Array((3, 9.91), (3, 9.92)))),
+      (1030L, ((7, 9.93), Array((7, 9.90), (7, 9.93)))),
+      (1100L, ((3, 9.94), Array((3, 9.94)))),
+      (1100L, ((7, 9.95), Array((7, 9.95)))),
+      (1130L, ((3, 9.96), Array((3, 9.94), (3, 9.96)))),
+      (1130L, ((7, 9.97), Array((7, 9.95), (7, 9.97))))
+    ).map(flattenFn(_))
     assert(result1.deep == expected1.deep)
 
-    val window2 = { t: Long => (t, t + 30) }
-    val result2 = orderedRDD.summarizeWindows(window2, sum, skFn).collect()
+    val window2 = { t: Long =>
+      (t, t + 30)
+    }
+    val result2 = orderedRDD
+      .summarizeWindows(window2, sum, skFn, null, null)
+      .map(flattenFn(_))
+      .collect()
     val expected2 = Array(
-      (1000L, ((7, 9.90), Vector((7, 9.90), (7, 9.93)))),
-      (1000L, ((3, 9.91), Vector((3, 9.91), (3, 9.92)))),
-      (1030L, ((3, 9.92), Vector((3, 9.92)))),
-      (1030L, ((7, 9.93), Vector((7, 9.93)))),
-      (1100L, ((3, 9.94), Vector((3, 9.94), (3, 9.96)))),
-      (1100L, ((7, 9.95), Vector((7, 9.95), (7, 9.97)))),
-      (1130L, ((3, 9.96), Vector((3, 9.96)))),
-      (1130L, ((7, 9.97), Vector((7, 9.97))))
-    )
+      (1000L, ((7, 9.90), Array((7, 9.90), (7, 9.93)))),
+      (1000L, ((3, 9.91), Array((3, 9.91), (3, 9.92)))),
+      (1030L, ((3, 9.92), Array((3, 9.92)))),
+      (1030L, ((7, 9.93), Array((7, 9.93)))),
+      (1100L, ((3, 9.94), Array((3, 9.94), (3, 9.96)))),
+      (1100L, ((7, 9.95), Array((7, 9.95), (7, 9.97)))),
+      (1130L, ((3, 9.96), Array((3, 9.96)))),
+      (1130L, ((7, 9.97), Array((7, 9.97))))
+    ).map(flattenFn(_))
     assert(result2.deep == expected2.deep)
 
-    val window3 = { t: Long => (t - 30, t + 30) }
-    val result3 = orderedRDD.summarizeWindows(window3, sum, skFn).collect()
+    val window3 = { t: Long =>
+      (t - 30, t + 30)
+    }
+    val result3 = orderedRDD
+      .summarizeWindows(window3, sum, skFn, null, null)
+      .map(flattenFn(_))
+      .collect()
     val expected3 = Array(
-      (1000L, ((7, 9.90), Vector((7, 9.90), (7, 9.93)))),
-      (1000L, ((3, 9.91), Vector((3, 9.91), (3, 9.92)))),
-      (1030L, ((3, 9.92), Vector((3, 9.91), (3, 9.92)))),
-      (1030L, ((7, 9.93), Vector((7, 9.90), (7, 9.93)))),
-      (1100L, ((3, 9.94), Vector((3, 9.94), (3, 9.96)))),
-      (1100L, ((7, 9.95), Vector((7, 9.95), (7, 9.97)))),
-      (1130L, ((3, 9.96), Vector((3, 9.94), (3, 9.96)))),
-      (1130L, ((7, 9.97), Vector((7, 9.95), (7, 9.97))))
-    )
+      (1000L, ((7, 9.90), Array((7, 9.90), (7, 9.93)))),
+      (1000L, ((3, 9.91), Array((3, 9.91), (3, 9.92)))),
+      (1030L, ((3, 9.92), Array((3, 9.91), (3, 9.92)))),
+      (1030L, ((7, 9.93), Array((7, 9.90), (7, 9.93)))),
+      (1100L, ((3, 9.94), Array((3, 9.94), (3, 9.96)))),
+      (1100L, ((7, 9.95), Array((7, 9.95), (7, 9.97)))),
+      (1130L, ((3, 9.96), Array((3, 9.94), (3, 9.96)))),
+      (1130L, ((7, 9.97), Array((7, 9.95), (7, 9.97))))
+    ).map(flattenFn(_))
     assert(result3.deep == expected3.deep)
 
-    val window4 = { t: Long => (t - 30, t) }
-    val result4 = orderedRDD.summarizeWindows(window4, sum, noneSkFn).collect()
+    val window4 = { t: Long =>
+      (t - 30, t)
+    }
+    val result4 = orderedRDD
+      .summarizeWindows(window4, sum, noneSkFn, null, null)
+      .map(flattenFn(_))
+      .collect()
     val expected4 = Array(
-      (1000L, ((7, 9.90), Vector((7, 9.90), (3, 9.91)))),
-      (1000L, ((3, 9.91), Vector((7, 9.90), (3, 9.91)))),
-      (1030L, ((3, 9.92), Vector((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
-      (1030L, ((7, 9.93), Vector((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
-      (1100L, ((3, 9.94), Vector((3, 9.94), (7, 9.95)))),
-      (1100L, ((7, 9.95), Vector((3, 9.94), (7, 9.95)))),
-      (1130L, ((3, 9.96), Vector((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97)))),
-      (1130L, ((7, 9.97), Vector((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97))))
-    )
+      (1000L, ((7, 9.90), Array((7, 9.90), (3, 9.91)))),
+      (1000L, ((3, 9.91), Array((7, 9.90), (3, 9.91)))),
+      (1030L, ((3, 9.92), Array((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
+      (1030L, ((7, 9.93), Array((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
+      (1100L, ((3, 9.94), Array((3, 9.94), (7, 9.95)))),
+      (1100L, ((7, 9.95), Array((3, 9.94), (7, 9.95)))),
+      (1130L, ((3, 9.96), Array((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97)))),
+      (1130L, ((7, 9.97), Array((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97))))
+    ).map(flattenFn(_))
     assert(result4.deep == expected4.deep)
 
-    val window5 = { t: Long => (t, t + 30) }
-    val result5 = orderedRDD.summarizeWindows(window5, sum, noneSkFn).collect()
+    val window5 = { t: Long =>
+      (t, t + 30)
+    }
+    val result5 = orderedRDD
+      .summarizeWindows(window5, sum, noneSkFn, null, null)
+      .map(flattenFn(_))
+      .collect()
     val expected5 = Array(
-      (1000L, ((7, 9.90), Vector((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
-      (1000L, ((3, 9.91), Vector((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
-      (1030L, ((3, 9.92), Vector((3, 9.92), (7, 9.93)))),
-      (1030L, ((7, 9.93), Vector((3, 9.92), (7, 9.93)))),
-      (1100L, ((3, 9.94), Vector((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97)))),
-      (1100L, ((7, 9.95), Vector((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97)))),
-      (1130L, ((3, 9.96), Vector((3, 9.96), (7, 9.97)))),
-      (1130L, ((7, 9.97), Vector((3, 9.96), (7, 9.97))))
-    )
+      (1000L, ((7, 9.90), Array((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
+      (1000L, ((3, 9.91), Array((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
+      (1030L, ((3, 9.92), Array((3, 9.92), (7, 9.93)))),
+      (1030L, ((7, 9.93), Array((3, 9.92), (7, 9.93)))),
+      (1100L, ((3, 9.94), Array((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97)))),
+      (1100L, ((7, 9.95), Array((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97)))),
+      (1130L, ((3, 9.96), Array((3, 9.96), (7, 9.97)))),
+      (1130L, ((7, 9.97), Array((3, 9.96), (7, 9.97))))
+    ).map(flattenFn(_))
     assert(result5.deep == expected5.deep)
 
-    val window6 = { t: Long => (t - 30, t + 30) }
-    val result6 = orderedRDD.summarizeWindows(window6, sum, noneSkFn).collect()
+    val window6 = { t: Long =>
+      (t - 30, t + 30)
+    }
+    val result6 = orderedRDD
+      .summarizeWindows(window6, sum, noneSkFn, null, null)
+      .map(flattenFn(_))
+      .collect()
     val expected6 = Array(
-      (1000L, ((7, 9.90), Vector((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
-      (1000L, ((3, 9.91), Vector((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
-      (1030L, ((3, 9.92), Vector((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
-      (1030L, ((7, 9.93), Vector((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
-      (1100L, ((3, 9.94), Vector((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97)))),
-      (1100L, ((7, 9.95), Vector((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97)))),
-      (1130L, ((3, 9.96), Vector((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97)))),
-      (1130L, ((7, 9.97), Vector((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97))))
-    )
+      (1000L, ((7, 9.90), Array((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
+      (1000L, ((3, 9.91), Array((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
+      (1030L, ((3, 9.92), Array((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
+      (1030L, ((7, 9.93), Array((7, 9.90), (3, 9.91), (3, 9.92), (7, 9.93)))),
+      (1100L, ((3, 9.94), Array((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97)))),
+      (1100L, ((7, 9.95), Array((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97)))),
+      (1130L, ((3, 9.96), Array((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97)))),
+      (1130L, ((7, 9.97), Array((3, 9.94), (7, 9.95), (3, 9.96), (7, 9.97))))
+    ).map(flattenFn(_))
     assert(result6.deep == expected6.deep)
   }
 
   it should "`shift correctly`" in {
-    val fn = { x: Long => x + 1000L }
+    val fn = { x: Long =>
+      x + 1000L
+    }
     val result = orderedRDD2.shift(fn)
-    val expected = orderedRDD2.collect().map{ case (t, v) => (fn(t), v) }
+    val expected = orderedRDD2.collect().map { case (t, v) => (fn(t), v) }
     assert(result.collect().deep == expected.deep)
 
-    val fn1 = { x: Long => x - 1000L }
+    val fn1 = { x: Long =>
+      x - 1000L
+    }
     val result1 = orderedRDD2.shift(fn1)
-    val expected1 = orderedRDD2.collect().map{ case (t, v) => (fn1(t), v) }
+    val expected1 = orderedRDD2.collect().map { case (t, v) => (fn1(t), v) }
     assert(result1.collect().deep == expected1.deep)
   }
 }

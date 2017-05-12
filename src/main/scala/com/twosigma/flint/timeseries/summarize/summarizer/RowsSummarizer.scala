@@ -16,6 +16,8 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
+import java.util.ArrayDeque
+
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.{ ColumnList, InputAlwaysValid, LeftSubtractableSummarizer, SummarizerFactory }
@@ -36,16 +38,16 @@ case class RowsSummarizer(
   column: String
 ) extends LeftSubtractableSummarizer with InputAlwaysValid {
   override type T = InternalRow
-  override type U = Vector[InternalRow]
-  override type V = Vector[InternalRow]
-  override val summarizer = subtractable.RowsSummarizer[InternalRow]()
+  override type U = ArrayDeque[InternalRow]
+  override type V = Array[InternalRow]
+  override val summarizer = subtractable.InternalRowsSummarizer()
   override val schema = Schema.of(column -> ArrayType(inputSchema))
 
   override def toT(r: InternalRow): T = r
 
   override def fromV(v: V): InternalRow = {
-    val values = new GenericArrayData(v.toArray)
+    val values = new GenericArrayData(v.asInstanceOf[Array[Any]])
     InternalRow(values)
   }
-
 }
+
