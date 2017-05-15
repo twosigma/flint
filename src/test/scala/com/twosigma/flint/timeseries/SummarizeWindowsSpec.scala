@@ -104,42 +104,6 @@ class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData w
     }
   }
 
-  it should "pass `SummarizeWindowCountOverTwoTimeSeries` test." in {
-    val resultsTSRdd = fromCSV(
-      "SummarizeWindowCountOverTwoTimeSeries.results",
-      Schema("count" -> LongType)
-    )
-
-    def test(left: TimeSeriesRDD, right: TimeSeriesRDD): Unit = {
-      val summarizedTSRdd = left.summarizeWindows(Windows.pastAbsoluteTime("500ns"), Summarizers.count(), Seq(), right)
-      assertEquals(summarizedTSRdd, resultsTSRdd)
-    }
-
-    {
-      val clock1 = fromCSV("Clock1.csv", Schema())
-      val clock2 = fromCSV("Clock2.csv", Schema())
-      withPartitionStrategy(clock1, clock2)(DEFAULT)(test)
-    }
-
-  }
-
-  it should "pass `SummarizeWindowCountOverSingleTimeSeries` test." in {
-    val resultsTSRdd = fromCSV(
-      "SummarizeWindowCountOverSingleTimeSeries.results",
-      Schema("count" -> LongType)
-    )
-
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val summarizedTSRdd = rdd.summarizeWindows(Windows.pastAbsoluteTime("5ns"), Summarizers.count())
-      assertEquals(summarizedTSRdd, resultsTSRdd)
-    }
-
-    {
-      val clock = fromCSV("Clock.csv", Schema())
-      withPartitionStrategy(clock)(DEFAULT)(test)
-    }
-  }
-
   it should "pass `SummarizeWindowSumOverSingleTimeSeries` test." in {
     val resultsTSRdd = fromCSV(
       "SummarizeWindowSumOverSingleTimeSeries.results",
@@ -174,42 +138,12 @@ class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData w
         window, Summarizers.count()
       ).rdd.map(_.getAs[Long]("count"))
 
-      val summarized2 = clockTSRdd.summarizeWindows(
-        window, Summarizers.count(), Seq(), clockTSRdd
-      ).rdd.map(_.getAs[Long]("count"))
-
       val results = clock.map {
         t1 =>
           val (b, e) = window.of(t1.toLong)
           clock.count { t2 => t2 >= b && t2 <= e }
       }
       assert(summarized1.collect().deep == results.toArray.deep)
-      assert(summarized2.collect().deep == results.toArray.deep)
-    }
-  }
-
-  it should "pass `SummarizeWindowCountOverTwoRandomTimeSeries` test." in {
-    (1 to 10).foreach { seed =>
-      val n = 100
-      val step = 10
-      val rand = new Random(seed)
-      val clock1 = Seq.fill(n)(rand.nextInt(step * n)).sorted
-      val clock2 = Seq.fill(n)(rand.nextInt(step * n)).sorted
-      val clockTSRdd1 = toTSRdd(clock1)
-      val clockTSRdd2 = toTSRdd(clock2)
-
-      val window = Windows.pastAbsoluteTime(s"$step ns")
-
-      val summarized = clockTSRdd1.summarizeWindows(
-        window, Summarizers.count(), Seq(), clockTSRdd2
-      ).rdd.map(_.getAs[Long]("count"))
-
-      val results = clock1.map {
-        t1 =>
-          val (b, e) = window.of(t1.toLong)
-          clock2.count { t2 => t2 >= b && t2 <= e }
-      }
-      assert(summarized.collect().deep == results.toArray.deep)
     }
   }
 
@@ -233,38 +167,5 @@ class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData w
     def gen(): TimeSeriesRDD = cycleData1
 
     withPartitionStrategyAndParams(gen)(DEFAULT)(params)(addWindows)
-  }
-
-  it should "pass cycle data property test with other rdd" in {
-    val testData1 = cycleData1
-    val testData2 = cycleData2
-    val cycleWidth = cycleMetaData1.cycleWidth
-    val intervalWidth = cycleMetaData1.intervalWidth
-
-    def addWindows(
-      windowFn: (String) => ShiftTimeWindow,
-      windowWidth: Long,
-      key: Seq[String]
-    )(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): TimeSeriesRDD = {
-      val window = windowFn(s"${windowWidth}ns")
-      rdd1.addWindows(window, key = key, otherRdd = rdd2)
-    }
-
-    for (
-      windowFn <- Seq(Windows.pastAbsoluteTime _, Windows.futureAbsoluteTime _);
-      width <- Seq(
-        0, cycleWidth / 2, cycleWidth, cycleWidth * 2, intervalWidth / 2, intervalWidth, intervalWidth * 2
-      );
-      key <- Seq(Seq.empty, Seq("id"))
-    ) {
-      withPartitionStrategyCompare(
-        testData1, testData2
-      )(
-        // Ideally we want to run DEFAULT partition strategies, but it's too freaking slow!
-        NONE :+ MultiTimestampUnnormailzed
-      )(
-          addWindows(windowFn, width, key)
-        )
-    }
   }
 }

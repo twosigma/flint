@@ -412,7 +412,7 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       (t - 30, t)
     }
     val result1 = orderedRDD
-      .summarizeWindows(window1, sum, skFn, null, null)
+      .summarizeWindows(window1, sum, skFn)
       .map(flattenFn(_))
       .collect()
     val expected1 = Array(
@@ -431,7 +431,7 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       (t, t + 30)
     }
     val result2 = orderedRDD
-      .summarizeWindows(window2, sum, skFn, null, null)
+      .summarizeWindows(window2, sum, skFn)
       .map(flattenFn(_))
       .collect()
     val expected2 = Array(
@@ -450,7 +450,7 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       (t - 30, t + 30)
     }
     val result3 = orderedRDD
-      .summarizeWindows(window3, sum, skFn, null, null)
+      .summarizeWindows(window3, sum, skFn)
       .map(flattenFn(_))
       .collect()
     val expected3 = Array(
@@ -469,7 +469,7 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       (t - 30, t)
     }
     val result4 = orderedRDD
-      .summarizeWindows(window4, sum, noneSkFn, null, null)
+      .summarizeWindows(window4, sum, noneSkFn)
       .map(flattenFn(_))
       .collect()
     val expected4 = Array(
@@ -488,7 +488,7 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       (t, t + 30)
     }
     val result5 = orderedRDD
-      .summarizeWindows(window5, sum, noneSkFn, null, null)
+      .summarizeWindows(window5, sum, noneSkFn)
       .map(flattenFn(_))
       .collect()
     val expected5 = Array(
@@ -507,7 +507,7 @@ class OrderedRDDSpec extends FlatSpec with SharedSparkContext {
       (t - 30, t + 30)
     }
     val result6 = orderedRDD
-      .summarizeWindows(window6, sum, noneSkFn, null, null)
+      .summarizeWindows(window6, sum, noneSkFn)
       .map(flattenFn(_))
       .collect()
     val expected6 = Array(
