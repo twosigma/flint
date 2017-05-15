@@ -41,6 +41,7 @@ object PartitionPreservingOperation {
       case _: WholeStageCodegenExec => true
       case _: InputAdapter => true
       case _: GenerateExec => true
+      case _: SerializeFromObjectExec => true
       case _ => false
     }
   }
@@ -51,6 +52,7 @@ object PartitionPreservingOperation {
         // TODO: This is hacky. Should use LogicalRelation/LogicalRDD to distinguish ExistingRDD/ParquetRelation
         // This works for 2.x as well
         physicalRDD.nodeName == "ExistingRDD"
+      case _: ExternalRDDScanExec[_] => true
       case _: InMemoryTableScanExec => true
       case _ => false
     }

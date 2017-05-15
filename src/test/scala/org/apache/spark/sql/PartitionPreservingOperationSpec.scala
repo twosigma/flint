@@ -94,7 +94,6 @@ class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
 
   it should "get executedPlan of cached DataFrame" in {
     val data = DFConverter.newDataFrame(testData)
-    assert(executedPlan(data).isInstanceOf[RDDScanExec])
     data.cache()
     data.count()
     assert(executedPlan(data).isInstanceOf[InMemoryTableScanExec])
