@@ -37,17 +37,16 @@ case class NthCentralMomentSummarizer(
 ) extends Summarizer with FilterNullInput {
   private val Sequence(Seq(column)) = requiredColumns
   private val columnIndex = inputSchema.fieldIndex(column)
+  private final val valueExtractor = asDoubleExtractor(inputSchema(columnIndex).dataType, columnIndex)
 
   override type T = Double
   override type U = NthCentralMomentState
   override type V = NthCentralMomentOutput
 
-  private final val toDouble = anyToDouble(inputSchema(columnIndex).dataType)
-
   override val summarizer = NthCentralMomentSum(moment)
   override val schema = Schema.of(s"${column}_${moment}thCentralMoment" -> DoubleType)
 
-  override def toT(r: InternalRow): T = toDouble(r.get(columnIndex, inputSchema(columnIndex).dataType))
+  override def toT(r: InternalRow): T = valueExtractor(r)
 
   override def fromV(v: V): InternalRow = InternalRow(v.nthCentralMoment(moment))
 }

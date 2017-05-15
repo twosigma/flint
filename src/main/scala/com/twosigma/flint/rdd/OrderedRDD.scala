@@ -358,10 +358,10 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * @return a [[OrderedRDD]] with windowing summaries.
    */
   def summarizeWindows[SK, V1, U, V2: ClassTag](
-     window: K => (K, K),
-     summarizer: Summarizer[V, U, V2],
-     sk: V => SK
-   ): OrderedRDD[K, (V, V2)] = SummarizeWindows(self, window, summarizer, sk)
+    window: K => (K, K),
+    summarizer: Summarizer[V, U, V2],
+    sk: V => SK
+  ): OrderedRDD[K, (V, V2)] = SummarizeWindows(self, window, summarizer, sk)
 
   /**
    * For each row of an [[OrderedRDD]], apply a [[Summarizer]] to all rows of its window.

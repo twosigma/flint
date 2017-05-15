@@ -37,7 +37,7 @@ case class QuantileSummarizer(
 ) extends Summarizer with FilterNullInput {
   private val Sequence(Seq(column)) = requiredColumns
   private val columnIndex = inputSchema.fieldIndex(column)
-  private val toDouble = anyToDouble(inputSchema(columnIndex).dataType)
+  private final val valueExtractor = asDoubleExtractor(inputSchema(columnIndex).dataType, columnIndex)
 
   override type T = Double
   override type U = QState[Double]
@@ -46,7 +46,7 @@ case class QuantileSummarizer(
   override val summarizer = QSummarizer(p)
   override val schema = Schema.of(p.map { q => s"${column}_${q}quantile" -> DoubleType }: _*)
 
-  override def toT(r: InternalRow): T = toDouble(r.get(columnIndex, inputSchema(columnIndex).dataType))
+  override def toT(r: InternalRow): T = valueExtractor(r)
 
   override def fromV(v: V): InternalRow = InternalRow.fromSeq(Array[Any]() ++ v)
 }

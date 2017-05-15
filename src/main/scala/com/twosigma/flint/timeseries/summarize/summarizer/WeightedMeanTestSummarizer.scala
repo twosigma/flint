@@ -37,8 +37,8 @@ case class WeightedMeanTestSummarizer(
   val Sequence(Seq(valueColumn, weightColumn)) = requiredColumns
   private val valueColumnIndex = inputSchema.fieldIndex(valueColumn)
   private val weightColumnIndex = inputSchema.fieldIndex(weightColumn)
-  private val valueToDouble = anyToDouble(inputSchema(valueColumnIndex).dataType)
-  private val weightToDouble = anyToDouble(inputSchema(weightColumnIndex).dataType)
+  private final val valueExtractor = asDoubleExtractor(inputSchema(valueColumnIndex).dataType, valueColumnIndex)
+  private final val weightExtractor = asDoubleExtractor(inputSchema(weightColumnIndex).dataType, weightColumnIndex)
   private val columnPrefix = s"${valueColumn}_${weightColumn}"
 
   override type T = (Double, Double)
@@ -55,8 +55,8 @@ case class WeightedMeanTestSummarizer(
 
   override def toT(r: InternalRow): T =
     (
-      valueToDouble(r.get(valueColumnIndex, inputSchema(valueColumnIndex).dataType)),
-      weightToDouble(r.get(weightColumnIndex, inputSchema(weightColumnIndex).dataType))
+      valueExtractor(r),
+      weightExtractor(r)
     )
 
   override def fromV(v: V): InternalRow = InternalRow.fromSeq(v.productIterator.toSeq)

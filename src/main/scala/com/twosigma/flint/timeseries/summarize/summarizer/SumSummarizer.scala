@@ -41,8 +41,9 @@ case class SumSummarizer(
   override val summarizer = subtractable.SumSummarizer[Double]()
   override val schema = Schema.of(s"${sumColumn}_sum" -> DoubleType)
 
-  override def toT(r: InternalRow): T =
-    anyToDouble(inputSchema(sumColumnIndex).dataType)(r.get(sumColumnIndex, inputSchema(sumColumnIndex).dataType))
+  private final val sumExtractor = asDoubleExtractor(inputSchema(sumColumnIndex).dataType, sumColumnIndex)
+
+  override def toT(r: InternalRow): T = sumExtractor(r)
 
   override def fromV(v: V): InternalRow = InternalRow(v)
 }

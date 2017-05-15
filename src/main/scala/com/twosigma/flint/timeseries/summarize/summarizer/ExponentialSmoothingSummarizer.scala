@@ -62,7 +62,7 @@ case class ExponentialSmoothingSummarizer(
   private val xColumnId = inputSchema.fieldIndex(xColumn)
   private val timeColumnId = inputSchema.fieldIndex(timeColumn)
 
-  private val xToDouble = anyToDouble(inputSchema(xColumnId).dataType)
+  private final val xExtractor = asDoubleExtractor(inputSchema(xColumnId).dataType, xColumnId)
 
   override type T = SmoothingRow
   override type U = ExponentialSmoothingState
@@ -72,7 +72,7 @@ case class ExponentialSmoothingSummarizer(
 
   override def toT(r: InternalRow): SmoothingRow = SmoothingRow(
     time = r.getLong(timeColumnId),
-    x = xToDouble(r.get(xColumnId, inputSchema(xColumnId).dataType))
+    x = xExtractor(r)
   )
 
   override val schema = ExponentialSmoothingSummarizer.outputSchema

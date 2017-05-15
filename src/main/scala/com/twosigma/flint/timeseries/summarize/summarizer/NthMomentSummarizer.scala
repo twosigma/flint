@@ -42,12 +42,12 @@ case class NthMomentSummarizer(
   override type U = NthMomentState
   override type V = Double
 
-  private final val toDouble = anyToDouble(inputSchema(columnIndex).dataType)
+  private final val doubleGetter = asDoubleExtractor(inputSchema(columnIndex).dataType, columnIndex)
 
   override val summarizer = NMSummarizer(moment)
   override val schema = Schema.of(s"${column}_${moment}thMoment" -> DoubleType)
 
-  override def toT(r: InternalRow): T = toDouble(r.get(columnIndex, inputSchema(columnIndex).dataType))
+  override def toT(r: InternalRow): T = doubleGetter(r)
 
   override def fromV(v: V): InternalRow = InternalRow(v)
 }

@@ -72,18 +72,14 @@ object SummarizeWindows {
       )
       (lagWindowFn(windowFn(k).begin).begin, windowFn(k).end.get)
     }
-    if (otherRdd == null) {
-      val overlappedRdd = OverlappedOrderedRDD(rdd, composedWindow)
-      val splits = overlappedRdd.rangeSplits
-      overlappedRdd.mapPartitionsWithIndexOverlapped(
-        (partitionIndex, iterator) =>
-          new OverlappableWindowSummarizerIterator(
-            iterator.buffered, splits(partitionIndex).range, windowFn, lagWindowFn, summarizer, skFn
-          )
-      ).nonOverlapped()
-    } else {
-      throw new scala.NotImplementedError("Join iterator not implemented for overlappable summarizers")
-    }
+    val overlappedRdd = OverlappedOrderedRDD(rdd, composedWindow)
+    val splits = overlappedRdd.rangeSplits
+    overlappedRdd.mapPartitionsWithIndexOverlapped(
+      (partitionIndex, iterator) =>
+        new OverlappableWindowSummarizerIterator(
+          iterator.buffered, splits(partitionIndex).range, windowFn, lagWindowFn, summarizer, skFn
+        )
+    ).nonOverlapped()
   }
 
   private[rdd] def getCloseOpenWindowRange[K](windowFn: K => (K, K))(k: K)(implicit ord: Ordering[K]): Range[K] = {

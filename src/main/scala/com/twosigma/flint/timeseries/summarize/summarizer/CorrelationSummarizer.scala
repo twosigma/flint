@@ -44,11 +44,7 @@ abstract class AbstractCorrelationSummarizer(
   override final type U = CorrelationState
   override final type V = CorrelationOutput
   override final val summarizer = CorrelationSum()
-  override final def toT(r: InternalRow): (Double, Double) =
-    (
-      xToDouble(r.get(columnXIndex, inputSchema(columnXIndex).dataType)),
-      yToDouble(r.get(columnYIndex, inputSchema(columnYIndex).dataType))
-    )
+  override final def toT(r: InternalRow): (Double, Double) = (xExtractor(r), yExtractor(r))
 }
 
 class CorrelationSummarizer(
