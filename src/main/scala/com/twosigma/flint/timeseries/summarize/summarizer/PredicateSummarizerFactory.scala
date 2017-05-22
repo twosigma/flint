@@ -108,6 +108,9 @@ private object UDFConverter {
         (input: InternalRow) => {
           func(extractors(0)(input), extractors(1)(input), extractors(2)(input), extractors(3)(input))
         }
+
+      case _ =>
+        throw new UnsupportedOperationException("Cannot build function with more than four arguments")
     }
   }
 }

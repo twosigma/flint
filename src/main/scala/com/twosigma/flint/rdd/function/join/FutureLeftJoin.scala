@@ -61,7 +61,7 @@ protected[flint] object FutureLeftJoin {
       (part, context) => {
         val parts = leftPartitions(part.index)
         val rightIter = PeekableIterator(PartitionsIterator(rightRdd, parts, context))
-        val foreSeen = new java.util.HashMap[SK, util.Deque[(K, V2)]]()
+        val foreSeen = new util.HashMap[SK, util.Deque[(K, V2)]]()
         leftRdd.iterator(part, context).map {
           case (k, v) =>
             val sk = leftSk(v)

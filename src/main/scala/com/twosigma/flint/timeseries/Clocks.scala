@@ -21,6 +21,9 @@ import com.twosigma.flint.timeseries.clock.{ RandomClock, UniformClock }
 
 object Clocks {
 
+  private val defaultBegin = "1970-01-01"
+  private val defaultEnd = "2030-01-01"
+
   /**
    * Returns a evenly sampled clock as a [[TimeSeriesRDD]]. The [[TimeSeriesRDD]] has only a "time" column.
    *
@@ -39,8 +42,8 @@ object Clocks {
     sc: SparkContext,
     frequency: String,
     offset: String = "0s",
-    beginDateTime: String = "1970-01-01",
-    endDateTime: String = "2030-01-01",
+    beginDateTime: String = defaultBegin,
+    endDateTime: String = defaultEnd,
     timeZone: String = "UTC"
   ): TimeSeriesRDD = {
     val clock = new UniformClock(sc, beginDateTime, endDateTime, frequency, offset, timeZone)
@@ -69,8 +72,8 @@ object Clocks {
     sc: SparkContext,
     frequency: String,
     offset: String = "0s",
-    beginDateTime: String = "1990-01-01",
-    endDateTime: String = "2030-01-01",
+    beginDateTime: String = defaultBegin,
+    endDateTime: String = defaultEnd,
     timeZone: String = "UTC",
     seed: Long = System.currentTimeMillis()
   ): TimeSeriesRDD = {

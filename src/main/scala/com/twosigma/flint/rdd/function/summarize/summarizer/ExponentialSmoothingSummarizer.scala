@@ -108,16 +108,17 @@ class ExponentialSmoothingSummarizer(
   }
 
   override def render(u: ExponentialSmoothingState): ExponentialSmoothingOutput = {
-    var _u = u.copy()
-    if (_u.count > 0) {
+    var newU = u.copy()
+    if (newU.count > 0) {
       // Account for priming periods
-      val periods = timestampsToPeriods(_u.firstXValue.get.time, _u.prevTime) max 0
+      val periods = timestampsToPeriods(newU.firstXValue.get.time, newU.prevTime) max 0
       val primingAlpha = getAlpha(primingPeriods)
       val tuningAlpha = getAlpha(periods)
-      _u.primaryESValue = _u.primaryESValue + tuningAlpha * (1.0 - primingAlpha) * _u.firstXValue.get.x
-      _u.auxiliaryESValue = _u.auxiliaryESValue + tuningAlpha * (1.0 - primingAlpha) * 1.0
-      _u = update(_u)
-      ExponentialSmoothingOutput(_u.primaryESValue / _u.auxiliaryESValue)
+      val adjustedAlpha = tuningAlpha * (1.0 - primingAlpha)
+      newU.primaryESValue = newU.primaryESValue + adjustedAlpha * newU.firstXValue.get.x
+      newU.auxiliaryESValue = newU.auxiliaryESValue + adjustedAlpha
+      newU = update(newU)
+      ExponentialSmoothingOutput(newU.primaryESValue / newU.auxiliaryESValue)
     } else {
       ExponentialSmoothingOutput(Double.NaN)
     }
