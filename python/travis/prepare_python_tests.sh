@@ -28,6 +28,7 @@ mv spark-2.1.1-bin-hadoop2.7 spark
 # lower log level to WARN by default;
 # otherwise travis output will be swamped by Spark reporting.
 cp travis/spark_log4j.properties spark/conf/log4j.properties
+# Add the flint assembly to spark test instance
+sed "s,_FLINT_ROOT_,$(pwd)/..," <travis/spark-defaults.conf >spark/conf/spark-defaults.conf
 
 conda create -n flint python=3.5 pandas notebook
-

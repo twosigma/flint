@@ -19,5 +19,9 @@
 set -ev
 
 source activate flint
+conda install -y -c conda-forge findspark
 
-PYSPARK_PYTHON=python3 spark/bin/spark-submit --master=local --jars ../target/scala-2.11/flint-assembly-0.2.0-SNAPSHOT.jar --py-files ../target/scala-2.11/flint-assembly-0.2.0-SNAPSHOT.jar test/test_dataframe.py
+# Set SPARK_HOME
+export SPARK_HOME=$(pwd)/spark
+
+python -m unittest discover -s test

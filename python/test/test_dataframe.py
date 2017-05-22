@@ -13,20 +13,15 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-
 import unittest
 
-from pyspark import SparkContext, SparkConf
-from pyspark.sql import SQLContext, types
+from py_spark_test_case import PySparkTestCase
+from pyspark.sql import types
 from pyspark.sql.functions import col
-import ts.flint
-from ts.flint import FlintContext
 from ts.flint import summarizers
 import ts.flint.dataframe
 
-
-class TestDataframe(unittest.TestCase):
-
+class TestDataframe(PySparkTestCase):
     def date_parser(self, fmt):
         @ts.flint.udf(types.LongType())
         def parse(x):
@@ -34,15 +29,11 @@ class TestDataframe(unittest.TestCase):
             return int(dt.strftime("%s%f"))
         return parse
 
-    def setUp(self):
-        config = SparkConf().setAppName("flint_tests").setMaster("local")
-        self.sparkContext = SparkContext(conf=config)
-        self.sqlContext = SQLContext(self.sparkContext)
-        self.flintContext = FlintContext(self.sqlContext)
-
     def test_summary(self):
-        weather = (self.sqlContext.read.csv('examples/weather.csv', header=True, inferSchema=True).withColumn('time', self.date_parser('%Y%m%d')(col('DATE'))))
-        spy = (self.sqlContext.read.csv('examples/spy.csv', header=True, inferSchema=True).withColumn('time', self.date_parser('%Y-%m-%d %H:%M:%S')(col('DATE'))))
+        weather = (self.sqlContext.read.csv('examples/weather.csv', header=True, inferSchema=True)
+                   .withColumn('time', self.date_parser('%Y%m%d')(col('DATE'))))
+        spy = (self.sqlContext.read.csv('examples/spy.csv', header=True, inferSchema=True)
+               .withColumn('time', self.date_parser('%Y-%m-%d %H:%M:%S')(col('DATE'))))
         weather_df = self.flintContext.read.dataframe(weather, is_sorted=False)
         spy_df = self.flintContext.read.dataframe(spy, is_sorted=False)
         joined = spy_df.leftJoin(weather_df, tolerance="3d")
