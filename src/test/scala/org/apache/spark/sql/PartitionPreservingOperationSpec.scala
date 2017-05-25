@@ -18,7 +18,7 @@ package org.apache.spark.sql
 
 import com.twosigma.flint.FlintSuite
 import PartitionPreservingOperation.{ executedPlan, isPartitionPreserving }
-import org.apache.spark.sql.execution._
+import org.apache.spark.sql.execution.RDDScanExec
 import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
 
 import org.apache.spark.sql.{ functions => F }
@@ -96,6 +96,7 @@ class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
 
   it should "get executedPlan of cached DataFrame" in {
     val data = DFConverter.newDataFrame(testData)
+    assert(executedPlan(data).isInstanceOf[RDDScanExec])
     data.cache()
     data.count()
     assert(executedPlan(data).isInstanceOf[InMemoryTableScanExec])
@@ -109,7 +110,7 @@ class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
   }
 
   it should "test explode" in {
-    val data = new DataFrame(sqlContext, testData.logicalPlan)
+    val data = DFConverter.newDataFrame(testData)
     var result = data.withColumn("values", F.array(F.lit(1), F.lit(2)))
     result = result.withColumn("value", F.explode(F.col("values")))
     assert(isPartitionPreserving(data, result))

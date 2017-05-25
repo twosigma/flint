@@ -108,7 +108,7 @@ class OrderPreservingOperationSpec extends FlintSuite with FlintTestData {
   }
 
   it should "test explode" in {
-    val data = new DataFrame(sqlContext, testData.logicalPlan)
+    val data = DFConverter.newDataFrame(testData)
     var result = data.withColumn("values", F.array(F.lit(1), F.lit(2)))
     result = result.withColumn("value", F.explode(F.col("values")))
     assert(OrderPreservingOperation.isOrderPreserving(data, result))
