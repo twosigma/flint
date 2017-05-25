@@ -60,19 +60,20 @@ private[flint] trait TimeSeriesTestData {
 
   protected lazy val forecastData: TimeSeriesRDD = {
     val df = sqlContext.sparkContext.parallelize(
-      ForecastData(1000L, 7, 3.0) ::
-        ForecastData(1000L, 3, 5.0) ::
-        ForecastData(1050L, 3, -1.5) ::
-        ForecastData(1050L, 7, 2.0) ::
-        ForecastData(1100L, 3, -2.4) ::
-        ForecastData(1100L, 7, 6.4) ::
-        ForecastData(1150L, 3, 1.5) ::
-        ForecastData(1150L, 7, -7.9) ::
-        ForecastData(1200L, 3, 4.6) ::
-        ForecastData(1200L, 7, 1.4) ::
-        ForecastData(1250L, 3, -9.6) ::
-        ForecastData(1250L, 7, 6.0) :: Nil
+      ForecastData(1000L, 7, Some(3.0)) ::
+        ForecastData(1000L, 3, Some(5.0)) ::
+        ForecastData(1050L, 3, Some(-1.5)) ::
+        ForecastData(1050L, 7, Some(2.0)) ::
+        ForecastData(1100L, 3, Some(-2.4)) ::
+        ForecastData(1100L, 7, Some(6.4)) ::
+        ForecastData(1150L, 3, Some(1.5)) ::
+        ForecastData(1150L, 7, Some(-7.9)) ::
+        ForecastData(1200L, 3, Some(4.6)) ::
+        ForecastData(1200L, 7, Some(1.4)) ::
+        ForecastData(1250L, 3, Some(-9.6)) ::
+        ForecastData(1250L, 7, Some(6.0)) :: Nil
     ).toDF()
+
     TimeSeriesRDD.fromDF(df)(isSorted = true, timeUnit = NANOSECONDS)
   }
 
@@ -144,5 +145,5 @@ private[flint] trait TimeSeriesTestData {
 
 private[flint] object TimeSeriesTestData {
   case class TestData(time: Long)
-  case class ForecastData(time: Long, id: Int, forecast: Double)
+  case class ForecastData(time: Long, id: Int, forecast: Option[Double])
 }
