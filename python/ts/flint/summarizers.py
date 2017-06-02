@@ -319,7 +319,7 @@ def nth_moment(column, n):
     return SummarizerFactory('nthMoment', column, n)
 
 
-def quantile(sc, column, phis):
+def quantile(column, phis):
     '''Computes the quantiles of the values in a column.
 
     **Adds columns:**
@@ -335,8 +335,7 @@ def quantile(sc, column, phis):
     :type phis: list
 
     '''
-    phis_seq = utils.list_to_seq(sc, phis)
-    return SummarizerFactory('quantile', column, phis_seq)
+    return SummarizerFactory('quantile', column, phis)
 
 
 def stddev(column):
