@@ -14,11 +14,11 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.timeseries.summarize.summarizer
+package com.twosigma.flint.timeseries.summarize.summarizer.subtractable
 
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
-import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesRDD }
+import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesRDD, Windows }
 import org.apache.spark.sql.types._
 
 class WeightedMeanTestSummarizerSpec extends SummarizerSuite {
@@ -44,6 +44,26 @@ class WeightedMeanTestSummarizerSpec extends SummarizerSuite {
     assert(result.getAs[Long]("price_forecast_observationCount") == 12L)
   }
 
+  it should "compute `WeightedMean` correctly for a window" in {
+    init
+    val lastWindowRdd = joinedRdd.deleteRows(r => r.getAs[Long]("time") < 1150L)
+    val expectedResult = lastWindowRdd.summarize(Summarizers.weightedMeanTest("price", "forecast")).first
+    val results = joinedRdd.summarizeWindows(
+      Windows.pastAbsoluteTime("100 ns"),
+      Summarizers.weightedMeanTest("price", "forecast")
+    ).collect()
+    val lastResult = results(results.length - 1)
+
+    assert(lastResult.getAs[Double]("price_forecast_weightedMean") ===
+      expectedResult.getAs[Double]("price_forecast_weightedMean"))
+    assert(lastResult.getAs[Double]("price_forecast_weightedStandardDeviation") ===
+      expectedResult.getAs[Double]("price_forecast_weightedStandardDeviation"))
+    assert(lastResult.getAs[Double]("price_forecast_weightedTStat") ===
+      expectedResult.getAs[Double]("price_forecast_weightedTStat"))
+    assert(lastResult.getAs[Long]("price_forecast_observationCount") ==
+      expectedResult.getAs[Long]("price_forecast_observationCount"))
+  }
+
   it should "ignore null values" in {
     init
     assertEquals(
@@ -58,6 +78,6 @@ class WeightedMeanTestSummarizerSpec extends SummarizerSuite {
   }
 
   it should "pass summarizer property test" in {
-    summarizerPropertyTest(AllProperties)(Summarizers.weightedMeanTest("x1", "x2"))
+    summarizerPropertyTest(AllPropertiesAndSubtractable)(Summarizers.weightedMeanTest("x1", "x2"))
   }
 }

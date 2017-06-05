@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.rdd.function.summarize.summarizer.{ WeightedMeanTestOutput, WeightedMeanTestState, WeightedMeanTestSummarizer => WMSummarizer }
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ WeightedMeanTestOutput, WeightedMeanTestState, WeightedMeanTestSummarizer => WMSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
 import com.twosigma.flint.timeseries.summarize._
@@ -33,7 +33,7 @@ case class WeightedMeanTestSummarizer(
   override val inputSchema: StructType,
   override val prefixOpt: Option[String],
   requiredColumns: ColumnList
-) extends Summarizer with FilterNullInput {
+) extends LeftSubtractableSummarizer with FilterNullInput {
   val Sequence(Seq(valueColumn, weightColumn)) = requiredColumns
   private val valueColumnIndex = inputSchema.fieldIndex(valueColumn)
   private val weightColumnIndex = inputSchema.fieldIndex(weightColumn)

@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.rdd.function.summarize.summarizer
+package com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 
 import com.twosigma.flint.math.Kahan
 import scala.math._
@@ -29,7 +29,7 @@ import scala.math._
  *
  */
 case class WeightedMeanTestState(
-  val count: Long,
+  var count: Long,
   val sumWeight: Kahan,
   val mean: Kahan,
   val sumSquareOfDiffFromMean: Kahan,
@@ -44,7 +44,7 @@ case class WeightedMeanTestOutput(
 )
 
 case class WeightedMeanTestSummarizer()
-  extends Summarizer[(Double, Double), WeightedMeanTestState, WeightedMeanTestOutput] {
+  extends LeftSubtractableSummarizer[(Double, Double), WeightedMeanTestState, WeightedMeanTestOutput] {
   override def zero(): WeightedMeanTestState = WeightedMeanTestState(0, Kahan(), Kahan(), Kahan(), Kahan())
 
   override def add(u: WeightedMeanTestState, data: (Double, Double)): WeightedMeanTestState = {
@@ -61,14 +61,30 @@ case class WeightedMeanTestSummarizer()
     u.mean.add(R)
     u.sumSquareOfDiffFromMean.add(oldSumWeight * delta * R)
     u.sumSquareOfWeights.add(weight * weight)
+    u.count += 1
 
-    WeightedMeanTestState(
-      u.count + 1,
-      u.sumWeight,
-      u.mean,
-      u.sumSquareOfDiffFromMean,
-      u.sumSquareOfWeights
-    )
+    u
+  }
+
+  override def subtract(u: WeightedMeanTestState, data: (Double, Double)): WeightedMeanTestState = {
+    val (rawValue, rawWeight) = data
+
+    val value = rawValue * signum(rawWeight)
+    val weight = abs(rawWeight)
+
+    val oldSumWeight = u.sumWeight.getValue()
+    u.sumWeight.add(-1.0 * weight)
+
+    val newMean = (u.mean.getValue() * oldSumWeight - weight * value) / u.sumWeight.getValue()
+    val delta = value - newMean
+    val R = delta * weight / oldSumWeight
+
+    u.mean.add(-1.0 * R)
+    u.sumSquareOfDiffFromMean.add(-1.0 * u.sumWeight.getValue() * delta * R)
+    u.sumSquareOfWeights.add(-1.0 * weight * weight)
+    u.count -= 1
+
+    u
   }
 
   override def merge(u1: WeightedMeanTestState, u2: WeightedMeanTestState): WeightedMeanTestState = {
@@ -85,14 +101,9 @@ case class WeightedMeanTestSummarizer()
       u1.sumSquareOfDiffFromMean.add(u2.sumSquareOfDiffFromMean)
       u1.sumSquareOfDiffFromMean.add(delta * delta * oldSumWeight * u2.sumWeight.getValue() / u1.sumWeight.getValue())
       u1.sumSquareOfWeights.add(u2.sumSquareOfWeights)
+      u1.count += u2.count
 
-      WeightedMeanTestState(
-        u1.count + u2.count,
-        u1.sumWeight,
-        u1.mean,
-        u1.sumSquareOfDiffFromMean,
-        u1.sumSquareOfWeights
-      )
+      u1
     }
   }
 
