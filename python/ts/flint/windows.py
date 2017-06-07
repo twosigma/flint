@@ -35,7 +35,7 @@ __all__ = [
 ]
 
 
-class WindowFactory:
+class WindowsFactoryBase:
     '''WindowFactory represents an intended window that will be
     instantiated later when we have access to a SparkContext.
 
@@ -46,18 +46,29 @@ class WindowFactory:
     construct the actual window object the user wanted.
 
     '''
-
+    __metaclass__ = ABCMeta
 
     def __init__(self, func, *args):
         self._func = func
         self._args = args
 
+    @abstractmethod
+    def _java_cls(self, sc):
+        pass
 
     def _jwindow(self, sc):
-        return java.Packages(sc).Windows.__getattr__(self._func)(*self._args)
+        return self._java_cls(sc).__getattr__(self._func)(*self._args)
 
     def __str__(self):
         return "%s(%s)" % (self._func, ", ".join(str(arg) for arg in self._args))
+
+
+class WindowsFactory(WindowsFactoryBase):
+    def __init__(self, func, *args):
+        super().__init__(func, *args)
+
+    def _java_cls(self, sc):
+        return java.Packages(sc).Windows
 
 
 def past_absolute_time(duration):
@@ -92,7 +103,7 @@ def past_absolute_time(duration):
 
     '''
 
-    return WindowFactory('pastAbsoluteTime', duration)
+    return WindowsFactory('pastAbsoluteTime', duration)
 
 
 def future_absolute_time(duration):
@@ -127,4 +138,6 @@ def future_absolute_time(duration):
 
     '''
 
-    return WindowFactory('futureAbsoluteTime', duration)
+
+    return WindowsFactory('futureAbsoluteTime', duration)
+
