@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer.subtractable
 
-import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesGenerator, Windows }
+import com.twosigma.flint.timeseries.{ Summarizers, Windows }
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
@@ -49,7 +49,8 @@ class NthMomentSummarizerSpec extends SummarizerSuite {
   }
 
   it should "ignore null values" in {
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+    val priceTSRdd =
+      fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
     assertEquals(
       priceTSRdd.summarize(Summarizers.nthMoment("price", 0), Seq("id")),
       insertNullRows(priceTSRdd, "price").summarize(Summarizers.nthMoment("price", 0), Seq("id"))
@@ -63,8 +64,7 @@ class NthMomentSummarizerSpec extends SummarizerSuite {
 
   "NthCentralMomentSummarizer" should "`computeNthCentralMoment` correctly" in {
     val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    var results = priceTSRdd.summarize(Summarizers.nthMoment("price", 0), Seq("id")).collect()
-    results = priceTSRdd.summarize(Summarizers.nthCentralMoment("price", 1), Seq("id")).collect()
+    var results = priceTSRdd.summarize(Summarizers.nthCentralMoment("price", 1), Seq("id")).collect()
     assert(results.find(_.getAs[Int]("id") == 3).head.getAs[Double]("price_1thCentralMoment") === 0d)
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_1thCentralMoment") === 0d)
 
@@ -81,8 +81,22 @@ class NthMomentSummarizerSpec extends SummarizerSuite {
     assert(results.find(_.getAs[Int]("id") == 7).head.getAs[Double]("price_4thCentralMoment") === 21.227285879629633)
   }
 
+  it should "return 0.0 for variance with constant values" in {
+    val dataWithConstantColumn = AllData(1).addColumns("c" -> DoubleType -> { _ => 1.0 })
+    var results = dataWithConstantColumn.summarize(
+      Summarizers.nthCentralMoment("c", 2)
+    ).collect().head
+    assert(results.getAs[Double]("c_2thCentralMoment") == 0.0)
+
+    results = dataWithConstantColumn.summarizeWindows(
+      Windows.pastAbsoluteTime("10000 ns"),
+      Summarizers.nthCentralMoment("c", 2)
+    ).collect().last
+    assert(results.getAs[Double]("c_2thCentralMoment") == 0.0)
+  }
+
   it should "pass summarizer property test" in {
-    summarizerPropertyTest(AllProperties)(Summarizers.nthCentralMoment("x1", 1))
-    summarizerPropertyTest(AllProperties)(Summarizers.nthCentralMoment("x2", 2))
+    summarizerPropertyTest(AllPropertiesAndSubtractable)(Summarizers.nthCentralMoment("x2", 2))
+    summarizerPropertyTest(AllPropertiesAndSubtractable)(Summarizers.nthCentralMoment("x3", 3))
   }
 }

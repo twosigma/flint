@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.rdd.function.summarize.summarizer.{ NthCentralMomentOutput, NthCentralMomentState, NthCentralMomentSummarizer => NthCentralMomentSum }
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ NthCentralMomentOutput, NthCentralMomentState, NthCentralMomentSummarizer => NthCentralMomentSum }
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
 import com.twosigma.flint.timeseries.summarize._
@@ -34,7 +34,7 @@ case class NthCentralMomentSummarizer(
   override val prefixOpt: Option[String],
   requiredColumns: ColumnList,
   moment: Int
-) extends Summarizer with FilterNullInput {
+) extends LeftSubtractableSummarizer with FilterNullInput {
   private val Sequence(Seq(column)) = requiredColumns
   private val columnIndex = inputSchema.fieldIndex(column)
   private final val valueExtractor = asDoubleExtractor(inputSchema(columnIndex).dataType, columnIndex)

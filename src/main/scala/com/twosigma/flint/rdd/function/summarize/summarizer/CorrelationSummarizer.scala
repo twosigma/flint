@@ -17,7 +17,7 @@
 package com.twosigma.flint.rdd.function.summarize.summarizer
 
 import com.twosigma.flint.math.Kahan
-import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ NthMomentState, NthMomentSummarizer }
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ NthCentralMomentState, NthCentralMomentSummarizer, NthMomentState, NthMomentSummarizer }
 
 import scala.math._
 
