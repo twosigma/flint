@@ -17,6 +17,8 @@
 package com.twosigma.flint.rdd.function.summarize.summarizer
 
 import com.twosigma.flint.math.Kahan
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ NthMomentState, NthMomentSummarizer }
+
 import scala.math._
 
 case class CorrelationState(

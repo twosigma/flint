@@ -14,40 +14,50 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.rdd.function.summarize.summarizer
+package com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 
 import com.twosigma.flint.math.Kahan
 
-case class NthMomentState(var count: Long, val nthMoment: Kahan)
+case class NthMomentState(var count: Long, nthMoment: Kahan)
 
 // This summarizer uses mutable state
-case class NthMomentSummarizer(moment: Int) extends Summarizer[Double, NthMomentState, Double] {
+case class NthMomentSummarizer(moment: Int)
+  extends LeftSubtractableSummarizer[Double, NthMomentState, Double] {
   require(moment >= 0)
   override def zero(): NthMomentState = NthMomentState(0, Kahan())
 
   override def add(u: NthMomentState, t: Double): NthMomentState = {
-    val newCount = u.count + 1
+    val newCount = u.count + 1L
     val curMoment = u.nthMoment
     val data = scala.math.pow(t, moment.toDouble)
-    if (newCount == 1) {
+    if (newCount == 1L) {
       curMoment.add(data)
     } else {
       val delta = data - curMoment.getValue()
       curMoment.add(delta / newCount)
     }
+    u.count = newCount
 
+    u
+  }
+
+  override def subtract(u: NthMomentState, t: Double): NthMomentState = {
+    val newCount = u.count - 1L
+    val curMoment = u.nthMoment
+    val data = scala.math.pow(t, moment.toDouble)
+    val delta = data - curMoment.getValue()
+    curMoment.add(-delta / newCount)
     u.count = newCount
 
     u
   }
 
   override def merge(u1: NthMomentState, u2: NthMomentState): NthMomentState = {
-    if (u1.count == 0) {
+    if (u1.count == 0L) {
       u2
-    } else if (u2.count == 0) {
+    } else if (u2.count == 0L) {
       u1
     } else {
-
       val newCount = u1.count + u2.count
       val delta = u2.nthMoment.subtract(u1.nthMoment)
 

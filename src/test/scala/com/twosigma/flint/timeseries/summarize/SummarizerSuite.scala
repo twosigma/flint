@@ -18,16 +18,21 @@ package com.twosigma.flint.timeseries.summarize
 
 import com.twosigma.flint.timeseries._
 import org.apache.commons.math3.primes
-import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DFConverter, Row }
-import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, GenericRowWithSchema }
+import org.apache.spark.sql.{CatalystTypeConvertersWrapper, DFConverter, Row}
+import org.apache.spark.sql.catalyst.expressions.{
+  GenericInternalRow,
+  GenericRowWithSchema
+}
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types._
+
 import scala.concurrent.duration.NANOSECONDS
 
 sealed trait SummarizerProperty {
 
   def test(
-    timeSeriesRdd: TimeSeriesRDD,
-    summarizerFactory: SummarizerFactory
+      timeSeriesRdd: TimeSeriesRDD,
+      summarizerFactory: SummarizerFactory
   ): Unit
 }
 
@@ -98,8 +103,8 @@ class SummarizerSuite extends TimeSeriesSuite {
   // Check if (a + b) + c = a + (b + c)
   class AssociativeLawProperty extends SummarizerProperty {
     override def test(
-      timeSeriesRdd: TimeSeriesRDD,
-      summarizerFactory: SummarizerFactory
+        timeSeriesRdd: TimeSeriesRDD,
+        summarizerFactory: SummarizerFactory
     ): Unit = {
       val p = timeSeriesRdd.rdd.partitions.length
       val maxDepth = Math.ceil(Math.log(p.toDouble) / Math.log(2.0)).toInt
@@ -119,8 +124,8 @@ class SummarizerSuite extends TimeSeriesSuite {
   // Check if 0 + 0 = 0
   class IdenityProperty extends SummarizerProperty {
     override def test(
-      timeSeriesRdd: TimeSeriesRDD,
-      summarizerFactory: SummarizerFactory
+        timeSeriesRdd: TimeSeriesRDD,
+        summarizerFactory: SummarizerFactory
     ): Unit = {
       val summarizer = summarizerFactory.apply(timeSeriesRdd.schema)
       val mergedZero = summarizer
@@ -141,8 +146,8 @@ class SummarizerSuite extends TimeSeriesSuite {
   // Check if 0 + a = a
   class RightIdenityProperty extends SummarizerProperty {
     override def test(
-      timeSeriesRdd: TimeSeriesRDD,
-      summarizerFactory: SummarizerFactory
+        timeSeriesRdd: TimeSeriesRDD,
+        summarizerFactory: SummarizerFactory
     ): Unit = {
       val summarizer = summarizerFactory.apply(timeSeriesRdd.schema)
       val rows = timeSeriesRdd.toDF.queryExecution.toRdd.take(100)
@@ -167,8 +172,8 @@ class SummarizerSuite extends TimeSeriesSuite {
   // Check if a + 0 = a
   class LeftIdenityProperty extends SummarizerProperty {
     override def test(
-      timeSeriesRdd: TimeSeriesRDD,
-      summarizerFactory: SummarizerFactory
+        timeSeriesRdd: TimeSeriesRDD,
+        summarizerFactory: SummarizerFactory
     ): Unit = {
       val summarizer = summarizerFactory.apply(timeSeriesRdd.schema)
       val rows = timeSeriesRdd.toDF.queryExecution.toRdd.map(_.copy).take(100)
@@ -193,13 +198,13 @@ class SummarizerSuite extends TimeSeriesSuite {
   // Check if (a + b) + c - a = b + c
   class LeftSubtractableProperty extends SummarizerProperty {
     override def test(
-      timeSeriesRdd: TimeSeriesRDD,
-      summarizerFactory: SummarizerFactory
+        timeSeriesRdd: TimeSeriesRDD,
+        summarizerFactory: SummarizerFactory
     ): Unit = {
       require(
         summarizerFactory
-        .apply(timeSeriesRdd.schema)
-        .isInstanceOf[LeftSubtractableSummarizer]
+          .apply(timeSeriesRdd.schema)
+          .isInstanceOf[LeftSubtractableSummarizer]
       )
       val summarizer = summarizerFactory
         .apply(timeSeriesRdd.schema)
@@ -249,6 +254,54 @@ class SummarizerSuite extends TimeSeriesSuite {
     override def toString(): String = "LeftSubtractableProperty"
   }
 
+  class WindowProperty extends SummarizerProperty {
+    override def test(
+        timeSeriesRdd: TimeSeriesRDD,
+        summarizerFactory: SummarizerFactory
+    ): Unit = {
+      require(
+        summarizerFactory
+          .apply(timeSeriesRdd.schema)
+          .isInstanceOf[LeftSubtractableSummarizer]
+      )
+
+      val windowSize = 20L * frequency
+      val window = Windows.pastAbsoluteTime(s"$windowSize ns")
+      val end = timeSeriesRdd.toDF
+        .select(TimeSeriesRDD.timeColumnName)
+        .where(col(TimeSeriesRDD.timeColumnName) > (cycles - 2) * frequency)
+        .collect()
+        .last
+        .getAs[Long](TimeSeriesRDD.timeColumnName)
+      val lastWindow = timeSeriesRdd.deleteRows { r =>
+        r.getAs[Long](TimeSeriesRDD.timeColumnName) < window.of(end)._1
+      }
+
+      val expectedResults = lastWindow
+        .summarize(summarizerFactory)
+        .toDF
+        .drop(TimeSeriesRDD.timeColumnName)
+        .head
+      val nonTimeColumnNames = expectedResults.schema.fields.map { x =>
+        col(x.name)
+      }
+      val results = timeSeriesRdd
+        .summarizeWindows(
+          window,
+          summarizerFactory
+        )
+        .toDF
+        .where(col(TimeSeriesRDD.timeColumnName) === end)
+        .select(nonTimeColumnNames: _*)
+        .collect()
+        .last
+
+      assertAlmostEquals(results, expectedResults)
+    }
+
+    override def toString(): String = "WindowProperty"
+  }
+
   lazy val AllProperties = Seq(
     new AssociativeLawProperty,
     new RightIdenityProperty,
@@ -257,11 +310,12 @@ class SummarizerSuite extends TimeSeriesSuite {
   )
 
   lazy val AllPropertiesAndSubtractable = AllProperties ++ Seq(
-    new LeftSubtractableProperty
+    new LeftSubtractableProperty,
+    new WindowProperty
   )
 
   def summarizerPropertyTest(properties: Seq[SummarizerProperty])(
-    summarizer: SummarizerFactory
+      summarizer: SummarizerFactory
   ): Unit = {
     properties.foreach { property =>
       AllData.zipWithIndex.foreach {
