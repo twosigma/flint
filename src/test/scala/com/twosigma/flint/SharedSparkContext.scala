@@ -47,6 +47,12 @@ trait SharedSparkContext extends BeforeAndAfterAll {
 
   override def beforeAll() {
     conf.set("spark.ui.enabled", "false")
+
+    // Set the console progress if the system property is set
+    sys.props.get("spark.ui.showConsoleProgress").foreach(
+      conf.set("spark.ui.showConsoleProgress", _)
+    )
+
     // we want to detect memory leaks as soon as possible
     conf.set("spark.unsafe.exceptionOnMemoryLeak", "true")
       // The codec used to compress internal data such as RDD partitions, broadcast variables and shuffle outputs.
