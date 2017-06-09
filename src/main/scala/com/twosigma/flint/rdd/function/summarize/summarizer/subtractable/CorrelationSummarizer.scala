@@ -14,16 +14,15 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.rdd.function.summarize.summarizer
+package com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 
 import com.twosigma.flint.math.Kahan
-import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ NthCentralMomentState, NthCentralMomentSummarizer, NthMomentState, NthMomentSummarizer }
 
 import scala.math._
 
 case class CorrelationState(
   var count: Long,
-  val covariance: Kahan,
+  covariance: Kahan,
   var xMean: NthMomentState,
   var yMean: NthMomentState,
   var xVariance: NthCentralMomentState,
@@ -31,15 +30,15 @@ case class CorrelationState(
 )
 
 case class CorrelationOutput(
-  val covariance: Double,
-  val correlation: Double,
-  val tStat: Double,
-  val observationCount: Long
+  covariance: Double,
+  correlation: Double,
+  tStat: Double,
+  observationCount: Long
 )
 
 // This summarizer uses mutable state
 case class CorrelationSummarizer()
-  extends Summarizer[(Double, Double), CorrelationState, CorrelationOutput] {
+  extends LeftSubtractableSummarizer[(Double, Double), CorrelationState, CorrelationOutput] {
 
   val meanSummarizer = NthMomentSummarizer(1)
   val varianceSummarizer = NthCentralMomentSummarizer(2)
@@ -56,8 +55,8 @@ case class CorrelationSummarizer()
   override def add(u: CorrelationState, data: (Double, Double)): CorrelationState = {
     val (x, y) = data
 
-    u.count += 1
-    if (u.count > 1) {
+    u.count += 1L
+    if (u.count > 1L) {
       val xMean = meanSummarizer.render(u.xMean)
       val yMean = meanSummarizer.render(u.yMean)
       u.covariance.add(
@@ -73,10 +72,28 @@ case class CorrelationSummarizer()
     u
   }
 
+  override def subtract(u: CorrelationState, data: (Double, Double)): CorrelationState = {
+    val (x, y) = data
+
+    u.xMean = meanSummarizer.subtract(u.xMean, x)
+    u.yMean = meanSummarizer.subtract(u.yMean, y)
+    u.xVariance = varianceSummarizer.subtract(u.xVariance, x)
+    u.yVariance = varianceSummarizer.subtract(u.yVariance, y)
+
+    val xMean = meanSummarizer.render(u.xMean)
+    val yMean = meanSummarizer.render(u.yMean)
+    u.covariance.add(
+      -((u.count - 1d) / u.count) * (x - xMean) * (y - yMean)
+    )
+    u.count -= 1L
+
+    u
+  }
+
   override def merge(u1: CorrelationState, u2: CorrelationState): CorrelationState = {
-    if (u1.count == 0) {
+    if (u1.count == 0L) {
       u2
-    } else if (u2.count == 0) {
+    } else if (u2.count == 0L) {
       u1
     } else {
       u1.covariance.add(u2.covariance)
@@ -101,8 +118,8 @@ case class CorrelationSummarizer()
   }
 
   override def render(u: CorrelationState): CorrelationOutput = {
-    if (u.count == 0) {
-      CorrelationOutput(Double.NaN, Double.NaN, Double.NaN, 0)
+    if (u.count == 0L) {
+      CorrelationOutput(Double.NaN, Double.NaN, Double.NaN, 0L)
     } else {
       val covariance = u.covariance.getValue() / u.count
       val xDev = sqrt(varianceSummarizer.render(u.xVariance).nthCentralMoment(2))

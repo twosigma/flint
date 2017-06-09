@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.timeseries.summarize.summarizer
+package com.twosigma.flint.timeseries.summarize.summarizer.subtractable
 
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
@@ -114,7 +114,7 @@ class CorrelationSummarizerSpec extends SummarizerSuite {
   }
 
   it should "pass summarizer property test" in {
-    summarizerPropertyTest(AllProperties)(Summarizers.correlation("x1", "x2"))
-    summarizerPropertyTest(AllProperties)(Summarizers.correlation("x0", "x3"))
+    summarizerPropertyTest(AllPropertiesAndSubtractable)(Summarizers.correlation("x1", "x2"))
+    summarizerPropertyTest(AllPropertiesAndSubtractable)(Summarizers.correlation("x0", "x3"))
   }
 }
