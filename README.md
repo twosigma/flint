@@ -28,7 +28,7 @@ sbt assembly
 ## Python bindings
 
 The python bindings for Flint, including quickstart instructions, are documented at [python/README.md](python/README.md).
-API documentation is available at http://ts/ts-flint-doc
+API documentation is available at http://ts-flint.readthedocs.io/en/latest/.
 
 ## Getting Started
 
