@@ -6,3 +6,4 @@ target
 metastore_db
 derby.log
 python/spark
+**/.cache

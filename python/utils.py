@@ -1,7 +1,8 @@
-#!/bin/bash
-
+"""
+    Utility functions for assertions
+"""
 #
-#  Copyright 2015-2017 TWO SIGMA OPEN SOURCE, LLC
+#  Copyright 2015 TWO SIGMA OPEN SOURCE, LLC
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,13 +17,15 @@
 #  limitations under the License.
 #
 
-set -ev
+from pandas.util.testing import assert_frame_equal
 
-source activate flint
-conda install -y -c conda-forge pyspark
-pip install pytest-spark
+def assert_same(object_1, object_2, criteria=None):
+    """ Assert object_1 is equal to object_2 """
+    if isinstance(object_1, float):
+        assert criteria, object_1 == object_2
+    else:
+        assert_frame_equal(object_1, object_2)
 
-# Set SPARK_HOME
-export SPARK_HOME=$(pwd)/spark
-
-pytest -m "not net"
+def assert_true(object_1, description):
+    """ Assert object_1 evaluates to True """
+    assert object_1, description
