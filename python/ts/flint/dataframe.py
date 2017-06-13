@@ -14,22 +14,22 @@
 #  limitations under the License.
 #
 
-import collections
+import collections.abc
 import functools
 import inspect
-import json
-import types
 
+import pandas as pd
 import pyspark
 import pyspark.sql
 import pyspark.sql.types as pyspark_types
-import pandas as pd
 
 from . import java
-from . import utils
+from . import rankers
 from . import summarizers
-from .windows import WindowsFactoryBase
+from . import utils
 from .error import FlintError
+from .readwriter import TSDataFrameWriter
+from .windows import WindowsFactoryBase
 
 __all__ = ['TimeSeriesDataFrame']
 
@@ -279,15 +279,26 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         rows.  The added column's values are the return values of that
         function.
 
-        The columns specified need a name, a
-        :class:`pyspark.sql.types.DataType`, and a function to apply.  The
-        function should accept a ``list`` of rows and return a
-        ``dict`` from row to computed value.
+        The columns are specified as a ``dict``. The key of the dict is the
+        column name specified as a ``str``, and the value is either:
 
-        Example:
+        (1) a UDF defined as a pair of :class:`pyspark.sql.types.DataType` and
+        a function that takes a ``list`` of rows and return a ``dict`` from row to
+        computed value; or
+        (2) a ::class:`RankerFactory` constructed from one of the built-in
+        functions. See :mod:`rankers` for the built-in functions.
 
-            >>> import math
+        Example usage with a built-in function:
+
+            >>> from ts.flint import rankers
+            >>> active_price.addColumnsForCycle({
+            ...     "rank": rankers.percentile("volume"))
+            ... })
+
+        Example usage with a UDF:
+
             >>> from pyspark.sql.types import DoubleType
+            ...
             >>> def volumeZScore(rows):
             ...     size = len(rows)
             ...     if size <= 1:
@@ -296,22 +307,94 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             ...     stddev = math.sqrt(sum((row.closePrice - mean)**2 for row in rows) / (size - 1))
             ...     return {row:(row.closePrice - mean)/stddev for row in rows}
             ...
-            >>> columns = {'volumeZScore': (DoubleType(), volumeZScore)}
-            >>> df = active_price.addColumnsForCycle(columns)
+            >>> active_price.addColumnsForCycle({
+            ...    'volumeZScore': (DoubleType(), volumeZScore)
+            ... })
 
-        :param columns: a ``dict`` mapping each column name to a pair
-            of :class:`pyspark.sql.types.DataType` and the function to
-            compute that column, i.e. ``(pyspark.sql.types.DataType,
-            callable)``
-        :type columns: dict
+        :param columns: a ``dict`` mapping each column name to either:
+            (1) a pair of :class:`pyspark.sql.types.DataType` and the function to
+            compute that column, i.e. ``(pyspark.sql.types.DataType, callable)``, or
+            (2) a built-in function.
+            See examples above.
+        :type columns: collections.Mapping
         :param key: Optional. One or multiple column names to use as the grouping key
         :type key: str, list of str
         :returns: a new dataframe with the columns added
         :rtype: :class:`TimeSeriesDataFrame`
+        :raises ValueError: if there are columns with udfs or bindings that are not supported
         """
+        assert isinstance(columns, collections.abc.Mapping), "columns must be a mapping (e.g., dict)"
+
+        # Split the columns into Python UDFs and JVM CycleColumn bindings
+        udfs = {
+            target_column: udf
+            for target_column, udf in columns.items()
+            if (isinstance(udf, tuple) or isinstance(udf, list)) and
+            isinstance(udf[0], pyspark_types.DataType) and
+            callable(udf[1])
+        }
+
+        builtin_bindings = {
+            target_column: udf
+            for target_column, udf in columns.items()
+            if isinstance(udf, rankers.RankFactory)
+        }
+
+        if len(udfs) + len(builtin_bindings) < len(columns):
+            unsupported_columns = {
+                key
+                for key in columns
+                if key not in udfs and key not in builtin_bindings
+            }
+            raise ValueError(
+                "Unsupported column specification: {}. "
+                "Column values must be either a tuple of (pyspark.sqltypes.DataType, callable) or "
+                "an instance of rankers.RankFactory.".format(unsupported_columns)
+            )
+
+        tsdf = self
+        if builtin_bindings:
+            tsdf = TimeSeriesDataFrame._addColumnsForCycle_builtin(tsdf, builtin_bindings, key)
+
+        if udfs:
+            tsdf = TimeSeriesDataFrame._addColumnsForCycle_udfs(tsdf, udfs, key)
+
+        if tsdf.columns != self.columns + list(columns.keys()):
+            # Reorder to maintain order specified in `columns`
+            tsdf = tsdf.select(*self.columns, *columns.keys())
+
+        return tsdf
+
+    @staticmethod
+    def _addColumnsForCycle_builtin(tsdf, builtin_bindings, key):
+        """
+        Add columns using built-in ``CycleColumn`` bindings.
+        :param builtin_bindings: A `dict` containing target columns as keys and
+            :class:`rankers.RankFactory` as values.
+        """
+
+        scala_key = utils.list_to_seq(tsdf._sc, key)
+        scala_bindings = utils.list_to_seq(
+            tsdf._sc,
+            [rf(tsdf._sc, target_column) for target_column, rf in builtin_bindings.items()]
+        )
+        tsrdd = tsdf.timeSeriesRDD.addColumnsForCycle(scala_bindings, scala_key)
+        return TimeSeriesDataFrame._from_tsrdd(tsrdd, tsdf.sql_ctx)
+
+    @staticmethod
+    def _addColumnsForCycle_udfs(tsdf, udfs, key):
+        """
+        Add columns using Python-defined UDFs.
+        :param udfs: A `dict` containing target columns as keys and a tuple as the value,
+            where the tuple is (1) a Pyspark DataType and, (2) a function that takes
+            a list of rows and returns a dict of row to value.
+        """
+
         # Need to make a new StructType to prevent from modifying the original schema object
-        schema = pyspark_types.StructType.fromJson(self.schema.jsonValue())
-        tsdf = self.groupByCycle(key)
+        schema = pyspark_types.StructType.fromJson(tsdf.schema.jsonValue())
+
+        tsdf = tsdf.groupByCycle(key)
+
         # Don't pickle the whole schema, just the names for the lambda
         schema_names = list(schema.names)
 
@@ -319,25 +402,25 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             def _(orig_row):
                 orig_rows = orig_row.rows
                 new_rows = [list(row) for row in orig_rows]
-                for column, (datatype, fn) in columns.items():
+                for column, (datatype, fn) in udfs.items():
                     fn_rows = fn(orig_rows)
-                    for i,orig_row in enumerate(orig_rows):
+                    for i, orig_row in enumerate(orig_rows):
                         new_rows[i].append(fn_rows[orig_row])
 
                 NewRow = pyspark_types.Row(*schema_names)
                 return [NewRow(*row) for row in new_rows]
             return _
 
-        for column, (datatype, fn) in columns.items():
+        for column, (datatype, fn) in udfs.items():
             schema.add(column, data_type=datatype)
 
         rdd = tsdf.rdd.flatMap(flatmap_fn())
-        df = self.sql_ctx.createDataFrame(rdd, schema)
+        df = tsdf.sql_ctx.createDataFrame(rdd, schema)
 
         return TimeSeriesDataFrame(df,
                                    df.sql_ctx,
-                                   time_column=self._time_column,
-                                   unit=self._junit,
+                                   time_column=tsdf._time_column,
+                                   unit=tsdf._junit,
                                    tsrdd_part_info=tsdf._tsrdd_part_info)
 
     def merge(self, other):

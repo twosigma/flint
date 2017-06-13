@@ -138,6 +138,14 @@ TimeSeriesDataFrame
    **Time-series specific members:**
 
 
+Rankers
+```````
+
+.. currentmodule:: ts.flint.rankers
+
+.. automodule:: ts.flint.rankers
+   :members:
+
 Summarizers
 ```````````
 

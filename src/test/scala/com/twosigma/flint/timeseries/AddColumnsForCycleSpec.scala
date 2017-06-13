@@ -16,7 +16,9 @@
 
 package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.timeseries.row.Schema
+import java.util.concurrent.TimeUnit
+
+import com.twosigma.flint.timeseries.row.{ DuplicateColumnsException, Schema }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
@@ -116,5 +118,20 @@ class AddColumnsForCycleSpec extends MultiPartitionSuite {
       Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
     )
     withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+  }
+
+  it should "not accept duplicate column names" in {
+    val emptyTsRdd = TimeSeriesRDD.fromDF(
+      sqlContext.createDataFrame(sc.parallelize[Row](Seq(
+        Row(1L, 1.0)
+      )), Schema("time" -> LongType, "value" -> DoubleType))
+    )(isSorted = true, TimeUnit.NANOSECONDS)
+
+    intercept[DuplicateColumnsException] {
+      emptyTsRdd.addColumnsForCycle(
+        "newCol" -> DoubleType -> { rows: Seq[Row] => rows.map(_ => 1.0) },
+        "newCol" -> DoubleType -> { rows: Seq[Row] => rows.map(_ => 2.0) }
+      )
+    }
   }
 }

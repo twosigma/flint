@@ -6,5 +6,6 @@ sphinx_rtd_theme
 flake8
 numpy
 pandas
+scipy
 pytest
 pytest-cov

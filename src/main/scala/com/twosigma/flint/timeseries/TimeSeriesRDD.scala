@@ -608,55 +608,36 @@ trait TimeSeriesRDD extends Serializable {
   def addColumns(columns: ((String, DataType), Row => Any)*): TimeSeriesRDD
 
   /**
-   * Adds new columns using a sequence of provided names, data types and functions for each cycle.
+   * Convenience method for `addColumnsForCycle` when an additional key is not needed.
    *
-   * A cycle is defined as a sequence of rows that share exactly the same timestamps.
-   *
-   * @param columns A list of tuple(s). For each tuple, the left specifies the name and the data type of a column to
-   *                be added; while the right is a function that takes a cycle of rows as input and outputs a map from
-   *                rows to their calculated values respectively. Note that duplicated column names are not accepted.
-   * @return a [[TimeSeriesRDD]] with added columns.
-   * @example
-   * {{{
-   * val priceTSRdd = ...
-   * // A TimeSeriesRDD with columns "time", "id", and "sellingPrice"
-   * // time  id  sellingPrice
-   * // ----------------------
-   * // 1000L 0   1.0
-   * // 1000L 1   2.0
-   * // 1000L 1   3.0
-   * // 2000L 0   3.0
-   * // 2000L 0   4.0
-   * // 2000L 1   5.0
-   * // 2000L 2   6.0
-   *
-   * val results = priceTSRdd.addColumnsForCycle(
-   *   "adjustedSellingPrice" -> DoubleType -> { rows: Seq[Row] =>
-   *     rows.map { row => (row, row.getDouble(2) * rows.size) }.toMap
-   *  }
-   * )
-   * // time  id  sellingPrice adjustedSellingPrice
-   * // -------------------------------------------
-   * // 1000L 0   1.0          3.0
-   * // 1000L 1   2.0          6.0
-   * // 1000L 1   3.0          9.0
-   * // 2000L 0   3.0         12.0
-   * // 2000L 0   4.0         16.0
-   * // 2000L 1   5.0         20.0
-   * // 2000L 2   6.0         24.0
-   * }}}
+   * @see [[addColumnsForCycle(cycleColumns:Seq[CycleColumn],key:Seq[String]):TimeSeriesRDD*]]
    */
-  def addColumnsForCycle(columns: ((String, DataType), Seq[Row] => Map[Row, Any])*): TimeSeriesRDD
+  def addColumnsForCycle(cycleColumns: CycleColumn*): TimeSeriesRDD
 
   /**
-   * Adds new columns using a list of provided names, data types and functions for each cycle.
+   * Adds new columns for each cycle using a seq of [[CycleColumn]], with convenient implicits for converting tuples to
+   * [[CycleColumn]]s. A cycle is defined as a sequence of rows that share exactly the same timestamps.
    *
-   * A cycle is defined as a sequence of rows that share exactly the same timestamps.
+   * For each column, the user can use one of the following form, which will be converted to a
+   * [[CycleColumn]] implicitly:
    *
-   * @param columns A sequence of tuple(s). For each tuple, the left specifies the name and the data type of a column to
-   *                be added; while the right is a function that takes a cycle of rows as input and outputs a map from
-   *                rows to their calculated values respectively. Note that duplicated column names are not accepted.
-   * @param key     If non-empty, rows are further grouped by the columns specified by `key` in addition to row time.
+   *   <ul>
+   *    <li>(1) `"columnName" -> DataType -> Seq[Row] => Seq[Any]`</li>
+   *    <li>(2) `"columnName" -> DataType -> Seq[Row] => Map[Row, Any]`</li>
+   *    <li>(3) Using a built-in function, like: `"columnName" -> Ranker.percentile("price")`</li>
+   *   </ul>
+   *
+   *  In (1), if the length of the returned `Seq[Any]` is less than the length of the input
+   *  `Seq[Row]`, `null` is used to fill the remainder of rows.
+   *
+   *  In (2), if the `Map[Row, Any]` omits a row provided in the `Seq[Row]`, a value of
+   *  `null` is used as the value for that row.
+   *
+   *  Note that duplicate column names are not accepted.
+   *
+   * @param cycleColumns A seq of [[CycleColumn CycleColumns]].
+   * @param key If non-empty, rows are further grouped by the columns specified by `key` in addition to row time.
+   * @see [[CycleColumnImplicits!]] for implicit conversions.
    * @return a [[TimeSeriesRDD]] with added columns.
    * @example
    * {{{
@@ -673,31 +654,34 @@ trait TimeSeriesRDD extends Serializable {
    * // 2000L 2   6.0
    *
    * val results = priceTSRdd.addColumnsForCycle(
-   *   Seq("adjustedSellingPrice" -> DoubleType -> { rows: Seq[Row] =>
-   *     rows.map { row => (row, row.getDouble(2) * rows.size) }.toMap
-   *   }),
+   *   Seq(
+   *    "adjusted1" -> DoubleType -> { rows: Seq[Row] =>
+   *       rows.map { row => row.getDouble(2) * rows.size) }
+   *     },
+   *    "adjusted2" -> DoubleType -> { rows: Seq[Row] =>
+   *       rows.map { row => (row, row.getDouble(2) * rows.size) }.toMap
+   *     },
+   *    "adjusted3" -> CycleColumn.unnamed(DoubleType, { rows: Seq[Row] =>
+   *      rows.map { row => row.getDouble(2) * rows.size }
+   *      })
+   *  ),
    *   key = Seq("id")
    * )
-   * // time  id  sellingPrice adjustedSellingPrice
-   * // ---------------------------------------------
-   * // 1000L 0   1.0          1.0
-   * // 1000L 1   2.0          4.0
-   * // 1000L 1   3.0          6.0
-   * // 2000L 0   3.0          6.0
-   * // 2000L 0   4.0          8.0
-   * // 2000L 1   5.0          5.0
-   * // 2000L 2   6.0          6.0
+   * // time  id  sellingPrice adjusted1 adjusted2 adjusted3
+   * // ----------------------------------------------------
+   * // 1000L 0   1.0          1.0       1.0       1.0
+   * // 1000L 1   2.0          4.0       4.0       4.0
+   * // 1000L 1   3.0          6.0       6.0       6.0
+   * // 2000L 0   3.0          6.0       6.0       6.0
+   * // 2000L 0   4.0          8.0       8.0       8.0
+   * // 2000L 1   5.0          5.0       5.0       5.0
+   * // 2000L 2   6.0          6.0       6.0       6.0
    * }}}
    */
   def addColumnsForCycle(
-    columns: Seq[((String, DataType), Seq[Row] => Map[Row, Any])],
+    cycleColumns: Seq[CycleColumn],
     key: Seq[String] = Seq.empty
   ): TimeSeriesRDD
-
-  private[flint] def addColumnsForCycle(
-    columns: Seq[((String, DataType), Seq[Row] => Map[Row, Any])],
-    key: String
-  ): TimeSeriesRDD = addColumnsForCycle(columns, Option(key).toSeq)
 
   /**
    * Groups rows within a cycle, i.e. rows with exactly the same timestamps. If a `key` is provided, rows within a
@@ -1260,23 +1244,28 @@ class TimeSeriesRDDImpl private[timeseries] (
     )
   }
 
-  def addColumnsForCycle(
-    columns: ((String, DataType), Seq[Row] => Map[Row, Any])*
-  ): TimeSeriesRDD = addColumnsForCycle(columns.toSeq, key = Seq.empty)
+  def addColumnsForCycle(columns: CycleColumn*): TimeSeriesRDD =
+    addColumnsForCycle(columns.toSeq, key = Seq.empty)
 
   def addColumnsForCycle(
-    columns: Seq[((String, DataType), Seq[Row] => Map[Row, Any])],
+    columns: Seq[CycleColumn],
     key: Seq[String] = Seq.empty
   ): TimeSeriesRDD = {
-    val (add, newSchema) = InternalRowUtils.addOrUpdate(schema, columns.map(_._1))
+    val targetNameDataTypes = columns.map(c => c.name -> c.dataType)
+    val (add, newSchema) = InternalRowUtils.addOrUpdate(schema, targetNameDataTypes)
 
-    val newRdd = orderedRdd.groupByKey(safeGetAsAny(key)).flatMapValues {
-      (_, rows) =>
-        val eRows = rows.map(toExternalRow)
-        val nameWithTypeToRowMaps = Map(columns.map { case (k, fn) => k -> fn(eRows) }: _*)
-        (rows zip eRows).map {
-          case (row, eRow) => add(row, columns.map { case (k, _) => nameWithTypeToRowMaps(k)(eRow) })
-        }
+    val newRdd = orderedRdd.groupByKey(safeGetAsAny(key)).flatMapValues { (_, rows: Array[InternalRow]) =>
+      val eRows = rows.map(toExternalRow)
+
+      val rowColumnValues: Seq[IndexedSeq[Any]] = columns.map { cycleColumn =>
+        // Pad returned sequences to the same length as the input rows with `null`
+        cycleColumn.applyCycle(eRows).padTo(eRows.length, null)(scala.collection.breakOut)
+      }
+
+      rows.zipWithIndex.map {
+        case (row, idx) =>
+          add(row, rowColumnValues.map(value => value(idx)))
+      }
     }
 
     TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)

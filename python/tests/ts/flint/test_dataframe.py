@@ -101,6 +101,11 @@ def flint(pyspark):
 
 
 @pytest.fixture(scope='module')
+def rankers(flint):
+    from ts.flint import rankers
+    return rankers
+
+@pytest.fixture(scope='module')
 def summarizers(flint):
     from ts.flint import summarizers
     return summarizers
@@ -191,6 +196,15 @@ price_data = [
 ]
 
 
+price2_data = [
+    (0, 1, 1.0,),
+    (0, 2, 2.0,),
+    (1, 1, 3.0,),
+    (1, 2, 4.0,),
+    (1, 3, 5.0,),
+]
+
+
 vol_data = [
     (1000, 7, 100,),
     (1000, 3, 200,),
@@ -276,6 +290,11 @@ def forecast(flintContext):
 @pytest.fixture(scope='module')
 def price(flintContext):
     return flintContext.read.pandas(make_pdf(price_data, ["time", "id", "price"]))
+
+
+@pytest.fixture(scope='module')
+def price2(flintContext):
+    return flintContext.read.pandas(make_pdf(price2_data, ["time", "id", "price"]))
 
 
 @pytest.fixture(scope='module')
@@ -931,6 +950,149 @@ def test_addSummaryColumns(summarizers, tests_utils, vol):
 
     new_pdf = vol.addSummaryColumns(summarizers.sum("volume"), "id").toPandas()
     tests_utils.assert_same(new_pdf, expected_pdf, "with key")
+
+
+def test_percentile_rank(rankers, tests_utils, price2):
+    new_pdf = price2.addColumnsForCycle({
+        'result': rankers.percentile('price')
+    }).toPandas()
+
+    expected_pdf = make_pdf([
+        (0, 1, 1.0, 1.0 / 3),
+        (0, 2, 2.0, 2.0 / 3),
+        (1, 1, 3.0, .25),
+        (1, 2, 4.0, .5),
+        (1, 3, 5.0, .75),
+    ], ['time', 'id', 'price', 'result'])
+    tests_utils.assert_same(new_pdf, expected_pdf)
+
+
+def test_exclusive_rank(rankers, tests_utils, price2):
+    new_pdf = price2.addColumnsForCycle({
+        'result': rankers.exclusive('price', 0, 1)
+    }).toPandas()
+
+    expected_pdf = make_pdf([
+        (0, 1, 1.0, 1.0 / 3),
+        (0, 2, 2.0, 2.0 / 3),
+        (1, 1, 3.0, .25),
+        (1, 2, 4.0, .5),
+        (1, 3, 5.0, .75),
+    ], ['time', 'id', 'price', 'result'])
+    tests_utils.assert_same(new_pdf, expected_pdf)
+
+
+def test_inclusive_rank(rankers, tests_utils, price2):
+    new_pdf = price2.addColumnsForCycle({
+        'result': rankers.inclusive('price', 0, 1)
+    }).toPandas()
+
+    expected_pdf = make_pdf([
+        (0, 1, 1.0, 0.0),
+        (0, 2, 2.0, 1.0),
+        (1, 1, 3.0, 0.0),
+        (1, 2, 4.0, 0.5),
+        (1, 3, 5.0, 1.0),
+    ], ['time', 'id', 'price', 'result'])
+    tests_utils.assert_same(new_pdf, expected_pdf)
+
+
+def test_quantile_rank(rankers, tests_utils, price2):
+    new_pdf = price2.addColumnsForCycle({
+        'result': rankers.quantile('price', 2)
+    }).toPandas()
+
+    expected_pdf = make_pdf([
+        (0, 1, 1.0, 0),
+        (0, 2, 2.0, 1),
+        (1, 1, 3.0, 0),
+        (1, 2, 4.0, 1),
+        (1, 3, 5.0, 1),
+    ], ['time', 'id', 'price', 'result'])
+    tests_utils.assert_same(new_pdf, expected_pdf)
+
+
+def test_normal_distribution_percentile_rank(rankers, tests_utils, price2):
+    new_pdf = price2.addColumnsForCycle({
+        'result': rankers.normal_distribution_percentile('price')
+    }).toPandas()
+
+    expected_pdf = make_pdf([
+        (0, 1, 1.0, -0.43029175890572224,),
+        (0, 2, 2.0, 0.430291758905722,),
+        (1, 1, 3.0, -0.6741891400433162,),
+        (1, 2, 4.0, -1.0100667546808495e-7,),
+        (1, 3, 5.0, 0.6741891400433162)
+    ], ['time', 'id', 'price', 'result'])
+
+    tests_utils.assert_same(new_pdf, expected_pdf)
+
+
+def test_mixed_udfs(rankers, pyspark, price2):
+    """
+    addColumnsForCycle should support both built-in bindings and
+    Python UDFs in the same call.
+    """
+    from pyspark.sql.types import DoubleType
+    from scipy import stats
+
+    def percentile(column):
+        def f(rows):
+            values = [row[column] for row in rows] + [float("inf")]  # Add a max value so it's 1 exclusive
+            return {row: float(stats.percentileofscore(values, row[column], kind='rank') / 100) for row in rows}
+        return f
+
+    actual = price2.addColumnsForCycle({
+        'flint': rankers.percentile('price'),
+        'python': (DoubleType(), percentile('price'))
+    }).toPandas()
+
+    expected = make_pdf([
+        (0, 1, 1.0, 1/3, 1/3),
+        (0, 2, 2.0, 2/3, 2/3),
+        (1, 1, 3.0, .25, .25),
+        (1, 2, 4.0,  .5,  .5),
+        (1, 3, 5.0, .75, .75),
+    ], ['time', 'id', 'price', 'flint', 'python'])
+
+    # For some reason, we need to raise the tolerence threshold for comparing the python udf column
+    assert np.all(np.isclose(actual, expected, atol=1e-5)), "Left: {}\nRight: {}".format(actual, expected)
+
+
+def test_retain_column_order(rankers, pyspark, price2):
+    """
+    addColumnsForCycle should retain the order of the columns if specified
+    using an OrderedDict.
+    """
+    from pyspark.sql.types import DoubleType
+    from collections import OrderedDict
+
+    actual = price2.addColumnsForCycle(OrderedDict([
+        ('col1', rankers.exclusive('price', 0.0, 1.0)),
+        ('col2', (DoubleType(), lambda rows: {row: 1.0 for row in rows})),
+        ('col3', rankers.inclusive('price', 0.0, 1.0)),
+        ('col4', (DoubleType(), lambda rows: {row: 0.0 for row in rows})),
+    ]))
+
+    assert actual.columns == price2.columns + ['col1', 'col2', 'col3', 'col4']
+
+
+def test_addColumnsForCycle_unsupported_columns(rankers, pyspark, price2):
+    with pytest.raises(ValueError):
+        price2.addColumnsForCycle({
+            'invalid': 5.0,
+        })
+
+    with pytest.raises(ValueError):
+        price2.addColumnsForCycle({
+            'invalid': ('foo', lambda x: 1.0)
+        })
+
+    from pyspark.sql.types import DoubleType
+    with pytest.raises(ValueError):
+        price2.addColumnsForCycle({
+            'invalid': (DoubleType(), 5.0)
+        })
 
 
 def test_addWindows(tests_utils, windows, vol):
