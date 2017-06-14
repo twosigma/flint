@@ -226,8 +226,9 @@ object TimeSeriesRDD {
    *
    * @param dataFrame  The [[org.apache.spark.sql.DataFrame]] expected to convert. Its schema is expected to have a
    *                   column named "time" and of type Long.
-   * @param isSorted   A flag specifies if the rows in given `dataFrame` have been sorted by their timestamps under
-   *                   their time column.
+   * @param isSorted   A flag specifies if the rows in given `dataFrame` are sorted by their timestamps under
+   *                   their time column. If a given [[DataFrame]] is already sorted, and Catalyst knows about it,
+   *                   then the flag will be ignored.
    * @param timeUnit   The time unit under time column which could be [[scala.concurrent.duration.NANOSECONDS]],
    *                   [[scala.concurrent.duration.MILLISECONDS]], etc.
    * @param timeColumn Optional. The name of column in `df` that specifies the column name for time.

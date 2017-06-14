@@ -72,6 +72,14 @@ class ConversionSpec extends FlatSpec with SharedSparkContext with Timeouts {
     val orderedRdd = Conversion.fromNormalizedSortedRDD(sortedRDDWithEmptyPartitions)
     assert(orderedRdd.collect.length == sortedData.length)
     assert(orderedRdd.getNumPartitions == 8)
+    assert(orderedRdd.count() == 8)
+  }
+
+  it should "handle normalized RDD with non-trivial partitions" in {
+    val rdd = sc.parallelize(sortedData, 2)
+    val orderedRdd = Conversion.fromNormalizedSortedRDD(rdd)
+
+    assert(orderedRdd.count() == 8)
   }
 
   it should "fail in `fromNormalizedSortedRDD` if the given RDD is non normalized" in {

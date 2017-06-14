@@ -1068,6 +1068,14 @@ def test_from_tsrdd(sqlContext, flintContext, flint):
     assert(tsrdd.orderedRdd().getNumPartitions() == tsrdd2.orderedRdd().getNumPartitions())
 
 
+def test_sorted_df_partitioning(sqlContext, flintContext, pyspark, forecast):
+    sorted_df = forecast.sort("time")
+    # if the underlying data frame is sorted then conversion to TSDF or tsrdd shouldn't affect partitioning
+    normalized_df = pyspark.sql.DataFrame(flintContext.read.dataframe(sorted_df).timeSeriesRDD.toDF(), sqlContext)
+
+    assert_partition_equals(sorted_df, normalized_df)
+
+
 def test_with_column_preserve_order(sqlContext, flintContext):
     shared_test_partition_preserving(flintContext, lambda df: df.withColumn("neg_forecast", -df.forecast), True)
 
@@ -1245,6 +1253,24 @@ def shared_test_partition_preserving(flintContext, func, preserve, create = None
             assert_order_preserving(transform(input_df), func, preserve)
 
     df_cached.unpersist()
+
+
+def rows_to_pandas(rows):
+    return [pd.DataFrame(list(rows))]
+
+
+def get_nonempty_partitions(df):
+    pdfs = df.mapPartitions(rows_to_pandas).collect()
+    return [pdf for pdf in pdfs if not pdf.empty]
+
+
+def assert_partition_equals (df1, df2):
+    partitions1 = get_nonempty_partitions(df1)
+    partitions2 = get_nonempty_partitions(df2)
+
+    assert(len(partitions1) == len(partitions2))
+    for pdf1, pdf2 in zip(partitions1, partitions2):
+        pdt.assert_frame_equal(pdf1, pdf2)
 
 
 def assert_sorted(df):

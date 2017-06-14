@@ -20,8 +20,7 @@ import com.twosigma.flint.hadoop._
 import org.apache.spark.rdd.RDD
 import org.apache.spark._
 
-import scala.collection.SortedMap
-import scala.collection.immutable.TreeMap
+import scala.collection.immutable.{ SortedMap, TreeMap }
 import scala.reflect.ClassTag
 
 object Conversion {

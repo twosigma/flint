@@ -121,4 +121,26 @@ class DFConversionSpec extends TimeSeriesSuite with FlintTestData {
       TimeSeriesRDD.fromDF(df)(isSorted = false, TimeUnit.NANOSECONDS).keepColumns("time").validate()
     }
   }
+
+  it should "correctly use Catalyst partitioning information" in {
+    val df = clockTSRdd.toDF.withColumn("data", col("time") * 100)
+    assert(!TimeSeriesStore.isNormalized(df.queryExecution.executedPlan))
+
+    assert(TimeSeriesStore.isNormalized(df.sort("time").queryExecution.executedPlan))
+    assert(!TimeSeriesStore.isNormalized(df.sort(col("time").desc).queryExecution.executedPlan))
+    assert(!TimeSeriesStore.isNormalized(df.repartition(col("time")).queryExecution.executedPlan))
+
+    assert(!TimeSeriesStore.isNormalized(df.sort("data").queryExecution.executedPlan))
+  }
+
+  it should "preserve partitions of a sorted DF" in {
+    val sortedDf = clockTSRdd.toDF.sort("time")
+    val dfPartitions = sortedDf.mapPartitions {
+      iter => if (iter.isEmpty) Iterator.empty else Iterator(iter.next())
+    }.collect().map(_.getLong(0))
+
+    val tsrdd = TimeSeriesRDD.fromDF(sortedDf)(isSorted = true, TimeUnit.NANOSECONDS)
+    val tsrddPartitions = tsrdd.partInfo.get.splits.map(_.range.begin)
+    assert(dfPartitions.toSeq == tsrddPartitions)
+  }
 }
