@@ -42,14 +42,19 @@ case class NthMomentSummarizer(moment: Int)
   }
 
   override def subtract(u: NthMomentState, t: Double): NthMomentState = {
-    val newCount = u.count - 1L
-    val curMoment = u.nthMoment
-    val data = scala.math.pow(t, moment.toDouble)
-    val delta = data - curMoment.getValue()
-    curMoment.add(-delta / newCount)
-    u.count = newCount
+    require(u.count != 0L)
+    if (u.count == 1L) {
+      zero()
+    } else {
+      val newCount = u.count - 1L
+      val curMoment = u.nthMoment
+      val data = scala.math.pow(t, moment.toDouble)
+      val delta = data - curMoment.getValue()
+      curMoment.add(-delta / newCount)
+      u.count = newCount
 
-    u
+      u
+    }
   }
 
   override def merge(u1: NthMomentState, u2: NthMomentState): NthMomentState = {

@@ -98,33 +98,40 @@ case class NthCentralMomentSummarizer(val moment: Int)
     u: NthCentralMomentState,
     data: Double
   ): NthCentralMomentState = {
-    val prevMean = u.mean.getValue()
-    val newMean = (prevMean * u.count - data) / (u.count - 1L)
+    require(u.count != 0L)
+    if (u.count == 1L) {
+      zero()
+    } else {
+      val prevMean = u.mean.getValue()
+      val newMean = (prevMean * u.count - data) / (u.count - 1L)
 
-    val delta = data - newMean
+      val delta = data - newMean
 
-    u.mean.add(-delta / u.count)
-    val countDelta = (u.count - 1d) * delta / u.count
-    var countDeltaRunningProduct = countDelta
-    val oneMinusCount = 1d / (1d - u.count)
-    var oneMinusCountRunningProduct = 1d
-    val deltaOverCount = -delta / u.count
+      u.mean.add(-delta / u.count)
+      val countDelta = (u.count - 1d) * delta / u.count
+      var countDeltaRunningProduct = countDelta
+      val oneMinusCount = 1d / (1d - u.count)
+      var oneMinusCountRunningProduct = 1d
+      val deltaOverCount = -delta / u.count
 
-    for (p <- 2 to moment) {
-      countDeltaRunningProduct *= countDelta
-      oneMinusCountRunningProduct *= oneMinusCount
+      for (p <- 2 to moment) {
+        countDeltaRunningProduct *= countDelta
+        oneMinusCountRunningProduct *= oneMinusCount
 
-      var deltaOverCountRunningProduct = 1d
-      for (k <- 1 to p - 2) {
-        deltaOverCountRunningProduct *= deltaOverCount
-        u.moments(p - 2).add(-binomials(p - 2)(k - 1) * u.moments(p - k - 2).getValue() * deltaOverCountRunningProduct)
+        var deltaOverCountRunningProduct = 1d
+        for (k <- 1 to p - 2) {
+          deltaOverCountRunningProduct *= deltaOverCount
+          u.moments(p - 2).add(
+            -binomials(p - 2)(k - 1) * u.moments(p - k - 2).getValue() * deltaOverCountRunningProduct
+          )
+        }
+
+        u.moments(p - 2).add(-countDeltaRunningProduct * (1d - oneMinusCountRunningProduct))
       }
+      u.count -= 1L
 
-      u.moments(p - 2).add(-countDeltaRunningProduct * (1d - oneMinusCountRunningProduct))
+      u
     }
-    u.count -= 1L
-
-    u
   }
 
   override def merge(

@@ -30,17 +30,17 @@ import scala.math._
  */
 case class WeightedMeanTestState(
   var count: Long,
-  val sumWeight: Kahan,
-  val mean: Kahan,
-  val sumSquareOfDiffFromMean: Kahan,
-  val sumSquareOfWeights: Kahan
+  sumWeight: Kahan,
+  mean: Kahan,
+  sumSquareOfDiffFromMean: Kahan,
+  sumSquareOfWeights: Kahan
 )
 
 case class WeightedMeanTestOutput(
-  val weighedMean: Double,
-  val weightedStardardDeviation: Double,
-  val weightedTstat: Double,
-  val observationCount: Long
+  weighedMean: Double,
+  weightedStandardDeviation: Double,
+  weightedTstat: Double,
+  observationCount: Long
 )
 
 case class WeightedMeanTestSummarizer()
@@ -61,36 +61,41 @@ case class WeightedMeanTestSummarizer()
     u.mean.add(R)
     u.sumSquareOfDiffFromMean.add(oldSumWeight * delta * R)
     u.sumSquareOfWeights.add(weight * weight)
-    u.count += 1
+    u.count += 1L
 
     u
   }
 
   override def subtract(u: WeightedMeanTestState, data: (Double, Double)): WeightedMeanTestState = {
-    val (rawValue, rawWeight) = data
+    require(u.count != 0L)
+    if (u.count == 1L) {
+      zero()
+    } else {
+      val (rawValue, rawWeight) = data
 
-    val value = rawValue * signum(rawWeight)
-    val weight = abs(rawWeight)
+      val value = rawValue * signum(rawWeight)
+      val weight = abs(rawWeight)
 
-    val oldSumWeight = u.sumWeight.getValue()
-    u.sumWeight.add(-1.0 * weight)
+      val oldSumWeight = u.sumWeight.getValue()
+      u.sumWeight.add(-weight)
 
-    val newMean = (u.mean.getValue() * oldSumWeight - weight * value) / u.sumWeight.getValue()
-    val delta = value - newMean
-    val R = delta * weight / oldSumWeight
+      val newMean = (u.mean.getValue() * oldSumWeight - weight * value) / u.sumWeight.getValue()
+      val delta = value - newMean
+      val R = delta * weight / oldSumWeight
 
-    u.mean.add(-1.0 * R)
-    u.sumSquareOfDiffFromMean.add(-1.0 * u.sumWeight.getValue() * delta * R)
-    u.sumSquareOfWeights.add(-1.0 * weight * weight)
-    u.count -= 1
+      u.mean.add(-R)
+      u.sumSquareOfDiffFromMean.add(-u.sumWeight.getValue() * delta * R)
+      u.sumSquareOfWeights.add(-weight * weight)
+      u.count -= 1L
 
-    u
+      u
+    }
   }
 
   override def merge(u1: WeightedMeanTestState, u2: WeightedMeanTestState): WeightedMeanTestState = {
-    if (u1.count == 0) {
+    if (u1.count == 0L) {
       u2
-    } else if (u2.count == 0) {
+    } else if (u2.count == 0L) {
       u1
     } else {
       val delta = u2.mean.subtract(u1.mean)

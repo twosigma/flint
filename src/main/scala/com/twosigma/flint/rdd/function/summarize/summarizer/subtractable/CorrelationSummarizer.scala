@@ -73,21 +73,26 @@ case class CorrelationSummarizer()
   }
 
   override def subtract(u: CorrelationState, data: (Double, Double)): CorrelationState = {
-    val (x, y) = data
+    require(u.count != 0L)
+    if (u.count == 1L) {
+      zero()
+    } else {
+      val (x, y) = data
 
-    u.xMean = meanSummarizer.subtract(u.xMean, x)
-    u.yMean = meanSummarizer.subtract(u.yMean, y)
-    u.xVariance = varianceSummarizer.subtract(u.xVariance, x)
-    u.yVariance = varianceSummarizer.subtract(u.yVariance, y)
+      u.xMean = meanSummarizer.subtract(u.xMean, x)
+      u.yMean = meanSummarizer.subtract(u.yMean, y)
+      u.xVariance = varianceSummarizer.subtract(u.xVariance, x)
+      u.yVariance = varianceSummarizer.subtract(u.yVariance, y)
 
-    val xMean = meanSummarizer.render(u.xMean)
-    val yMean = meanSummarizer.render(u.yMean)
-    u.covariance.add(
-      -((u.count - 1d) / u.count) * (x - xMean) * (y - yMean)
-    )
-    u.count -= 1L
+      val xMean = meanSummarizer.render(u.xMean)
+      val yMean = meanSummarizer.render(u.yMean)
+      u.covariance.add(
+        -((u.count - 1d) / u.count) * (x - xMean) * (y - yMean)
+      )
+      u.count -= 1L
 
-    u
+      u
+    }
   }
 
   override def merge(u1: CorrelationState, u2: CorrelationState): CorrelationState = {

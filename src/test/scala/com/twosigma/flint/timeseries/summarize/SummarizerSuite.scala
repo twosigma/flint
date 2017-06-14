@@ -31,8 +31,8 @@ sealed trait SummarizerProperty {
 
 class SummarizerSuite extends TimeSeriesSuite {
 
-  // Use the smallest prime number that is larger than 1024 as default parallelism.
-  override val defaultPartitionParallelism: Int = primes.Primes.nextPrime(1024)
+  // Use the smallest prime number that is larger than 32 as default parallelism.
+  override val defaultPartitionParallelism: Int = primes.Primes.nextPrime(32)
 
   private val cycles = 10000L
 
@@ -296,6 +296,43 @@ class SummarizerSuite extends TimeSeriesSuite {
     override def toString: String = "WindowProperty"
   }
 
+  // Check if a - a = 0
+  class SubtractIdentityProperty extends SummarizerProperty {
+    override def test(
+      timeSeriesRdd: TimeSeriesRDD,
+      summarizerFactory: SummarizerFactory
+    ): Unit = {
+      require(
+        summarizerFactory
+        .apply(timeSeriesRdd.schema)
+        .isInstanceOf[LeftSubtractableSummarizer]
+      )
+      val summarizer = summarizerFactory
+        .apply(timeSeriesRdd.schema)
+        .asInstanceOf[LeftSubtractableSummarizer]
+
+      val rows = timeSeriesRdd.toDF.queryExecution.toRdd.map(_.copy).take(100)
+      var subtracted = summarizer.zero()
+      rows.foreach { row =>
+        subtracted = summarizer.add(subtracted, row)
+      }
+      rows.foreach { row =>
+        subtracted = summarizer.subtract(subtracted, row)
+      }
+      val toExternalRow = CatalystTypeConvertersWrapper.toScalaRowConverter(
+        summarizer.outputSchema
+      )
+
+      assertAlmostEquals(
+        toExternalRow(summarizer.render(subtracted)),
+        toExternalRow(summarizer.render(summarizer.zero()))
+      )
+      // We could check that 0 - a throws an exception, but currently some summarizers do not check for this case.
+    }
+
+    override def toString: String = "SubtractIdentityProperty"
+  }
+
   lazy val AllProperties = Seq(
     new AssociativeLawProperty,
     new RightIdentityProperty,
@@ -305,7 +342,8 @@ class SummarizerSuite extends TimeSeriesSuite {
 
   lazy val AllPropertiesAndSubtractable: Seq[SummarizerProperty] = AllProperties ++ Seq(
     new LeftSubtractableProperty,
-    new WindowProperty
+    new WindowProperty,
+    new SubtractIdentityProperty
   )
 
   def summarizerPropertyTest(properties: Seq[SummarizerProperty])(
