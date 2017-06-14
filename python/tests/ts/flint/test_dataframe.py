@@ -62,7 +62,7 @@ def reset_env():
 def launcher_params():
     # TODO: run on real datacenters for more thorough integration
     #       tests, but not often
-    default_codebase = '/opt/ts/services/spark-ts.ts_spark_1_6/'
+    default_codebase = '/opt/ts/services/spark-2.0-ts.ts_spark_2_0/'
     codebase_env = 'FLINT_VATS_CODEBASE'
 
     return {'datacenter': 'local',
@@ -130,8 +130,8 @@ def sc(launcher, pyspark):
 
 @pytest.fixture(scope='module')
 def sqlContext(pyspark, sc):
-    from pyspark.sql import HiveContext
-    return HiveContext(sc)
+    from pyspark.sql import SQLContext
+    return SQLContext(sc)
 
 
 @pytest.fixture(scope='module')
