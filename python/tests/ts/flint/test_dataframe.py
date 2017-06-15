@@ -1260,7 +1260,7 @@ def rows_to_pandas(rows):
 
 
 def get_nonempty_partitions(df):
-    pdfs = df.mapPartitions(rows_to_pandas).collect()
+    pdfs = df.rdd.mapPartitions(rows_to_pandas).collect()
     return [pdf for pdf in pdfs if not pdf.empty]
 
 
