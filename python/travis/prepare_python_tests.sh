@@ -30,7 +30,5 @@ mv spark-2.1.1-bin-hadoop2.7 spark
 cp travis/spark_log4j.properties spark/conf/log4j.properties
 # Add the flint assembly to spark test instance
 sed "s,_FLINT_ROOT_,$(pwd)/..," <travis/spark-defaults.conf >spark/conf/spark-defaults.conf
-# Set up the pytest.ini
-sed "s,_PYTHON_DIR_,$(pwd)," <travis/pytest.ini >pytest.ini
 
 conda create -n flint python=3.5 pandas notebook

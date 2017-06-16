@@ -25,4 +25,4 @@ pip install pytest-spark
 # Set SPARK_HOME
 export SPARK_HOME=$(pwd)/spark
 
-pytest -m "not net"
+python -m unittest discover tests
