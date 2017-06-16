@@ -82,7 +82,7 @@ case class ZScoreSummarizer(includeCurrentObservation: Boolean)
     if (u.value != Double.NaN) {
       val meanTestOutput = meanSummarizer.render(u.meanState)
       if (meanTestOutput.observationCount > 1) {
-        zScore = (u.value - meanTestOutput.weighedMean) / meanTestOutput.weightedStardardDeviation
+        zScore = (u.value - meanTestOutput.weighedMean) / meanTestOutput.weightedStandardDeviation
       }
     }
 

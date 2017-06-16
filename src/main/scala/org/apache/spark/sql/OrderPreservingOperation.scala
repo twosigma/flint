@@ -17,7 +17,8 @@
 package org.apache.spark.sql
 
 import com.twosigma.flint.annotation.PythonApi
-import org.apache.spark.sql.catalyst.plans.logical.{ Filter, LogicalPlan, Project }
+
+import org.apache.spark.sql.catalyst.plans.logical.{ Filter, LogicalPlan, Project, Generate }
 
 /**
  * A class to used to check whether a DataFrame operation is partition preserving.
@@ -33,6 +34,7 @@ object OrderPreservingOperation {
   private def isOrderPreservingLogicalNode(node: LogicalPlan): Boolean = node match {
     case _: Project => true
     case _: Filter => true
+    case _: Generate => true
     case _ => false
   }
 

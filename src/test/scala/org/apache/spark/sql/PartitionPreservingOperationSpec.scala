@@ -18,8 +18,10 @@ package org.apache.spark.sql
 
 import com.twosigma.flint.FlintSuite
 import PartitionPreservingOperation.{ executedPlan, isPartitionPreserving }
-import org.apache.spark.sql.execution.RDDScanExec
+import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
+
+import org.apache.spark.sql.{ functions => F }
 
 class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
 
@@ -104,6 +106,13 @@ class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
     orderedData.count()
     assert(executedPlan(orderedData).isInstanceOf[InMemoryTableScanExec])
     orderedData.unpersist()
+  }
+
+  it should "test explode" in {
+    val data = new DataFrame(sqlContext, testData.logicalPlan)
+    var result = data.withColumn("values", F.array(F.lit(1), F.lit(2)))
+    result = result.withColumn("value", F.explode(F.col("values")))
+    assert(isPartitionPreserving(data, result))
   }
 
   it should "throw exception when not derived" in {

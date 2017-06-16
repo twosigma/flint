@@ -1144,6 +1144,15 @@ def test_with_window_column_dont_preserve_order(sqlContext, flintContext):
     shared_test_partition_preserving(flintContext, with_window_column, False)
 
 
+def test_explode_preserve_order(flintContext):
+    def with_explode_column(df):
+        import pyspark.sql.functions as F
+        df2 = df.withColumn('values', F.array(F.lit(1), F.lit(2)))
+        df2 = df2.withColumn('value', F.explode(df2.values))
+        return df2
+    shared_test_partition_preserving(flintContext, with_explode_column, True)
+
+
 def test_df_lazy(flintContext):
     df_lazy = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
     assert(df_lazy._is_sorted is True)

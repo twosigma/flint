@@ -18,6 +18,7 @@ package org.apache.spark.sql
 
 import com.twosigma.flint.FlintSuite
 import org.apache.spark.sql.PartitionPreservingOperation.isPartitionPreserving
+import org.apache.spark.sql.{ functions => F }
 
 class OrderPreservingOperationSpec extends FlintSuite with FlintTestData {
 
@@ -104,6 +105,13 @@ class OrderPreservingOperationSpec extends FlintSuite with FlintTestData {
     val op = cache.andThen(selectV)
     assert(OrderPreservingOperation.isOrderPreserving(data, op(data)))
     data.unpersist
+  }
+
+  it should "test explode" in {
+    val data = new DataFrame(sqlContext, testData.logicalPlan)
+    var result = data.withColumn("values", F.array(F.lit(1), F.lit(2)))
+    result = result.withColumn("value", F.explode(F.col("values")))
+    assert(OrderPreservingOperation.isOrderPreserving(data, result))
   }
 
   it should "throw exception when not derived" in {
