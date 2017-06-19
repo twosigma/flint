@@ -125,12 +125,12 @@ object Summarizers {
    *   - "<column>_zScore": [[DoubleType]], the z-scores of specific column.
    *
    * @param column                    The column expected to calculate the z-score.
-   * @param excludeCurrentObservation Whether to use unbiased sample standard deviation with current observation or
+   * @param includeCurrentObservation Whether to use unbiased sample standard deviation with current observation or
    *                                  unbiased sample standard deviation excluding current observation.
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate z-score.
    */
-  def zScore(column: String, excludeCurrentObservation: Boolean): SummarizerFactory =
-    ZScoreSummarizerFactory(column, excludeCurrentObservation)
+  def zScore(column: String, includeCurrentObservation: Boolean): SummarizerFactory =
+    ZScoreSummarizerFactory(column, includeCurrentObservation)
 
   /**
    * Compute the n-th moment.

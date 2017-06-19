@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.timeseries.summarize.summarizer
+package com.twosigma.flint.timeseries.summarize.summarizer.subtractable
 
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
@@ -54,7 +54,7 @@ class ZScoreSummarizerSpec extends SummarizerSuite {
   }
 
   it should "pass summarizer property test" in {
-    summarizerPropertyTest(AllProperties)(Summarizers.zScore("x1", true))
-    summarizerPropertyTest(AllProperties)(Summarizers.zScore("x2", false))
+    summarizerPropertyTest(AllPropertiesAndSubtractable)(Summarizers.zScore("x1", true))
+    summarizerPropertyTest(AllPropertiesAndSubtractable)(Summarizers.zScore("x2", false))
   }
 }
