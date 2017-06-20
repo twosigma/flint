@@ -16,7 +16,8 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer.subtractable
 
-import com.twosigma.flint.timeseries.{ Summarizers, Windows }
+import breeze.numerics.abs
+import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesGenerator, Windows }
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
@@ -93,6 +94,50 @@ class NthMomentSummarizerSpec extends SummarizerSuite {
       Summarizers.nthCentralMoment("c", 2)
     ).collect().last
     assert(results.getAs[Double]("c_2thCentralMoment") == 0.0)
+  }
+
+  it should "return almost zero for variance with constant values in a window" in {
+    val dataWithRandomColumn = new TimeSeriesGenerator(
+      sc,
+      begin = 0L,
+      end = 100000L,
+      frequency = 10L
+    )(
+      uniform = false,
+      ids = Seq(1),
+      ratioOfCycleSize = 1.0,
+      columns = Seq(
+        "x" -> { (_: Long, _: Int, rand: util.Random) =>
+          rand.nextDouble()
+        }
+      ),
+      numSlices = 1
+    ).generate()
+    val dataWithConstantColumn = new TimeSeriesGenerator(
+      sc,
+      begin = 100000L,
+      end = 200000L,
+      frequency = 10L
+    )(
+      uniform = false,
+      ids = Seq(1),
+      ratioOfCycleSize = 1.0,
+      columns = Seq(
+        "x" -> { (_: Long, _: Int, rand: util.Random) =>
+          1.0
+        }
+      ),
+      numSlices = 1
+    ).generate()
+    val testData = dataWithRandomColumn.merge(dataWithConstantColumn)
+
+    val results = testData.summarizeWindows(
+      Windows.pastAbsoluteTime("1000 ns"),
+      Summarizers.nthCentralMoment("x", 2)
+    ).collect().last
+
+    // |observations| * variance
+    assert(abs(100 * results.getAs[Double]("x_2thCentralMoment")) < 1.0E-12)
   }
 
   it should "pass summarizer property test" in {

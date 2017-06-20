@@ -163,7 +163,8 @@ def covariance(x_column, y_column):
     return SummarizerFactory('covariance', x_column, y_column)
 
 
-def linear_regression(y_column, x_columns, weight_column=None, *, use_intercept=True, ignore_constants=False):
+def linear_regression(y_column, x_columns, weight_column=None, *, use_intercept=True, ignore_constants=False,
+                      constant_error_bound=1.0E-12):
     '''Computes a weighted multiple linear regression of the values in
     several columns against values in another column, using values
     from yet another column as the weights.
@@ -251,8 +252,15 @@ def linear_regression(y_column, x_columns, weight_column=None, *, use_intercept=
         independent variables, defined by x_columns, that are constants.
         See constant columns above. (default: False)
     :type ignore_constants: bool
+    :param constant_error_bound: Used when ignore_constants = True, otherwise
+        ignored. The error bound on (|observations| * variance) to determine
+        if a variable is constant. A variable will be considered as a constant
+        c if and only if the sum of squared differences to c is less than the
+        error bound. Default is 1.0E-12.
+    :type constant_error_bound: float
     '''
-    return SummarizerFactory('OLSRegression', y_column, x_columns, weight_column, use_intercept, ignore_constants)
+    return SummarizerFactory('OLSRegression', y_column, x_columns, weight_column, use_intercept, ignore_constants,
+                             constant_error_bound)
 
 
 def max(column):

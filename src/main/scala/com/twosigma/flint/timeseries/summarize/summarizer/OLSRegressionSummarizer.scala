@@ -16,7 +16,8 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.rdd.function.summarize.summarizer.{ OLSRegressionOutput, OLSRegressionState, RegressionRow, OLSRegressionSummarizer => RegressionSummarizer }
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ OLSRegressionOutput, OLSRegressionState, OLSRegressionSummarizer => RegressionSummarizer }
+import com.twosigma.flint.rdd.function.summarize.summarizer.RegressionRow
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -65,7 +66,8 @@ case class OLSRegressionSummarizerFactory(
   xColumns: Array[String],
   weightColumn: String,
   shouldIntercept: Boolean,
-  shouldIgnoreConstants: Boolean
+  shouldIgnoreConstants: Boolean,
+  constantErrorBound: Double
 ) extends SummarizerFactory {
   type K = Long
 
@@ -83,7 +85,8 @@ case class OLSRegressionSummarizerFactory(
       xColumns,
       Option(weightColumn),
       shouldIntercept,
-      shouldIgnoreConstants
+      shouldIgnoreConstants,
+      constantErrorBound
     )
 }
 
@@ -95,8 +98,9 @@ case class OLSRegressionSummarizer(
   xColumns: Array[String],
   weightColumn: Option[String],
   shouldIntercept: Boolean,
-  shouldIgnoreConstants: Boolean
-) extends Summarizer with FilterNullInput {
+  shouldIgnoreConstants: Boolean,
+  constantErrorBound: Double
+) extends LeftSubtractableSummarizer with FilterNullInput {
 
   private val dimensionOfX = xColumns.length
   private val isWeighted = weightColumn != null
@@ -115,7 +119,7 @@ case class OLSRegressionSummarizer(
   override type V = OLSRegressionOutput
 
   override val summarizer =
-    new RegressionSummarizer(dimensionOfX, shouldIntercept, isWeighted, shouldIgnoreConstants)
+    new RegressionSummarizer(dimensionOfX, shouldIntercept, isWeighted, shouldIgnoreConstants, constantErrorBound)
 
   override def toT(r: InternalRow): RegressionRow = {
     val x = new Array[Double](xColumnIds.length)

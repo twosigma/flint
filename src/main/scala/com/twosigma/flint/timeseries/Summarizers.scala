@@ -228,10 +228,13 @@ object Summarizers {
    *                              dimension as `xColumns`. However, entries corresponding to constant variables
    *                              will have 0.0 for beta and stdErr; and Double.NaN for tStat.
    *                              When it is false and if `xColumns` includes constant variables, the regression
-   *                             will output Double.NaN for all regression result. Note that if there are
+   *                              will output Double.NaN for all regression result. Note that if there are
    *                              multiple constant variables in `xColumns` and the user wants to include a
    *                              constant variable, it is recommended to set both `shouldIgnoreConstants`
    *                              and `shouldIntercept` to be true. Default false.
+   * @param constantErrorBound    The error bound on (|observations| * variance) to determine if a variable is constant.
+   *                              A variable will be considered as a constant c if and only if the sum of squared
+   *                              differences to c is less than the error bound. Default is 1.0E-12.
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate beta, intercept, stdErr,
    *         t-stats, and r etc.
    */
@@ -240,13 +243,31 @@ object Summarizers {
     xColumns: Seq[String],
     weightColumn: String = null,
     shouldIntercept: Boolean = true,
-    shouldIgnoreConstants: Boolean = false
+    shouldIgnoreConstants: Boolean = false,
+    constantErrorBound: Double = 1.0E-12
   ): SummarizerFactory = OLSRegressionSummarizerFactory(
     yColumn,
     xColumns.toArray,
     weightColumn,
     shouldIntercept,
-    shouldIgnoreConstants
+    shouldIgnoreConstants,
+    constantErrorBound
+  )
+
+  @PythonApi(until = "0.2.5")
+  private def OLSRegression(
+    yColumn: String,
+    xColumns: Seq[String],
+    weightColumn: String,
+    shouldIntercept: Boolean,
+    shouldIgnoreConstants: Boolean
+  ): SummarizerFactory = OLSRegression(
+    yColumn = yColumn,
+    xColumns = xColumns,
+    weightColumn,
+    shouldIntercept = shouldIntercept,
+    shouldIgnoreConstants = shouldIgnoreConstants,
+    constantErrorBound = 1.0E-12
   )
 
   @PythonApi(until = "0.2.1")

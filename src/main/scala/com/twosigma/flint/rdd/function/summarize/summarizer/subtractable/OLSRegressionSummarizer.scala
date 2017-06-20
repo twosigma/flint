@@ -14,11 +14,13 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.rdd.function.summarize.summarizer
+package com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 
 import breeze.linalg._
-import scala.util.{ Success, Failure }
+import com.twosigma.flint.rdd.function.summarize.summarizer.{ RegressionRow, RegressionSummarizer }
+
 import scala.util.control.Exception._
+import scala.util.{ Failure, Success }
 
 case class OLSRegressionState(
   var count: Long,
@@ -28,8 +30,7 @@ case class OLSRegressionState(
   var sumOfWeights: Double,
   var sumOfLogWeights: Double,
   var sumOfY: Double,
-  var rawPrimeConstXt: Option[Array[Double]],
-  var primeConstCoordinates: Array[Int]
+  var variancesOfPrimaryX: Array[NthCentralMomentState]
 )
 
 case class OLSRegressionOutput(
@@ -67,8 +68,9 @@ class OLSRegressionSummarizer(
   dimensionOfX: Int,
   shouldIntercept: Boolean,
   isWeighted: Boolean,
-  shouldIgnoreConstants: Boolean = false
-) extends Summarizer[RegressionRow, OLSRegressionState, OLSRegressionOutput] {
+  shouldIgnoreConstants: Boolean = false,
+  constantErrorBound: Double
+) extends LeftSubtractableSummarizer[RegressionRow, OLSRegressionState, OLSRegressionOutput] {
 
   import RegressionSummarizer._
 
@@ -78,6 +80,16 @@ class OLSRegressionSummarizer(
     dimensionOfX
   }
 
+  private val varianceSummarizer = NthCentralMomentSummarizer(2)
+
+  private def almostZero(x: Double): Boolean =
+    x < constantErrorBound && x > -constantErrorBound
+
+  private def getPrimaryConstCoords(u: OLSRegressionState): Array[Int] =
+    u.variancesOfPrimaryX.zipWithIndex.filter{
+      case (momentState, i) => almostZero(u.count * varianceSummarizer.render(momentState).nthCentralMoment(2))
+    }.map(_._2)
+
   override def zero(): OLSRegressionState = OLSRegressionState(
     count = 0L,
     matrixOfXX = DenseMatrix.zeros[Double](k, k),
@@ -86,8 +98,7 @@ class OLSRegressionSummarizer(
     0.0,
     0.0,
     0.0,
-    None,
-    Array.empty[Int]
+    Array.fill[NthCentralMomentState](dimensionOfX)(varianceSummarizer.zero())
   )
 
   override def merge(
@@ -110,15 +121,10 @@ class OLSRegressionSummarizer(
       mergedU.sumOfLogWeights = u1.sumOfLogWeights + u2.sumOfLogWeights
       mergedU.sumOfY = u1.sumOfY + u2.sumOfY
 
-      // Both u1 and u2 are from non-empty partitions.
-      mergedU.rawPrimeConstXt = u1.rawPrimeConstXt
-      mergedU.primeConstCoordinates = u1.rawPrimeConstXt.get.zip(u2.rawPrimeConstXt.get).map {
-        case (x1, x2) => x1 == x2
-      }.zipWithIndex.filter(_._1).map(_._2).toSet.intersect(
-        u1.primeConstCoordinates.toSet
-      ).intersect(
-        u2.primeConstCoordinates.toSet
-      ).toArray
+      // Update variances
+      mergedU.variancesOfPrimaryX = u1.variancesOfPrimaryX.zip(u2.variancesOfPrimaryX).map {
+        case (u1Var, u2Var) => varianceSummarizer.merge(u1Var, u2Var)
+      }
 
       mergedU
     }
@@ -152,10 +158,11 @@ class OLSRegressionSummarizer(
   private def shrink(
     u: OLSRegressionState
   ): (OLSRegressionState, (Array[Double], Double) => Array[Double]) = {
-    val dim = u.rawPrimeConstXt.fold(0) { _.length }
     if (shouldIgnoreConstants) {
       val primCoordinates =
-        ((0 until dim).toSet -- u.primeConstCoordinates).toIndexedSeq.sorted
+        u.variancesOfPrimaryX.zipWithIndex.filterNot{
+          case (momentState, i) => almostZero(u.count * varianceSummarizer.render(momentState).nthCentralMoment(2))
+        }.map(_._2).toIndexedSeq.sorted
       var coordinates = primCoordinates
       if (shouldIntercept) {
         coordinates = 0 +: primCoordinates.map(_ + 1)
@@ -164,9 +171,9 @@ class OLSRegressionSummarizer(
         matrixOfXX = u.matrixOfXX(coordinates, coordinates).toDenseMatrix,
         vectorOfXY = u.vectorOfXY(coordinates).toDenseVector
       )
-      (shrunk, stretch(primCoordinates, dim))
+      (shrunk, stretch(primCoordinates, dimensionOfX))
     } else {
-      (u, stretch(0 until dim, dim))
+      (u, stretch(0 until dimensionOfX, dimensionOfX))
     }
   }
 
@@ -232,7 +239,7 @@ class OLSRegressionSummarizer(
       akaikeIC = akaikeIC,
       bayesIC = bayesIC,
       cond = condOfMatrixOfXX,
-      constantsCoordinates = u.primeConstCoordinates
+      constantsCoordinates = getPrimaryConstCoords(u)
     )
   }
 
@@ -263,7 +270,7 @@ class OLSRegressionSummarizer(
           akaikeIC = Double.NaN,
           bayesIC = Double.NaN,
           cond = Double.NaN,
-          constantsCoordinates = u.primeConstCoordinates
+          constantsCoordinates = getPrimaryConstCoords(u)
         )
     }
   }
@@ -300,26 +307,53 @@ class OLSRegressionSummarizer(
     u.sumOfLogWeights += math.log(yw._2)
     u.sumOfY += yw._1 * yw._2
 
-    if (u.rawPrimeConstXt.isEmpty) {
-      // Should only be set once if this partition is non-empty.
-      u.rawPrimeConstXt = Some(t.x)
-      u.primeConstCoordinates = t.x.indices.toArray
-    } else {
-      val rawPrimeConstXt = u.rawPrimeConstXt.get
-      var diffFound = false
-      var i = 0
-      while (i < u.primeConstCoordinates.length) {
-        val c = u.primeConstCoordinates(i)
-        if (t.x(c) != rawPrimeConstXt(c)) {
-          u.primeConstCoordinates(i) = -1
-          diffFound = true
-        }
-        i = i + 1
+    // Update variances
+    i = 0
+    while (i < t.x.length) {
+      u.variancesOfPrimaryX(i) = varianceSummarizer.add(u.variancesOfPrimaryX(i), t.x(i))
+      i += 1
+    }
+
+    u
+  }
+
+  override def subtract(
+    u: OLSRegressionState,
+    t: RegressionRow
+  ): OLSRegressionState = {
+    val (xt, yt, yw) =
+      RegressionSummarizer.transform(t, shouldIntercept, isWeighted)
+    var i = 0
+    // Update matrixOfXX
+    while (i < xt.length) {
+      var j = i
+      while (j < xt.length) {
+        val xij = xt(i) * xt(j)
+        u.matrixOfXX.update(i, j, u.matrixOfXX(i, j) - xij)
+        u.matrixOfXX.update(j, i, u.matrixOfXX(i, j))
+        j += 1
       }
-      // Only have to do the filtering at most k times.
-      if (diffFound) {
-        u.primeConstCoordinates = u.primeConstCoordinates.filterNot(_ == -1)
-      }
+      i += 1
+    }
+
+    // Update vectorOfXY
+    i = 0
+    while (i < xt.length) {
+      u.vectorOfXY.update(i, u.vectorOfXY(i) - xt(i) * yt)
+      i += 1
+    }
+
+    u.sumOfYSquared -= yt * yt
+    u.count -= 1L
+    u.sumOfWeights -= yw._2
+    u.sumOfLogWeights -= math.log(yw._2)
+    u.sumOfY -= yw._1 * yw._2
+
+    // Update variances
+    i = 0
+    while (i < t.x.length) {
+      u.variancesOfPrimaryX(i) = varianceSummarizer.subtract(u.variancesOfPrimaryX(i), t.x(i))
+      i += 1
     }
 
     u

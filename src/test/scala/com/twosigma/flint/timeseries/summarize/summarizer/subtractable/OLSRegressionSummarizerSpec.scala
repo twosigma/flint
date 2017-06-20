@@ -14,10 +14,11 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.timeseries.summarize.summarizer
+package com.twosigma.flint.timeseries.summarize.summarizer.subtractable
 
+import com.twosigma.flint.timeseries.Summarizers
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
-import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesSuite }
+import com.twosigma.flint.timeseries.summarize.summarizer.OLSRegressionSummarizer
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.DoubleType
 
@@ -25,8 +26,6 @@ import scala.collection.mutable
 import scala.util.Random
 
 class OLSRegressionSummarizerSpec extends SummarizerSuite {
-
-  override val defaultPartitionParallelism: Int = 10
 
   override val defaultResourceDir = "/timeseries/summarize/summarizer/olsregressionsummarizer"
 
@@ -257,10 +256,10 @@ class OLSRegressionSummarizerSpec extends SummarizerSuite {
   }
 
   it should "pass summarizer property test" in {
-    summarizerPropertyTest(AllProperties)(
+    summarizerPropertyTest(AllPropertiesAndSubtractable)(
       Summarizers.OLSRegression("x0", Seq("x1", "x2"), "x3", shouldIntercept = false)
     )
-    summarizerPropertyTest(AllProperties)(
+    summarizerPropertyTest(AllPropertiesAndSubtractable)(
       Summarizers.OLSRegression("x0", Seq("x1", "x2"), "x3", shouldIntercept = true)
     )
   }
