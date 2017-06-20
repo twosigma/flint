@@ -884,6 +884,15 @@ def test_summary_compose(pyspark, summarizers, tests_utils, price):
                               summarizers.stddev("price")]).toPandas()
     pdt.assert_frame_equal(result, expected_pdf)
 
+def test_summary_prefix(pyspark, summarizers, tests_utils, price):
+    expected_pdf = make_pdf([
+        (0, 6.0, 6.0)
+    ], ["time", "price_max", "prefix_price_max"])
+
+    result = price.summarize([summarizers.max("price"),
+                              summarizers.max("price").prefix("prefix")]).toPandas()
+    pdt.assert_frame_equal(result, expected_pdf)
+
 def test_addSummaryColumns(summarizers, tests_utils, vol):
     expected_pdf = make_pdf([
         (1000, 7, 100, 100.0),

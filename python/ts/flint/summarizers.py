@@ -66,16 +66,27 @@ class SummarizerFactory:
     def __init__(self, func, *args):
         self._args = args
         self._func = func
+        self._prefix = None
 
     def _jsummarizer(self, sc):
         # TODO: There should be a standard way to converting python
         #       collection to scala collections, if they are not auto
         #       converted by py4j.
         args = [utils.py_col_to_scala_col(sc, arg) for arg in self._args]
-        return java.Packages(sc).Summarizers.__getattr__(self._func)(*args)
+        jsummarizer = java.Packages(sc).Summarizers.__getattr__(self._func)(*args)
+        if self._prefix is not None:
+            jsummarizer = jsummarizer.prefix(self._prefix)
+        return jsummarizer
 
     def __str__(self):
         return "%s(%s)" % (self._func, ", ".join(str(arg) for arg in self._args))
+
+    def prefix(self, prefix):
+        '''Adds prefix to the column names of output schema.
+        All columns names will be prepended as format '<prefix>_<column>'.
+        '''
+        self._prefix = prefix
+        return self
 
 
 def correlation(cols, other=None):
