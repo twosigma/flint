@@ -55,12 +55,14 @@ case class ZScoreSummarizer(includeCurrentObservation: Boolean)
   }
 
   override def subtract(u: ZScoreState, value: Double): ZScoreState = {
-    u.count -= 1L
-    u.meanState = meanSummarizer.subtract(u.meanState, (value, 1))
-    if (u.count == 0L) {
-      u.value = Double.NaN
+    require(u.count != 0L)
+    if (u.count == 1L) {
+      zero()
+    } else {
+      u.count -= 1L
+      u.meanState = meanSummarizer.subtract(u.meanState, (value, 1))
+      u
     }
-    u
   }
 
   override def merge(u1: ZScoreState, u2: ZScoreState): ZScoreState = {
