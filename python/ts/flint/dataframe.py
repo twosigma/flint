@@ -28,6 +28,7 @@ import pandas as pd
 from . import java
 from . import utils
 from . import summarizers
+from .windows import WindowsFactoryBase
 from .error import FlintError
 
 __all__ = ['TimeSeriesDataFrame']
@@ -636,17 +637,23 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
             >>> tsdf.shiftTime('100ns')
             >>> tsdf.shiftTime(pandas.Timedelta(nanoseconds=100))
+            >>> tsdf.shiftTime(windows.futureTradingTime('1day', 'US'))
 
-        :param shift: Amount to shift the dataframe time column, shift is of type ``pandas.Timedelta`` or string that can be
-                      formatted by ``pandas.Timedelta``
-        :param backwards: Shift time backwards (defaults to False)
+        :param shift: Amount to shift the dataframe time column, shift can be a ``pandas.Timedelta`` or a string that can be
+                      formatted by ``pandas.Timedelta`` or a ``window``.
+        :param backwards: Shift time backwards (defaults to False). Ignored when shift is a ``window``.
         :returns: a new :class:`TimeSeriesDataFrame`
         """
-        shift = self._timedelta_ns('shift', shift)
-        if backwards:
-            tsrdd = self.timeSeriesRDD.lookBackwardClock(shift)
+
+        if isinstance(shift, WindowsFactoryBase):
+            window = shift
+            tsrdd = self.timeSeriesRDD.shift(window._jwindow(self._sc))
         else:
-            tsrdd = self.timeSeriesRDD.lookForwardClock(shift)
+            shift = self._timedelta_ns('shift', shift)
+            if backwards:
+                tsrdd = self.timeSeriesRDD.lookBackwardClock(shift)
+            else:
+                tsrdd = self.timeSeriesRDD.lookForwardClock(shift)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def timestamp_df(self):

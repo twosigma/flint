@@ -632,6 +632,7 @@ def test_summarizeWindows(flintContext, tests_utils, windows, summarizers, vol):
 
 @pytest.mark.net
 def test_summarizeWindows_trading_time(flintContext, tests_utils, windows, summarizers):
+
     def to_nanos(dt):
         return int(dt.timestamp() * 1e9)
 
@@ -963,6 +964,43 @@ def test_shiftTime(tests_utils, price):
     expected_pdf.time -= 1000
     new_pdf = price.shiftTime(pd.Timedelta("1000ns"), backwards=True).toPandas()
     tests_utils.assert_same(new_pdf, expected_pdf, "backwards")
+
+def test_shiftTime_windows(flintContext, tests_utils, windows):
+
+    def to_nanos(dt):
+        return int(dt.timestamp() * 1e9)
+
+    friday = to_nanos(datetime.datetime(2001, 11, 9, 15, 0))
+    saturday = to_nanos(datetime.datetime(2001, 11, 10, 15, 0))
+    monday = to_nanos(datetime.datetime(2001, 11, 12, 15, 0))
+    tuesday = to_nanos(datetime.datetime(2001, 11, 13, 15, 0))
+    wednesday = to_nanos(datetime.datetime(2001, 11, 14, 15, 0))
+    thrusday = to_nanos(datetime.datetime(2001, 11, 15, 15, 0))
+
+    dates = flintContext.read.pandas(make_pdf([
+        (friday,),
+        (monday,),
+        (tuesday,),
+        (wednesday,),
+    ], ['time']))
+
+    expected1 = make_pdf([
+        (saturday,),
+        (tuesday,),
+        (wednesday,),
+        (thrusday,),
+    ], ['time'])
+    result1 = dates.shiftTime(windows.future_absolute_time('1day')).toPandas()
+    tests_utils.assert_same(result1, expected1)
+
+    expected2= make_pdf([
+        (monday,),
+        (tuesday,),
+        (wednesday,),
+        (thrusday,),
+    ], ['time'])
+    result2 = dates.shiftTime(windows.future_trading_time('1day', 'US')).toPandas()
+    tests_utils.assert_same(result2, expected2)
 
 
 # Not really human, but requires jobsystem creds and tsmoto doesn't have them.
