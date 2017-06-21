@@ -1331,7 +1331,7 @@ def assert_partition_equals (df1, df2):
 
 def assert_sorted(df):
     pdf = df.toPandas()
-    pdt.assert_frame_equal(pdf, pdf.sort_values('time'))
+    assert (np.diff(pdf.time) >= 0).all()
 
 
 def assert_partition_preserving(input_df, func, preserve):
