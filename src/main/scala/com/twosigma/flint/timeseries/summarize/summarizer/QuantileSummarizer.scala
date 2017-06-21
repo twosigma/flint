@@ -16,7 +16,7 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.rdd.function.summarize.summarizer.{ QuantileState => QState, QuantileSummarizer => QSummarizer }
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ SequentialArrayQueue, QuantileSummarizer => QSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
 import com.twosigma.flint.timeseries.summarize._
@@ -34,13 +34,13 @@ case class QuantileSummarizer(
   override val prefixOpt: Option[String],
   override val requiredColumns: ColumnList,
   p: Array[Double]
-) extends Summarizer with FilterNullInput {
+) extends LeftSubtractableSummarizer with FilterNullInput {
   private val Sequence(Seq(column)) = requiredColumns
   private val columnIndex = inputSchema.fieldIndex(column)
   private final val valueExtractor = asDoubleExtractor(inputSchema(columnIndex).dataType, columnIndex)
 
   override type T = Double
-  override type U = QState[Double]
+  override type U = SequentialArrayQueue[Double]
   override type V = Array[Double]
 
   override val summarizer = QSummarizer(p)

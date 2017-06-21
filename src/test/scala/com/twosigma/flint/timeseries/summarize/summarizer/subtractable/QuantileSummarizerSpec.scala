@@ -14,10 +14,11 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.timeseries.summarize.summarizer
+package com.twosigma.flint.timeseries.summarize.summarizer.subtractable
 
-import com.twosigma.flint.timeseries.{ Clocks, Summarizers, TimeSeriesRDD }
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.SequentialArrayQueue
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
+import com.twosigma.flint.timeseries.{ Clocks, Summarizers, TimeSeriesRDD }
 import org.apache.commons.math3.stat.descriptive.rank.Percentile
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.LongType
@@ -29,6 +30,53 @@ class QuantileSummarizerSpec extends SummarizerSuite {
       sc,
       frequency = "1d", offset = "0d", beginDateTime = "1970-01-01", endDateTime = "1980-01-01"
     )
+  }
+
+  "SequentialArrayQueue" should "resize up correctly" in {
+    val queue = new SequentialArrayQueue[Double]()
+    (1 to 32).map{
+      i => queue.add(i.toDouble)
+    }
+    assert(queue.view()._3.length == 32)
+    queue.add(0.0)
+    assert(queue.view()._3.length == 64)
+  }
+
+  it should "shift down correctly" in {
+    val queue = new SequentialArrayQueue[Double]()
+    (1 to 64).map{
+      i => queue.add(i.toDouble)
+    }
+    assert(queue.view()._3.length == 64)
+    (1 to 32).map{
+      _ => queue.remove()
+    }
+    assert(queue.view()._1 == 0)
+  }
+
+  it should "addAll and preserve order" in {
+    val queue1 = new SequentialArrayQueue[Double]()
+    val queue2 = new SequentialArrayQueue[Double]()
+
+    // Move the begin index
+    (1 to 5).map{
+      i =>
+        queue1.add(i.toDouble)
+        queue1.remove()
+    }
+    (1 to 3).map{
+      i => queue1.add(i.toDouble)
+    }
+
+    (4 to 10).map{
+      i => queue2.add(i.toDouble)
+    }
+    queue1.addAll(queue2)
+    var index = queue1.view()._1
+    for (i <- 1 to 10) {
+      assert(queue1.view()._3(index) == i)
+      index += 1
+    }
   }
 
   "QuantileSummarizer" should "compute `quantile` correctly" in {
@@ -52,6 +100,6 @@ class QuantileSummarizerSpec extends SummarizerSuite {
   }
 
   it should "pass summarizer property test" in {
-    summarizerPropertyTest(AllProperties)(Summarizers.quantile("x1", Seq(0.25, 0.5, 0.75, 0.9, 0.95)))
+    summarizerPropertyTest(AllPropertiesAndSubtractable)(Summarizers.quantile("x1", Seq(0.25, 0.5, 0.75, 0.9, 0.95)))
   }
 }

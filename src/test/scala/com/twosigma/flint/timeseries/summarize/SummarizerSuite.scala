@@ -271,14 +271,17 @@ class SummarizerSuite extends TimeSeriesSuite {
         r.getAs[Long](TimeSeriesRDD.timeColumnName) < window.of(end)._1
       }
 
-      val expectedResults = lastWindow
-        .summarize(summarizerFactory)
-        .toDF
-        .drop(TimeSeriesRDD.timeColumnName)
-        .head
-      val nonTimeColumnNames = expectedResults.schema.fields.map { x =>
-        col(x.name)
+      val lastWindowSummarized = lastWindow.summarize(summarizerFactory)
+      // We need to escape the column name to ensure that columns with names like "a.b" are handled well.
+      val nonTimeColumnNames = lastWindowSummarized.schema.fieldNames.filterNot(_ == TimeSeriesRDD.timeColumnName).map {
+        columnName => col(s"`$columnName`")
       }
+
+      val expectedResults = lastWindowSummarized
+        .toDF
+        .select(nonTimeColumnNames: _*)
+        .head
+
       val results = timeSeriesRdd
         .summarizeWindows(
           window,
