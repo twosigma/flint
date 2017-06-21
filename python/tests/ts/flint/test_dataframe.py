@@ -67,6 +67,7 @@ def launcher_params():
 
     return {'datacenter': 'local',
             'codebase': os.getenv(codebase_env, default_codebase),
+            'spark_conf': {'spark.ui.showConsoleProgress': 'false'},
             'executor_memory': (1*1024**3),
             'driver_memory': (4*1024**3)}
 
