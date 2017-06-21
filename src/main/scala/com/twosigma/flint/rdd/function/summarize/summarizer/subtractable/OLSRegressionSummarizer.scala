@@ -321,41 +321,46 @@ class OLSRegressionSummarizer(
     u: OLSRegressionState,
     t: RegressionRow
   ): OLSRegressionState = {
-    val (xt, yt, yw) =
-      RegressionSummarizer.transform(t, shouldIntercept, isWeighted)
-    var i = 0
-    // Update matrixOfXX
-    while (i < xt.length) {
-      var j = i
-      while (j < xt.length) {
-        val xij = xt(i) * xt(j)
-        u.matrixOfXX.update(i, j, u.matrixOfXX(i, j) - xij)
-        u.matrixOfXX.update(j, i, u.matrixOfXX(i, j))
-        j += 1
+    require(u.count > 0L)
+    if (u.count == 1L) {
+      zero()
+    } else {
+      val (xt, yt, yw) =
+        RegressionSummarizer.transform(t, shouldIntercept, isWeighted)
+      var i = 0
+      // Update matrixOfXX
+      while (i < xt.length) {
+        var j = i
+        while (j < xt.length) {
+          val xij = xt(i) * xt(j)
+          u.matrixOfXX.update(i, j, u.matrixOfXX(i, j) - xij)
+          u.matrixOfXX.update(j, i, u.matrixOfXX(i, j))
+          j += 1
+        }
+        i += 1
       }
-      i += 1
+
+      // Update vectorOfXY
+      i = 0
+      while (i < xt.length) {
+        u.vectorOfXY.update(i, u.vectorOfXY(i) - xt(i) * yt)
+        i += 1
+      }
+
+      u.sumOfYSquared -= yt * yt
+      u.count -= 1L
+      u.sumOfWeights -= yw._2
+      u.sumOfLogWeights -= math.log(yw._2)
+      u.sumOfY -= yw._1 * yw._2
+
+      // Update variances
+      i = 0
+      while (i < t.x.length) {
+        u.variancesOfPrimaryX(i) = varianceSummarizer.subtract(u.variancesOfPrimaryX(i), t.x(i))
+        i += 1
+      }
+
+      u
     }
-
-    // Update vectorOfXY
-    i = 0
-    while (i < xt.length) {
-      u.vectorOfXY.update(i, u.vectorOfXY(i) - xt(i) * yt)
-      i += 1
-    }
-
-    u.sumOfYSquared -= yt * yt
-    u.count -= 1L
-    u.sumOfWeights -= yw._2
-    u.sumOfLogWeights -= math.log(yw._2)
-    u.sumOfY -= yw._1 * yw._2
-
-    // Update variances
-    i = 0
-    while (i < t.x.length) {
-      u.variancesOfPrimaryX(i) = varianceSummarizer.subtract(u.variancesOfPrimaryX(i), t.x(i))
-      i += 1
-    }
-
-    u
   }
 }
