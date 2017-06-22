@@ -239,7 +239,7 @@ Compute the Z-score across an interval:
        if size <= 1:
            return {row:0 for row in rows}
        mean = sum(row.volume for row in rows) / size
-       stddev = math.sqrt(sum((row.closePrice - mean)**2 for row in rows)) / (size - 1)
+       stddev = math.sqrt(sum((row.closePrice - mean)**2 for row in rows) / (size - 1))
        return {row:(row.closePrice - mean)/stddev for row in rows}
 
    df = active_price.addColumnsForCycle(
