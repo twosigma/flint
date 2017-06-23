@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-#  Copyright 2015-2017 TWO SIGMA OPEN SOURCE, LLC
+#  Copyright 2017 TWO SIGMA OPEN SOURCE, LLC
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -15,14 +15,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-
 set -ev
 
-source activate flint
-conda install -y -c conda-forge pyspark
-pip install pytest-spark
+# This script is run from the flint/python directory
 
 # Set SPARK_HOME
 export SPARK_HOME=$(pwd)/spark
-
-python -m unittest discover tests
+# Call the actual run script
+cd ..
+scripts/run_python_tests.sh

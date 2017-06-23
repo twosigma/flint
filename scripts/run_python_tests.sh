@@ -1,5 +1,4 @@
-#!/usr/bin/env bash
-
+#!/bin/bash
 
 #
 #  Copyright 2017 TWO SIGMA OPEN SOURCE, LLC
@@ -17,18 +16,20 @@
 #  limitations under the License.
 #
 set -e
-#
-# Run a set of scala tests from a file
-# Ignore empty files
-#
-if test "$#" -lt 1; then 
-  echo "Must provide filename suffix (i.e. aa) as parameter"; exit 1
+
+if test "${SPARK_HOME}" == ""; then
+    echo "Must set SPARK_HOME environment variable before running this script"
+    exit 1
 fi
-filename=scala_test_${1}
-if test ! -f ${filename}; then
-  echo "File ${filename} does not exist - nothing to do!"; exit 0
+if ! test -d python/travis; then
+    echo "This script must be run from the root of the Flint distribution!"
+    exit 1
 fi
-# It is imperative that the arguments, starting with 'testOnly' are
-# are passed to sbt as a single string, otherwise all tests are run!
-sbt "testOnly $(cat ${filename})"
-rm -f ${filename}
+source activate flint
+# Note that py4j version depends on spark version. Spark 2.1.1 has version 0.10.4
+export PYTHONPATH=${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-0.10.4-src.zip:${PYTHONPATH}
+
+# Set base class for test cases
+export FLINT_BASE_TESTCASE=SparkTestCase 
+cd python
+python -W ignore -m unittest discover tests/ts
