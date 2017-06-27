@@ -431,6 +431,34 @@ object Summarizers {
    */
   def max(column: String): SummarizerFactory = ExtremeSummarizerFactory(column, ExtremeSummarizerType.Max)
 
+  /**
+   * Calculates the skewness for a column. This is the third standardized moment.
+   *
+   * The output schema is:
+   *   - "<column>_skewness": [[DoubleType]]
+   *
+   * @param column Name of the column to calculate skewness.
+   * @return a [[SummarizerFactory]] which provides a summarizer to calculate skewness.
+   */
+  def skewness(column: String): SummarizerFactory = StandardizedMomentSummarizerFactory(
+    column,
+    StandardizedMomentSummarizerType.Skewness
+  )
+
+  /**
+   * Calculates the excess kurtosis for a column. This is the fourth standardized moment subtracted by 3.
+   *
+   * The output schema is:
+   *   - "<column>_kurtosis": [[DoubleType]]
+   *
+   * @param column Name of the column to calculate kurtosis.
+   * @return a [[SummarizerFactory]] which provides a summarizer to calculate kurtosis.
+   */
+  def kurtosis(column: String): SummarizerFactory = StandardizedMomentSummarizerFactory(
+    column,
+    StandardizedMomentSummarizerType.Kurtosis
+  )
+
   // TODO: These might be useful to implement
 
   // def geometricMean
@@ -438,8 +466,4 @@ object Summarizers {
   // def describe
 
   // def product
-
-  // def skewness
-
-  // def kurtosis
 }
