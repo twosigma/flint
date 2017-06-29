@@ -459,11 +459,33 @@ object Summarizers {
     StandardizedMomentSummarizerType.Kurtosis
   )
 
+  /**
+   * Calculates the product for a column.
+   *
+   * The output schema is:
+   *   - "<column>_product": [[DoubleType]], the product of the rows.
+   *
+   * @param column Name of column for which to calculate the product.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the max.
+   */
+  def product(column: String): SummarizerFactory = ProductSummarizerFactory(column)
+
+  /**
+   * Calculates the dot product for two columns.
+   *
+   * The output schema is:
+   *   - "<columnX>_<columnY>_dotProduct": [[DoubleType]], the dot product of the two columns.
+   *
+   * @param columnX Name of the first column.
+   * @param columnY Name of the second column.
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the max.
+   */
+  def dotProduct(columnX: String, columnY: String): SummarizerFactory = DotProductSummarizerFactory(columnX, columnY)
+
   // TODO: These might be useful to implement
 
   // def geometricMean
 
   // def describe
 
-  // def product
 }
