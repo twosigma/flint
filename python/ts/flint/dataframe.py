@@ -359,9 +359,10 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         if udfs:
             tsdf = TimeSeriesDataFrame._addColumnsForCycle_udfs(tsdf, udfs, key)
 
-        if tsdf.columns != self.columns + list(columns.keys()):
+        new_columns = list(self.columns) + list(columns.keys())
+        if tsdf.columns != new_columns:
             # Reorder to maintain order specified in `columns`
-            tsdf = tsdf.select(*self.columns, *columns.keys())
+            tsdf = tsdf.select(*new_columns)
 
         return tsdf
 
