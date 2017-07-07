@@ -23,7 +23,6 @@ import scala.reflect.ClassTag
  * :: DeveloperApi ::
  */
 private[rdd] object RangeDependency {
-
   /**
    * Normalize the ranges of partitions from a sorted [[org.apache.spark.rdd.RDD]].
    *
@@ -39,19 +38,9 @@ private[rdd] object RangeDependency {
     normalizationStrategy: PartitionNormalizationStrategy = HeavyKeysNormalizationStrategy
   )(implicit ord: Ordering[K]): Seq[RangeDependency[K, P]] = {
     require(headers.nonEmpty, "Need at least one partition")
+    import OrderedPartitionHeaderUtils.HeaderOrdering
 
-    val sortedHeaders = headers.sortBy(_.partition.index).toArray
-    // Assume partitions are sorted, i.e. the keys of ith partition are less or equal than those of (i + 1)th partition.
-    sortedHeaders.reduceOption {
-      (h1, h2) =>
-        if (ord.lteq(h1.firstKey, h2.firstKey)) {
-          h2
-        } else {
-          sys.error(s"Partitions are not sorted. " +
-            s"The partition ${h1.partition.index} has the first key ${h1.firstKey} and " +
-            s"the partition ${h2.partition.index} has the first key ${h2.firstKey}.")
-        }
-    }
+    val sortedHeaders = headers.sortBy(x => x).toArray
 
     val (nonNormalizedPartitions, nonNormalizedRanges) = sortedHeaders.zipWithIndex.map {
       case (hdr, idx) =>
@@ -101,6 +90,32 @@ private[rdd] case class OrderedPartitionHeader[K, P <: Partition](
   firstKey: K,
   secondKey: Option[K]
 )
+
+private[rdd] object OrderedPartitionHeaderUtils {
+  implicit class HeaderOrdering[K, P <: Partition](header: OrderedPartitionHeader[K, P])(implicit ord: Ordering[K])
+    extends Ordered[OrderedPartitionHeader[K, P]] {
+    import scala.math.Ordered.orderingToOrdered
+    def compare(that: OrderedPartitionHeader[K, P]): Int = (header, that) match {
+      // First keys not equal we return the larger first key
+      case (OrderedPartitionHeader(_, thisFirst, _), OrderedPartitionHeader(_, thatFirst, _))
+        if thisFirst != thatFirst
+          => thisFirst.compare(thatFirst)
+      // First keys are equal, the header with "Some" second key one is larger than the one with "None"
+      case (OrderedPartitionHeader(_, _, Some(_)), OrderedPartitionHeader(_, _, None)) => 1
+      case (OrderedPartitionHeader(_, _, None), OrderedPartitionHeader(_, _, Some(_))) => -1
+      // If the partitions both only contain the same single key, compare by partition index to preserve
+      // previous behaviour
+      case (OrderedPartitionHeader(thisPartition, _, None), OrderedPartitionHeader(thatPartition, _, None))
+      => thisPartition.index.compare(thatPartition.index)
+      case (OrderedPartitionHeader(thisPartition, thisFirst, Some(thisSecond)),
+        OrderedPartitionHeader(thatPartition, _, Some(thatSecond))) =>
+          sys.error(s"Error has occurred, partitions weren't sorted properly, two partitions both had first key " +
+            s"$thisFirst and they both had non empty seconds keys: $thisSecond and $thatSecond" +
+            s" partitions were: $thisPartition and $thatPartition")
+    }
+  }
+}
+
 
 /**
  * :: DeveloperApi ::
@@ -214,7 +229,9 @@ private[rdd] object HeavyKeysNormalizationStrategy extends PartitionNormalizatio
     implicit
     ord: Ordering[K]
   ): Seq[CloseOpen[K]] = {
-    val sortedHeaders = headers.sortBy(_.partition.index)
+    import OrderedPartitionHeaderUtils.HeaderOrdering
+
+    val sortedHeaders = headers.sortBy(x => x)
 
     val partitionBoundaries = sortedHeaders.head.firstKey +: sortedHeaders.tail.map {
       header => header.secondKey.getOrElse(header.firstKey)

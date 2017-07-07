@@ -636,6 +636,25 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
     }
   }
 
+  // Parquet files no longer load with their partitions in the other they were written, see:
+  // https://issues.apache.org/jira/browse/SPARK-20144
+  // This tests that data loads correctly despite this, the parquet file in question was generated in spark shell
+  // with the following code:
+  //    import org.apache.spark.sql.types._
+  //    import org.apache.spark.sql._
+  //
+  //    val rdd = sc.makeRDD(Seq.range(0L, 10L).map(Row(_)), 5)
+  //    val schema = StructType(Array(StructField("time", LongType)))
+  //    val df = spark.sqlContext.createDataFrame(rdd, schema)
+  //    df.write.parquet("/small.parquet")
+  it should "load from parquet" taggedAs(Slow) in {
+    withResource("/timeseries/parquet/small.parquet") { source =>
+      val tsRdd = TimeSeriesRDD.fromParquet(sc, source)(true, TimeUnit.NANOSECONDS);
+      val loadedData = tsRdd.collect().map(_.getLong(0))
+      assert(loadedData.toSeq == Seq.range(0, 10))
+    }
+  }
+
   // This test is temporarily tagged as "Slow" so that scalatest runner could exclude this test optionally.
   it should "not modify original rows during conversions/modifications" taggedAs (Slow) ignore {
     withResource("/timeseries/parquet/PriceWithHeader.parquet") { source =>
@@ -652,5 +671,4 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
       assert(rows.deep == finalRows.deep)
     }
   }
-
 }
