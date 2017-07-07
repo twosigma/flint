@@ -636,7 +636,7 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
     }
   }
 
-  // Parquet files no longer load with their partitions in the other they were written, see:
+  // Parquet files no longer load with their partitions in the order they were written, see:
   // https://issues.apache.org/jira/browse/SPARK-20144
   // This tests that data loads correctly despite this, the parquet file in question was generated in spark shell
   // with the following code:
