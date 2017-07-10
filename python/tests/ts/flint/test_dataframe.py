@@ -894,6 +894,46 @@ def test_summary_covariance(pyspark, summarizers, tests_utils, price, forecast):
     result = joined.summarize(summarizers.covariance("price", "forecast")).toPandas()
     pdt.assert_frame_equal(result, expected_pdf)
 
+def test_summary_product(pyspark, summarizers, tests_utils, price):
+    expected_pdf = make_pdf([
+        (0, 116943.75)
+    ], ["time", "price_product"])
+
+    result = price.summarize(summarizers.product("price")).toPandas()
+    pdt.assert_frame_equal(result, expected_pdf)
+
+def test_summary_dot_product(pyspark, summarizers, tests_utils, price):
+    expected_pdf = make_pdf([
+        (0, 162.5)
+    ], ["time", "price_price_dotProduct"])
+
+    result = price.summarize(summarizers.dot_product("price", "price")).toPandas()
+    pdt.assert_frame_equal(result, expected_pdf)
+
+def test_summary_geometric_mean(pyspark, summarizers, tests_utils, price):
+    expected_pdf = make_pdf([
+        (0, 2.644425997)
+    ], ["time", "price_geometricMean"])
+
+    result = price.summarize(summarizers.geometric_mean("price")).toPandas()
+    pdt.assert_frame_equal(result, expected_pdf)
+
+def test_summary_skewness(pyspark, summarizers, tests_utils, price):
+    expected_pdf = make_pdf([
+        (0, 0.0)
+    ], ["time", "price_skewness"])
+
+    result = price.summarize(summarizers.skewness("price")).toPandas()
+    pdt.assert_frame_equal(result, expected_pdf)
+
+def test_summary_kurtosis(pyspark, summarizers, tests_utils, price):
+    expected_pdf = make_pdf([
+        (0, -1.216783217)
+    ], ["time", "price_kurtosis"])
+
+    result = price.summarize(summarizers.kurtosis("price")).toPandas()
+    pdt.assert_frame_equal(result, expected_pdf)
+
 def test_summary_compose(pyspark, summarizers, tests_utils, price):
     expected_pdf = make_pdf([
         (0, 6.0, 0.5, 3.25, 1.802775638,)

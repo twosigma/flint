@@ -458,7 +458,7 @@ object Summarizers {
    * Calculates the geometric mean for a column.
    *
    * The output schema is:
-   *   - "<column>_geometricMean": [[DoubleType]], the product of the rows.
+   *   - "<column>_geometricMean": [[DoubleType]], the geometric mean of the rows.
    *
    * @param column Name of column for which to calculate the geometric mean.
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the geometric mean.

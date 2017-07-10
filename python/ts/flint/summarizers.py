@@ -37,13 +37,18 @@ __all__ = [
     'correlation',
     'count',
     'covariance',
+    'dot_product',
+    'geometric_mean',
+    'kurtosis',
     'linear_regression',
     'max',
     'mean',
     'min',
     'nth_central_moment',
     'nth_moment',
+    'product',
     'quantile',
+    'skewness',
     'stddev',
     'sum',
     'variance',
@@ -161,6 +166,50 @@ def covariance(x_column, y_column):
     :type column_y: str
     '''
     return SummarizerFactory('covariance', x_column, y_column)
+
+
+def dot_product(x_column, y_column):
+    '''Computes the dot product of two columns.
+
+    **Adds columns:**
+
+    <x_column>_<y_column>_dotProduct (*float*)
+        the dot product of x_column and y_column
+
+    :param x_column: name of column X
+    :type x_column: str
+    :param y_column: name of column y
+    :type y_column: str
+    '''
+    return SummarizerFactory('dotProduct', x_column, y_column)
+
+
+def geometric_mean(column):
+    '''Computes the geometric mean of a column.
+
+    **Adds columns:**
+
+    <column>_geometricMean (*float*)
+        The geometric mean of the column
+
+    :param column: name of the column to be summarized
+    :type column: str
+    '''
+    return SummarizerFactory('geometricMean', column)
+
+
+def kurtosis(column):
+    '''Computes the excess kurtosis of a column.
+
+    **Adds columns:**
+
+    <column>_kurtosis (*float*)
+        The excess kurtosis of the column
+
+    :param column: name of the column to be summarized
+    :type column: str
+    '''
+    return SummarizerFactory('kurtosis', column)
 
 
 def linear_regression(y_column, x_columns, weight_column=None, *, use_intercept=True, ignore_constants=False,
@@ -338,6 +387,20 @@ def nth_moment(column, n):
     return SummarizerFactory('nthMoment', column, n)
 
 
+def product(column):
+    '''Computes the product of a column.
+
+    **Adds columns:**
+
+    <column>_product (*float*)
+        The product of the column
+
+    :param column: name of the column to be summarized
+    :type column: str
+    '''
+    return SummarizerFactory('product', column)
+
+
 def quantile(column, phis):
     '''Computes the quantiles of the values in a column.
 
@@ -355,6 +418,20 @@ def quantile(column, phis):
 
     '''
     return SummarizerFactory('quantile', column, phis)
+
+
+def skewness(column):
+    '''Computes the skewness of a column.
+
+    **Adds columns:**
+
+    <column>_skewness (*float*)
+        The skewness of the column
+
+    :param column: name of the column to be summarized
+    :type column: str
+    '''
+    return SummarizerFactory('skewness', column)
 
 
 def stddev(column):
@@ -390,7 +467,7 @@ def sum(column):
 def variance(column):
     '''Computes the variance of a column.
 
-    **Addes columns:**
+    **Adds columns:**
 
     <column>_variance (*float*)
         The variance of the column
