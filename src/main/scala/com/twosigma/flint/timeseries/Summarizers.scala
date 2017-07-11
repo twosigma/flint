@@ -17,6 +17,8 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.annotation.PythonApi
+import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingConvention.ExponentialSmoothingConvention
+import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingType.ExponentialSmoothingType
 import com.twosigma.flint.timeseries.summarize.{ LeftSubtractableOverlappableSummarizerFactory, OverlappableSummarizerFactory, SummarizerFactory }
 import com.twosigma.flint.timeseries.summarize.summarizer._
 import org.apache.spark.sql.types._
@@ -353,60 +355,96 @@ object Summarizers {
 
   /**
    * Performs single exponential smoothing over a column. Primes the EMA by maintaining two EMAs, one over the series
-   * (0.0, x_1, x_2, ...) and one over the series (0.0, 1.0, 1.0, ...). The smoothed series is the result of dividing
-   * each element in the EMA of the first series by the element at the same index in the second series.
+   * (0.0, x_1, x_2, ...) and one over the series (0.0, 1.0, 1.0, ...). For Core, the smoothed series is the result of
+   * dividing each element in the EMA of the first series by the element at the same index in the second series. For
+   * Convolution, the smoothed series is simply the EMA of the first series.
+   *
+   * Calculates EMA as a convolution between the exponential function and the series. Since the series is discrete, it
+   * is necessary to interpolate values between rows by specifying the exponentialSmoothingType, which supports
+   * CurrentPoint, LinearInterpolation, and PreviousPoint interpolations.
    *
    * More concretely, the primary EMA is caclulated as follows: suppose we have a time series
-   * X = ((x_1, t_1), (x_2, t_2), ..., (x_n, t_n)). Then, we calculate the primary EMA as
-   * <pre><code>(EMA<sub>p</sub> (X))<sub>i</sub> = &alpha;(t<sub>i-1</sub>, t<sub>i</sub>) (EMA<sub>p</sub> (X))<sub>i-1</sub> + (1 - &alpha;(t<sub>i-1</sub>, t<sub>i</sub>)) x<sub>i</sub> </code>
+   * X = ((x_1, t_1), (x_2, t_2), ..., (x_n, t_n)).
+   *
+   * For CurrentPoint:
+   * <pre><code>(EMA<sub>p</sub> (X))<sub>i</sub> = decay(t<sub>i-1</sub>, t<sub>i</sub>)) (EMA<sub>p</sub> (X))<sub>i-1</sub> + (1 - decay(t<sub>i-1</sub>, t<sub>i</sub>)) x<sub>i</sub> </code>
    * </pre>
+   *
+   * For LinearInterpolation:
+   * <pre><code>(EMA<sub>p</sub> (X))<sub>i</sub> = decay(t<sub>i-1</sub>, t<sub>i</sub>)) (EMA<sub>p</sub> (X))<sub>i-1</sub> +
+   * (interpolateDecay - decay(t<sub>i-1</sub>, t<sub>i</sub>)) x<sub>i-1</sub> + (1 - interpolateDecay) x<sub>i</sub></code>
+   * </pre>
+   *
+   * For PreviousPoint:
+   * <pre><code>(EMA<sub>p</sub> (X))<sub>i</sub> = decay(t<sub>i-1</sub>, t<sub>i</sub>)) (EMA<sub>p</sub> (X))<sub>i-1</sub> + (1 - decay(t<sub>i-1</sub>, t<sub>i</sub>)) x<sub>i-1</sub> </code>
+   * </pre>
+   *
    * with the initial conditions
    * <pre><code>(EMA<sub>p</sub> (X))<sub>0</sub> = 0.0, t<sub>0</sub> = t<sub>1</sub> - primingPeriods </code>
    * </pre>
-   * and where <pre><code>&alpha;(t<sub>i-1</sub>, t<sub>i</sub>)</code></pre>
-   * is the decay between the timestamps jointly specified by timestampsToPeriods and decayPerPeriod, i.e.
-   * <pre><code>&alpha;(t<sub>i-1</sub>, t<sub>i</sub>) = exp(timestampsToPeriods(t<sub>i-1</sub>, t<sub>i</sub>) * ln(1 - decayPerPeriod)) </code>
+   * and where <pre><code>decay(t<sub>i-1</sub>, t<sub>i</sub>)</code></pre>
+   * is the decay between the timestamps jointly specified by timestampsToPeriods and alpha, i.e.
+   * <pre><code>decay(t<sub>i-1</sub>, t<sub>i</sub>) = 1 - exp(timestampsToPeriods(t<sub>i-1</sub>, t<sub>i</sub>) * ln(1 - alpha)) </code>
    * </pre>
    *
-   * Likewise, the auxiliary EMA is calculated as
-   * <pre><code>(EMA<sub>a</sub> (X))<sub>i</sub> = &alpha;(t<sub>i-1</sub>, t<sub>i</sub>) (EMA<sub>a</sub> (X))<sub>i-1</sub> + (1 - &alpha;(t<sub>i-1</sub>, t<sub>i</sub>)) </code>
+   * For LinearInterpolation, interpolateDecay is calculated as follows:
+   * <pre><code>interpolateDecay =  (1 - decay) / (-timestampsToPeriods(t<sub>i-1</sub>, t<sub>i</sub>) * ln(1 - alpha)) </code>
+   * </pre>
+   *
+   * The auxiliary EMA is calculated as
+   * <pre><code>(EMA<sub>a</sub> (X))<sub>i</sub> = decay(t<sub>i-1</sub>, t<sub>i</sub>) (EMA<sub>a</sub> (X))<sub>i-1</sub> + (1 - decay(t<sub>i-1</sub>, t<sub>i</sub>)) </code>
    * </pre>
    * with the same initial conditions.
    *
-   * Finally, we take
+   * For Core, we take
    * <pre><code>(EMA (X))<sub>i</sub> = (EMA<sub>p</sub> (X))<sub>i</sub> / (EMA<sub>a</sub> (X))<sub>i</sub> </code>
    * </pre>
    *
-   * @note The implementation does not find the exponential moving average via a one-pass streaming algorithm. Rather,
-   *       it calculates the EMA of the data in each partition and then during the merge phase calculates correction
-   *       factors to account for using the wrong decay values (primingPeriods vs. the number of periods elapsed between
-   *       the last data point of the previous partition and the first data point in the current partition). Moreover,
-   *       the implementation collects summary data for each data point in xColumn onto the master when used via the
-   *       summarize() API which may be a concern for IO or memory-bound applications.
-   * @param xColumn              Name of column containing series to be smoothed
-   * @param timeColumn           Name of column containing the timestamp
-   * @param decayPerPeriod       Parameter setting the decay rate of the average
-   * @param primingPeriods       Parameter used to find the initial decay parameter - taken to be the time elapsed
-   *                             before the first data point
-   * @param timestampsToPeriods  Function that takes two longs and returns the number of periods that should be
-   *                             considered to have elapsed between them
+   * For Convolution, we simply take
+   * <pre><code>(EMA (X))<sub>i</sub> = (EMA<sub>p</sub> (X))<sub>i</sub> </code>
+   * </pre>
+   *
+   * @param xColumn                         Name of column containing series to be smoothed
+   * @param timeColumn                      Name of column containing the timestamp
+   * @param alpha                           The proportion by which the average will decay over one period
+   *                                        A period is a duration of time defined by the function provided for
+   *                                        timestampsToPeriods. For instance, if the timestamps in the dataset are in
+   *                                        nanoseconds, and the function provided in timestampsToPeriods is
+   *                                        (t2 - t1) / nanosecondsInADay, then the summarizer will take the number of
+   *                                        periods between rows to be the number of days elapsed between their
+   *                                        timestamps. Default is 0.05.
+   * @param primingPeriods                  Parameter used to find the initial decay parameter - taken to be the number
+   *                                        of periods (defined above) elapsed before the first data point. Default is
+   *                                        1.
+   * @param timestampsToPeriods             Function that given two timestamps, returns how many periods should be
+   *                                        considered to have passed between them. Default is 1 day, given timestamps
+   *                                        in nanoseconds.
+   * @param exponentialSmoothingType        Parameter used to determine the interpolation method for intervals between
+   *                                        two rows. The options are "previous", "linear", and "current". Default is
+   *                                        "current".
+   * @param exponentialSmoothingConvention  Parameter used to determine the convolution convention. The options are
+   *                                        "core" and "convolution". Default is core.
    * @return a [[SummarizerFactory]] which provides a summarizer to calculate the exponentially smoothed
    *         series
    */
   def exponentialSmoothing(
     xColumn: String,
     timeColumn: String = TimeSeriesRDD.timeColumnName,
-    decayPerPeriod: Double = 0.05,
+    alpha: Double = 0.05,
     primingPeriods: Double = 1.0,
     timestampsToPeriods: (Long, Long) => Double = (t1: Long, t2: Long) =>
-      (t2 - t1) / (24 * 60 * 60 * 1e9)
+      (t2 - t1) / (24 * 60 * 60 * 1e9),
+    exponentialSmoothingType: String = "current",
+    exponentialSmoothingConvention: String = "core"
   ): SummarizerFactory =
     ExponentialSmoothingSummarizerFactory(
       xColumn,
       timeColumn,
-      decayPerPeriod,
+      alpha,
       primingPeriods,
-      timestampsToPeriods
+      timestampsToPeriods,
+      ExponentialSmoothingType.withName(exponentialSmoothingType),
+      ExponentialSmoothingConvention.withName(exponentialSmoothingConvention)
     )
 
   /**

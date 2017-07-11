@@ -16,135 +16,168 @@
 
 package com.twosigma.flint.rdd.function.summarize.summarizer
 
-import scala.collection.mutable.{ ArrayBuffer, ListBuffer }
+import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingConvention
+import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingConvention.ExponentialSmoothingConvention
+import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingType
+import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingType.ExponentialSmoothingType
 
 case class SmoothingRow(time: Long, x: Double)
 
 /**
- * @param primaryESValue     Current primary smoothing series value (up to prevTime if update has not been called)
- * @param auxiliaryESValue   Current auxiliary smoothing series value (up to prevTime if update has not been called)
- * @param firstXValue        The first data point in the series
- * @param lastXValue         The most recently seen data point in the series
- * @param time               Whenever a row is added, time is updated as well.
- * @param prevTime           The time at the data point prior to that in lastXValue
- * @param alpha              The decay value for the next update. A function of time - prevTime
+ * @param primaryESValue     Current primary smoothing series value
+ * @param auxiliaryESValue   Current auxiliary smoothing series value
+ * @param firstRow           The first row in the series
+ * @param prevRow            The last row seen in the series
  * @param count              The count of rows
  */
 case class ExponentialSmoothingState(
   var primaryESValue: Double,
   var auxiliaryESValue: Double,
-  var firstXValue: Option[SmoothingRow],
-  var lastXValue: Option[SmoothingRow],
-  var time: Long,
-  var prevTime: Long,
-  var alpha: Double,
+  var firstRow: Option[SmoothingRow],
+  var prevRow: Option[SmoothingRow],
   var count: Long
 )
 
 case class ExponentialSmoothingOutput(es: Double)
 
 /**
- * @param decayPerPeriod       The proportion by which the average will decay over one period
- *                             A period is a duration of time defined by the function provided for timestampsToPeriods.
- *                             For instance, if the timestamps in the dataset are in nanoseconds, and the function
- *                             provided in timestampsToPeriods is (t2 - t1)/nanosecondsInADay, then the summarizer will
- *                             take the number of periods between rows to be the number of days elapsed between their
- *                             timestamps.
- * @param primingPeriods       Parameter used to find the initial decay parameter - taken to be the time elapsed
- *                             before the first data point
- * @param timestampsToPeriods  Function that given two timestamps, returns how many periods should be considered to
- *                             have passed between them
+ * Implemented based on
+ * [[http://www.eckner.com/papers/Algorithms%20for%20Unevenly%20Spaced%20Time%20Series.pdf]]
+ * The formulas can also be derived by calculating the convolution of the exponential function with the timeseries
+ * given the interpolation scheme.
+ *
+ * In a distributed system, merging two EMA states is simply a matter of decaying the left state given the time
+ * difference between the end of the left state and the end of the right state. Then, we also account for the periods
+ * between the last left row and the first right row.
+ *
+ * @param alpha                           The proportion by which the average will decay over one period
+ *                                        A period is a duration of time defined by the function provided for
+ *                                        timestampsToPeriods. For instance, if the timestamps in the dataset are in
+ *                                        nanoseconds, and the function provided in timestampsToPeriods is
+ *                                        (t2 - t1) / nanosecondsInADay, then the summarizer will take the number of
+ *                                        periods between rows to be the number of days elapsed between their
+ *                                        timestamps.
+ * @param primingPeriods                  Parameter used to find the initial decay parameter - taken to be the number
+ *                                        of periods (defined above) elapsed before the first data point
+ * @param timestampsToPeriods             Function that given two timestamps, returns how many periods should be
+ *                                        considered to have passed between them
+ * @param exponentialSmoothingType        Parameter used to determine the interpolation method for intervals between
+ *                                        two rows
+ * @param exponentialSmoothingConvention  Parameter used to determine the convolution convention.
  */
-class ExponentialSmoothingSummarizer(
-  decayPerPeriod: Double,
+case class ExponentialSmoothingSummarizer(
+  alpha: Double,
   primingPeriods: Double,
-  timestampsToPeriods: (Long, Long) => Double
+  timestampsToPeriods: (Long, Long) => Double,
+  exponentialSmoothingType: ExponentialSmoothingType,
+  exponentialSmoothingConvention: ExponentialSmoothingConvention
 ) extends Summarizer[SmoothingRow, ExponentialSmoothingState, ExponentialSmoothingOutput] {
+  private val logDecayPerPeriod = math.log(1.0 - alpha)
 
-  private def getAlpha(periods: Double): Double = math.exp(periods * math.log(1.0 - decayPerPeriod))
+  @inline
+  private def decayForInterval(
+    esValue: Double,
+    periods: Double
+  ): Double = {
+    val timeOverTimeConstant = periods * logDecayPerPeriod
+    val decay = math.exp(timeOverTimeConstant)
+    decay * esValue
+  }
+
+  @inline
+  private def interpolateForInterval(
+    startVal: Double,
+    endVal: Double,
+    periods: Double
+  ): Double =
+    if (periods == 0.0) {
+      0.0
+    } else {
+      val timeOverTimeConstant = periods * logDecayPerPeriod
+      val decay = math.exp(timeOverTimeConstant)
+      exponentialSmoothingType match {
+        case ExponentialSmoothingType.PreviousPoint =>
+          (1.0 - decay) * startVal
+        case ExponentialSmoothingType.LinearInterpolation =>
+          val interpolateDecay = (decay - 1.0) / timeOverTimeConstant
+          (interpolateDecay - decay) * startVal + (1.0 - interpolateDecay) * endVal
+        case ExponentialSmoothingType.CurrentPoint =>
+          (1.0 - decay) * endVal
+      }
+    }
 
   override def zero(): ExponentialSmoothingState = ExponentialSmoothingState(
     primaryESValue = 0.0,
     auxiliaryESValue = 0.0,
-    firstXValue = None,
-    lastXValue = None,
-    time = 0L,
-    prevTime = 0L,
-    alpha = 0.0,
+    firstRow = None,
+    prevRow = None,
     count = 0L
   )
 
   override def merge(
-    state1: ExponentialSmoothingState,
-    state2: ExponentialSmoothingState
+    u1: ExponentialSmoothingState,
+    u2: ExponentialSmoothingState
   ): ExponentialSmoothingState = {
-    require(state1.time < state2.time || state1.count == 0 || state2.count == 0)
-    if (state1.count == 0) {
-      return state2
-    }
-
-    if (state2.count == 0) {
-      return state1
-    }
-
-    if (state2.count == 1) {
-      require(state2.alpha == 0 && state2.prevTime == 0)
-      add(state1, state2.firstXValue.get)
+    if (u1.count == 0L) {
+      u2
+    } else if (u2.count == 0L) {
+      u1
     } else {
-      val merged = zero()
-      val updatedState1 = update(state1)
-      val gapPeriods = timestampsToPeriods(updatedState1.time, state2.prevTime)
-      val gapAlpha = getAlpha(gapPeriods)
-      merged.primaryESValue = state2.primaryESValue + gapAlpha * updatedState1.primaryESValue
-      merged.auxiliaryESValue = state2.auxiliaryESValue + gapAlpha * updatedState1.auxiliaryESValue
-      merged.prevTime = state2.prevTime
-      merged.alpha = state2.alpha
-      merged.firstXValue = state1.firstXValue
-      merged.lastXValue = state2.lastXValue
-      merged.time = state2.time
-      merged.count = state1.count + state2.count
-      merged
+      require(u1.prevRow.get.time < u2.prevRow.get.time)
+      val newU = zero()
+      val gapPeriods = timestampsToPeriods(u1.prevRow.get.time, u2.firstRow.get.time)
+      val u2Periods = timestampsToPeriods(u2.firstRow.get.time, u2.prevRow.get.time)
+
+      // Add the first value of u2
+      newU.primaryESValue = decayForInterval(u1.primaryESValue, gapPeriods) +
+        interpolateForInterval(u1.prevRow.get.x, u2.firstRow.get.x, gapPeriods)
+      newU.auxiliaryESValue = decayForInterval(u1.auxiliaryESValue, gapPeriods) +
+        interpolateForInterval(1.0, 1.0, gapPeriods)
+
+      // Decay over u2 period
+      newU.primaryESValue = decayForInterval(newU.primaryESValue, u2Periods) + u2.primaryESValue
+      newU.auxiliaryESValue = decayForInterval(newU.auxiliaryESValue, u2Periods) + u2.auxiliaryESValue
+
+      newU.count = u2.count + u1.count
+      newU.firstRow = u1.firstRow
+      newU.prevRow = u2.prevRow
+      newU
     }
   }
 
   override def render(u: ExponentialSmoothingState): ExponentialSmoothingOutput = {
-    var newU = u.copy()
-    if (newU.count > 0) {
+    if (u.count > 0L) {
       // Account for priming periods
-      val periods = timestampsToPeriods(newU.firstXValue.get.time, newU.prevTime) max 0
-      val primingAlpha = getAlpha(primingPeriods)
-      val tuningAlpha = getAlpha(periods)
-      val adjustedAlpha = tuningAlpha * (1.0 - primingAlpha)
-      newU.primaryESValue = newU.primaryESValue + adjustedAlpha * newU.firstXValue.get.x
-      newU.auxiliaryESValue = newU.auxiliaryESValue + adjustedAlpha
-      newU = update(newU)
-      ExponentialSmoothingOutput(newU.primaryESValue / newU.auxiliaryESValue)
+      val primedPrimaryESValue = interpolateForInterval(0.0, u.firstRow.get.x, primingPeriods)
+      val primedAuxiliaryESValue = interpolateForInterval(0.0, 1.0, primingPeriods)
+      val periods = timestampsToPeriods(u.firstRow.get.time, u.prevRow.get.time) max 0
+      val finalPrimaryESValue = decayForInterval(primedPrimaryESValue, periods) + u.primaryESValue
+      val finalAuxiliaryESValue = decayForInterval(primedAuxiliaryESValue, periods) + u.auxiliaryESValue
+
+      exponentialSmoothingConvention match {
+        case ExponentialSmoothingConvention.Convolution =>
+          ExponentialSmoothingOutput(finalPrimaryESValue)
+        case ExponentialSmoothingConvention.Core =>
+          ExponentialSmoothingOutput(finalPrimaryESValue / finalAuxiliaryESValue)
+      }
     } else {
       ExponentialSmoothingOutput(Double.NaN)
     }
   }
 
-  def update(u: ExponentialSmoothingState): ExponentialSmoothingState = {
-    u.primaryESValue = u.alpha * u.primaryESValue + (1.0 - u.alpha) * u.lastXValue.get.x
-    u.auxiliaryESValue = u.alpha * u.auxiliaryESValue + (1.0 - u.alpha) * 1.0
-    u
-  }
-
   override def add(u: ExponentialSmoothingState, row: SmoothingRow): ExponentialSmoothingState = {
-    var newU = u.copy()
-    if (newU.count == 0) {
-      newU.firstXValue = Some(row)
-    } else if (newU.count == 1) {
-      // Don't update here, we will account for priming periods at the end
-      newU.alpha = getAlpha(timestampsToPeriods(newU.time, row.time))
+    // Don't update here, we will account for priming periods at the end
+    if (u.count == 0L) {
+      u.firstRow = Some(row)
     } else {
-      newU = update(newU)
-      newU.alpha = getAlpha(timestampsToPeriods(newU.time, row.time))
+      val periods = timestampsToPeriods(u.prevRow.get.time, row.time)
+      u.primaryESValue = decayForInterval(u.primaryESValue, periods) +
+        interpolateForInterval(u.prevRow.get.x, row.x, periods)
+      u.auxiliaryESValue = decayForInterval(u.auxiliaryESValue, periods) +
+        interpolateForInterval(1.0, 1.0, periods)
     }
-    newU.lastXValue = Some(row)
-    newU.prevTime = newU.time
-    newU.time = row.time
-    newU.count += 1
-    newU
+    u.prevRow = Some(row)
+    u.count += 1L
+    u
   }
 }
