@@ -164,6 +164,22 @@ class ConversionSpec extends FlatSpec with SharedSparkContext with Timeouts {
         assert(false, "Should not completed as the job has been killed.")
       case Failure(_) =>
     }
+  }
 
+  "fromSortedRDD" should "sort partitions, and have partition indexes increasing" in {
+
+    // Create an RDD with data data sorted within partitions, but partitions not sorted
+    // Data is:
+    // Partition 0: 100, 130, 160, 199
+    // Partition 1:   0,  30,  60,  99
+    val data = Seq(100, 130, 160, 199, 0, 30, 60, 99)
+    val kvData = data.zip(data)
+    val rdd = sc.makeRDD(kvData, 2)
+
+    val orderedRdd = Conversion.fromSortedRDD(rdd)
+    assert(orderedRdd.partitions(0).index == 0)
+    assert(orderedRdd.partitions(1).index == 1)
+
+    assert(orderedRdd.collect().toSeq == kvData.sorted)
   }
 }

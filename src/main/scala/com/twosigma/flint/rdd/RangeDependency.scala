@@ -40,7 +40,7 @@ private[rdd] object RangeDependency {
     require(headers.nonEmpty, "Need at least one partition")
     import OrderedPartitionHeaderUtils.HeaderOrdering
 
-    val sortedHeaders = headers.sortBy(x => x).toArray
+    val sortedHeaders = headers.sorted.toArray
 
     val (nonNormalizedPartitions, nonNormalizedRanges) = sortedHeaders.zipWithIndex.map {
       case (hdr, idx) =>
@@ -231,7 +231,7 @@ private[rdd] object HeavyKeysNormalizationStrategy extends PartitionNormalizatio
   ): Seq[CloseOpen[K]] = {
     import OrderedPartitionHeaderUtils.HeaderOrdering
 
-    val sortedHeaders = headers.sortBy(x => x)
+    val sortedHeaders = headers.sorted
 
     val partitionBoundaries = sortedHeaders.head.firstKey +: sortedHeaders.tail.map {
       header => header.secondKey.getOrElse(header.firstKey)
