@@ -2,4 +2,8 @@ project/project
 project/target
 target
 .idea
-
+.vscode
+metastore_db
+derby.log
+python/spark
+**/.cache

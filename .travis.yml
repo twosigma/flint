@@ -3,3 +3,42 @@ scala:
   - 2.11.8
 jdk:
   - oraclejdk8
+install:
+  # This work is to Run Conda on travis; based on https://conda.io/docs/travis.html
+  - sudo apt-get update
+  # We do this conditionally because it saves us some downloading if the
+  # version is the same.
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+      wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
+    else
+      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+    fi
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  # Useful for debugging any issues with conda
+  - conda info -a
+  # The parameter here is the number of batches to split into
+  # Depending on the total number of tests the matrix below
+  # has to have the same number of entries, 
+  # i.e. 8 entries will have: aa, ab, ac, ad, ..., ah
+  - bash ./scripts/divide_scala_tests.sh 8
+env:
+  matrix:
+    - TEST_DIR=. DEPS_CMD=':' TEST_CMD='./scripts/run_scala_test.sh aa'
+    - TEST_DIR=. DEPS_CMD=':' TEST_CMD='./scripts/run_scala_test.sh ab'
+    - TEST_DIR=. DEPS_CMD=':' TEST_CMD='./scripts/run_scala_test.sh ac'
+    - TEST_DIR=. DEPS_CMD=':' TEST_CMD='./scripts/run_scala_test.sh ad'
+    - TEST_DIR=. DEPS_CMD=':' TEST_CMD='./scripts/run_scala_test.sh ae'
+    - TEST_DIR=. DEPS_CMD=':' TEST_CMD='./scripts/run_scala_test.sh af'
+    - TEST_DIR=. DEPS_CMD=':' TEST_CMD='./scripts/run_scala_test.sh ag'
+    - TEST_DIR=. DEPS_CMD=':' TEST_CMD='./scripts/run_scala_test.sh ah'
+    - TEST_DIR=python DEPS_CMD='./travis/prepare_python_tests.sh' TEST_CMD='./travis/run_python_tests.sh'
+before_script:
+  # this chmod command is a workaround for a current bug in travis image.
+  # see https://github.com/travis-ci/travis-ci/issues/7703
+  - sudo chmod +x /usr/local/bin/sbt 
+  - (cd $TEST_DIR && $DEPS_CMD)
+script: cd $TEST_DIR && $TEST_CMD
