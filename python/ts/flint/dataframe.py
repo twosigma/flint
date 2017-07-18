@@ -752,4 +752,15 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
     def __str__(self):
         return "TimeSeriesDataFrame[%s]" % (", ".join("%s: %s" % c for c in self.dtypes))
 
+    def toPandas(self):
+        pdf = super().toPandas()
+        if 'time' in pdf.columns:
+            try:
+                series = pd.to_datetime(pdf['time'])
+            except:
+                series = pdf['time']
+            pdf = pdf.assign(time=series)
+        return pdf
+
+
 TimeSeriesDataFrame._override_df_methods()
