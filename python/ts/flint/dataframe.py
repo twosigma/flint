@@ -308,12 +308,12 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         :returns: a new dataframe with the columns added
         :rtype: :class:`TimeSeriesDataFrame`
         """
-        # Need to make a new StructType to prevent from modifying the original schema object
-        schema = pyspark_types.StructType.fromJson(self.schema.jsonValue())
         tsdf = self.groupByCycle(key)
-        # Don't pickle the whole schema, just the names for the lambda
+        # Last element of tsdf.schema describes the 'rows' returned
+        # which does differ from self.schema if the first column is not 'time'
+        schema = tsdf.schema[len(tsdf.schema)-1].dataType.elementType
         schema_names = list(schema.names)
-
+        
         def flatmap_fn():
             def _(orig_row):
                 orig_rows = orig_row.rows
