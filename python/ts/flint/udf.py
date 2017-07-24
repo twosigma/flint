@@ -14,10 +14,46 @@
 #  limitations under the License.
 #
 
-import pyspark.sql.functions
+from pyspark.sql.types import StructType, StructField
+from pyspark.serializers import PickleSerializer
 
+def _fn_and_type(udf_column):
+    '''Get the python function and sql date type from a spark udf column
+    :return: A tuple of (function, dataType)
+    '''
+    ser = PickleSerializer()
+    b = udf_column._jc.expr().func().command()
+    return ser.loads(b)
 
-def udf(return_type):
-    def _udf(fn):
-        return pyspark.sql.functions.udf(fn, return_type)
-    return _udf
+def _children_column_names(udf_column):
+    '''Get children column names from a spark udf column. (Used for column pruning)
+    :return: A list of children column names.
+    '''
+    children_exprs = udf_column._jc.expr().children()
+    size = children_exprs.size()
+    return [children_exprs.apply(i).name() for i in range(size)]
+
+def _numpy_to_python(v):
+    '''Converts numpy types or tuple of numpy types to python types.
+
+    This function is expensive, don't invoke this on every row.
+    '''
+    if isinstance(v, tuple):
+        vs = v
+        return tuple(_numpy_to_python(v) for v in vs)
+    elif hasattr(v, 'item') and callable(v.item):
+        return v.item()
+    else:
+        return v
+
+def _tuple_to_struct(returnType):
+    '''
+    Convert (dataType, dataType) to StructType([StructField('_0',
+    dataType), StructField('_1', dataType)]) to make it a valid
+    pyspark returnType.
+    '''
+    if isinstance(returnType, tuple):
+        ret = StructType([StructField("_{}".format(i), returnType[i]) for i in range(len(returnType))])
+        return ret
+    else:
+        return returnType

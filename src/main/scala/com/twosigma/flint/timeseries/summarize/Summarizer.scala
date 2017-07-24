@@ -215,6 +215,8 @@ trait Summarizer extends OSummarizer[InternalRow, Any, InternalRow] with InputVa
   final override def merge(u1: Any, u2: Any): Any = summarizer.merge(toU(u1), toU(u2))
 
   final override def render(u: Any): InternalRow = fromV(summarizer.render(toU(u)))
+
+  final override def close(u: Any): Unit = summarizer.close(toU(u))
 }
 
 trait LeftSubtractableSummarizer extends Summarizer with OLeftSubtractableSummarizer[InternalRow, Any, InternalRow] {

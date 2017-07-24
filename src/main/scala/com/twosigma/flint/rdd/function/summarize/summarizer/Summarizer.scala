@@ -62,4 +62,12 @@ trait Summarizer[T, U, V] extends Serializable {
    * @return a rendered value with desired type.
    */
   def render(u: U): V
+
+  /**
+   * Free the resources taken up by the state u.
+   * By default this is a noop.
+   *
+   * @param u state expected to be cleaned up
+   */
+  def close(u: U): Unit = {}
 }

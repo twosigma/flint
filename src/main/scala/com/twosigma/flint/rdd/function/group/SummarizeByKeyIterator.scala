@@ -19,8 +19,10 @@ package com.twosigma.flint.rdd.function.group
 import java.util
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
+import org.apache.spark.TaskContext
 
 import scala.reflect.ClassTag
+import scala.collection.JavaConversions._
 
 /**
  * Summarizes rows for each key and secondary key using a constant
@@ -53,6 +55,11 @@ private[rdd] case class SummarizeByKeyIterator[K, V, SK, U, V2](
   private var currentKey: K = _
   // We use a mutable linked hash map in order to preserve the secondary key ordering.
   private val intermediates: util.LinkedHashMap[SK, U] = new util.LinkedHashMap()
+
+  TaskContext.get.addTaskCompletionListener { _ => cleanup() }
+
+  private def cleanup(): Unit =
+    intermediates.toMap.values.foreach{ u => summarizer.close(u) }
 
   override def hasNext: Boolean = !intermediates.isEmpty || bufferedIter.hasNext
 

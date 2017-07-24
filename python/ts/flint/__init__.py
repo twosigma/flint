@@ -18,7 +18,7 @@
 
 from .context import FlintContext
 from .dataframe import TimeSeriesDataFrame
-from .udf import udf
+from .functions import udf
 
 from ._version import get_versions
 __version__ = get_versions()['version']

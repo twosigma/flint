@@ -16,20 +16,28 @@
 
 import collections.abc
 import functools
+import itertools
 import inspect
+import json
+import types
+import uuid
 
 import pandas as pd
 import pyspark
 import pyspark.sql
 import pyspark.sql.types as pyspark_types
+import pyspark.sql.functions as F
 
 from . import java
 from . import rankers
 from . import summarizers
+from . import functions
+from . import udf
 from . import utils
 from .error import FlintError
 from .readwriter import TSDataFrameWriter
 from .windows import WindowsFactoryBase
+
 
 __all__ = ['TimeSeriesDataFrame']
 
@@ -586,23 +594,164 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
     def summarizeCycles(self, summarizer, key=None):
         """
-        Computes aggregate statistics of rows that share a timestamp.
+        Computes aggregate statistics of rows that share a timestamp
+        using a summarizer spec.
 
-        Example:
+        A summarizer spec can be either:
 
-            >>> # count the number of rows in each cycle
-            >>> counts = df.summarizeCycles(summarizers.count())
+        1. A summarizer or a list of summarizers. Available
+           summarizers can be found in :mod:`.summarizers`.
 
-        :param summarizer: A summarizer or a list of summarizers that will calculate results for the new columns. Available summarizers can be found in :mod:`.summarizers`.
-        :param key: Optional. One or multiple column names to use as the grouping key
+        2. A map from column names to columnar udf objects. A columnar
+           udf object is defined by :meth:`ts.flint.functions.udf`
+           with a python function, a return type and a list of input
+           columns. Each map entry can be one of the following:
+
+           1. str -> udf
+
+              This will add a single column. The python function must
+              return a single scalar value, which will be the value
+              for the new column. The ``returnType`` argument of the
+              udf object must be a single
+              :class:`~pyspark.sql.types.DataType`.
+
+           2. tuple(str) -> udf
+
+              This will add multiple columns. The python function must
+              return a tuple of scalar values. The ``returnType``
+              argument of the udf object must be a tuple of
+              :class:`~pyspark.sql.types.DataType`. The cardinality of
+              the column names, return data types and return values
+              must match.
+
+        Examples:
+
+        Use built-in summarizers
+
+            >>> df.summarizeCycles(summarizers.mean('v'))
+
+            >>> df.summarizeCycles([summarizers.mean('v'), summarizers.stddev('v')])
+
+        Use user defined functions (UDF):
+
+            >>> from ts.flint import udf
+            >>> @udf(DoubleType())
+            ... def mean(v):
+            ...     return v.mean()
+            >>>
+            >>> @udf(DoubleType())
+            ... def std(v):
+            ...     return v.std()
+            >>>
+            >>> df.summarizeCycles({
+            ...     'mean': mean(df['v']),
+            ...     'std': std(df['v'])
+            ... })
+
+        Use a OrderedDict to specify output column order
+
+            >>> from collections import OrderedDict
+            >>> df.summarizeCycles(OrderedDict([
+            ...     ('mean', mean(df['v'])),
+            ...     ('std', std(df['v'])),
+            ... ]))
+
+        Return multiple data from a single udf as tuple
+
+            >>> @udf((DoubleType(), DoubleType()))
+            >>> def mean_and_std(v):
+            ...     return (v.mean(), v.std())
+            >>> df.summarizeCycles({
+            ...     ('mean', 'std'): mean_and_std(df['v']),
+            ... })
+
+        Use other python libraries in udf
+
+            >>> from statsmodels.stats.weightstats import DescrStatsW
+            >>> @udf(DoubleType())
+            ... def weighted_mean(v, w):
+            ...     return DescrStatsW(v, w).mean
+            >>>
+            >>> df.summarizeCycles({
+            ...     'wm': weighted_mean(df['v'], df['w'])
+            ... })
+
+        Use :class:`pandas.DataFrame` as input to udf
+
+            >>> @udf(DoubleType())
+            ... def weighted_mean(cycle_df):
+            ...     return DescrStatsW(cycle_df.v, cycle_df.w).mean
+            >>>
+            >>> df.summarizeCycles({
+            ...     'wm': weighted_mean(df[['v', 'w']])
+            ... })
+
+        :param summarizer: A summarizer spec. See above for the
+            allowed types of objects.
+        :param key: Optional. One or multiple column names to use as
+            the grouping key
         :type key: str, list of str
         :returns: a new dataframe with summarization columns
         :rtype: :class:`TimeSeriesDataFrame`
+
+        .. seealso:: :meth:`ts.flint.functions.udf`
+
         """
-        scala_key = utils.list_to_seq(self._sc, key)
-        composed_summarizer = summarizers.compose(self._sc, summarizer)
-        tsrdd = self.timeSeriesRDD.summarizeCycles(composed_summarizer._jsummarizer(self._sc), scala_key)
-        return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
+
+        if isinstance(summarizer, collections.abc.Mapping):
+            import pyarrow as pa
+
+            columns = summarizer
+            arrow_column_prefix = "__tmp_" + str(uuid.uuid4())[:8]
+            required_col_names = list(set(itertools.chain(
+                *[udf._children_column_names(col) for col in columns.values()])))
+            grouped = self.summarizeCycles(
+                summarizers.arrow(required_col_names).prefix(arrow_column_prefix),
+                key=key)
+
+            # (1) Turns row in each cycle into an arrow file format
+            # (2) For each udf, we apply the function and put the
+            #     result in a new column. If the udf returns multiple
+            #     values, we put the values in a struct first and later
+            #     explode it into multiple columns.
+
+            arrow_column_name = "{}_arrow_bytes".format(arrow_column_prefix)
+            for col_name, udf_column in columns.items():
+                children_names = udf._children_column_names(udf_column)
+                fn, t = udf._fn_and_type(udf_column)
+                column_indices = udf_column.column_indices
+
+                def _fn(arrow_bytes):
+                    reader = pa.RecordBatchFileReader(pa.BufferReader(arrow_bytes))
+                    assert(reader.num_record_batches == 1,
+                           "Cannot read more than one record batch")
+                    rb = reader.get_batch(0)
+                    pdf = rb.to_pandas()
+                    inputs = [pdf[index] for index in column_indices]
+                    ret = fn(*inputs)
+                    return udf._numpy_to_python(ret)
+
+                if isinstance(col_name, tuple):
+                    tmp_struct_col_name = "__tmp_" + str(uuid.uuid4())[:8]
+                    grouped = grouped.withColumn(
+                        tmp_struct_col_name,
+                        F.udf(_fn, t)(grouped[arrow_column_name]))
+                    for i in range(len(col_name)):
+                        grouped = grouped.withColumn(
+                            col_name[i],
+                            grouped[tmp_struct_col_name]['_{}'.format(i)])
+                    grouped = grouped.drop(tmp_struct_col_name)
+                else:
+                    grouped = grouped.withColumn(
+                        col_name,
+                        F.udf(_fn, t)(grouped[arrow_column_name]))
+
+            return grouped.drop(arrow_column_name)
+        else:
+            scala_key = utils.list_to_seq(self._sc, key)
+            composed_summarizer = summarizers.compose(self._sc, summarizer)
+            tsrdd = self.timeSeriesRDD.summarizeCycles(composed_summarizer._jsummarizer(self._sc), scala_key)
+            return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def summarizeIntervals(self, clock, summarizer, key=None, beginInclusive=True):
         """
@@ -616,7 +765,9 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         :param clock: A dataframe used to determine the intervals
         :type clock: :class:`TimeSeriesDataFrame`
-        :param summarizer: A summarizer or a list of summarizers that will calculate results for the new columns. Available summarizers can be found in :mod:`.summarizers`.
+        :param summarizer: A summarizer or a list of summarizers that
+            will calculate results for the new columns. Available
+            summarizers can be found in :mod:`.summarizers`.
         :param key: Optional. One or multiple column names to use as the grouping key
         :type key: str, list of str
         :param begin_inclusive: Optional. Default True. If True, timestamp of output dataframe will
@@ -628,7 +779,11 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         """
         scala_key = utils.list_to_seq(self._sc, key)
         composed_summarizer = summarizers.compose(self._sc, summarizer)
-        tsrdd = self.timeSeriesRDD.summarizeIntervals(clock.timeSeriesRDD, composed_summarizer._jsummarizer(self._sc), scala_key, beginInclusive)
+        tsrdd = self.timeSeriesRDD.summarizeIntervals(
+            clock.timeSeriesRDD,
+            composed_summarizer._jsummarizer(self._sc),
+            scala_key,
+            beginInclusive)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def summarizeWindows(self, window, summarizer, key=None):
@@ -642,16 +797,26 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
            ...                               summarizers.weighted_mean("return", "volume"),
            ...                               key="id"))
 
-        :param window: A window that specifies which rows to add to the new column. Lists of windows can be found in :mod:`.windows`.
-        :param summarizer: A summarizer or a list of summarizers that will calculate results for the new columns. Available summarizers can be found in :mod:`.summarizers`.
-        :param key: Optional. One or multiple column names to use as the grouping key
+        :param window: A window that specifies which rows to add to
+            the new column. Lists of windows can be found in
+            :mod:`.windows`.
+        :param summarizer: A summarizer or a list of summarizers that
+            will calculate results for the new columns. Available
+            summarizers can be found in :mod:`.summarizers`.
+        :param key: Optional. One or multiple column names to use as
+            the grouping key.
         :type key: str, list of str
         :returns: a new dataframe with summarization columns
         :rtype: :class:`TimeSeriesDataFrame`
         """
+
         scala_key = utils.list_to_seq(self._sc, key)
         composed_summarizer = summarizers.compose(self._sc, summarizer)
-        tsrdd = self.timeSeriesRDD.summarizeWindows(window._jwindow(self._sc), composed_summarizer._jsummarizer(self._sc), scala_key)
+
+        tsrdd = self.timeSeriesRDD.summarizeWindows(
+            window._jwindow(self._sc),
+            composed_summarizer._jsummarizer(self._sc),
+            scala_key)
 
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
@@ -717,6 +882,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
     def shiftTime(self, shift, *, backwards=False):
         """Returns a :class: `TimeSeriesDataFrame` by shifting all timestamps by giving ammount
+
         Example:
 
             >>> tsdf.shiftTime('100ns')

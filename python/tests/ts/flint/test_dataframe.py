@@ -152,6 +152,11 @@ def tests_utils(flint):
     return utils
 
 
+@pytest.fixture(scope='module')
+def F(pyspark):
+    import pyspark.sql.functions as F
+    return F
+
 def make_pdf(data, schema):
     d = {schema[i]:[row[i] for row in data] for i in range(len(schema))}
     return pd.DataFrame(data=d)[schema]
@@ -356,26 +361,26 @@ def test_addColumnsForCycle(pyspark_types, tests_utils, price, vol3):
         [1000, 7, 101, 302],
         [1000, 3, 200, 601],
         [1000, 3, 201, 602],
-        [1050, 7, 400, 1201],
-        [1050, 7, 401, 1202],
         [1050, 3, 300, 901],
         [1050, 3, 301, 902],
-        [1100, 7, 600, 1801],
-        [1100, 7, 601, 1802],
+        [1050, 7, 400, 1201],
+        [1050, 7, 401, 1202],
         [1100, 3, 500, 1501],
         [1100, 3, 501, 1502],
-        [1150, 7, 800, 2401],
-        [1150, 7, 801, 2402],
+        [1100, 7, 600, 1801],
+        [1100, 7, 601, 1802],
         [1150, 3, 700, 2101],
         [1150, 3, 701, 2102],
-        [1200, 7, 1000, 3001],
-        [1200, 7, 1001, 3002],
+        [1150, 7, 800, 2401],
+        [1150, 7, 801, 2402],
         [1200, 3, 900, 2701],
         [1200, 3, 901, 2702],
-        [1250, 7, 1200, 3601],
-        [1250, 7, 1201, 3602],
+        [1200, 7, 1000, 3001],
+        [1200, 7, 1001, 3002],
         [1250, 3, 1100, 3301],
         [1250, 3, 1101, 3302],
+        [1250, 7, 1200, 3601],
+        [1250, 7, 1201, 3602],
     ], ["time", "id", "volume", "totalVolume"])
 
     def fn(rows):
@@ -396,18 +401,7 @@ def test_addColumnsForCycle(pyspark_types, tests_utils, price, vol3):
         ).toPandas()
     )
 
-    # XXX: should just do tests_utils.assert_same(new_pdf, expected_pdf, "with key")
-    # once https://gitlab.twosigma.com/analytics/huohua/issues/26 gets resolved.
-    tests_utils.assert_same(
-        new_pdf[new_pdf['id'] == 3].reset_index(drop=True),
-        expected_pdf[expected_pdf['id'] == 3].reset_index(drop=True),
-        "with key 3"
-    )
-    tests_utils.assert_same(
-        new_pdf[new_pdf['id'] == 7].reset_index(drop=True),
-        expected_pdf[expected_pdf['id'] == 7].reset_index(drop=True),
-        "with key 7"
-    )
+    tests_utils.assert_same(new_pdf, expected_pdf)
 
 def test_merge(pyspark_types, tests_utils, price):
     price1 = price.filter(price.time > 1100)
@@ -550,6 +544,135 @@ def test_summarizeCycles(summarizers, tests_utils, vol, vol2):
     ], ["time", "id", "volume_sum"])
     new_pdf2 = vol2.summarizeCycles(summarizers.sum("volume"), key="id").toPandas()
     tests_utils.assert_same(new_pdf2, expected_pdf2)
+
+
+def test_summarizeCycles_udf(tests_utils, vol, pyspark, F):
+    from ts.flint import udf
+    from pyspark.sql.types import DoubleType, LongType
+    from collections import OrderedDict
+
+    weighted_vol = vol.withColumn('weight', F.lit(1))
+
+    result1 = vol.summarizeCycles(
+        OrderedDict([
+            ('mean', udf(lambda v: v.mean(), DoubleType())(weighted_vol.volume)),
+            ('sum', udf(lambda v: v.sum(), LongType())(weighted_vol.volume)),
+        ])
+    ).toPandas()
+
+    result2 = vol.summarizeCycles(
+        OrderedDict([
+            ('mean', udf(lambda df: df.volume.mean(), DoubleType())(weighted_vol[['volume']])),
+            ('sum', udf(lambda df: df.volume.sum(), LongType())(weighted_vol[['volume']])),
+        ])
+    ).toPandas()
+
+    result3 = weighted_vol.summarizeCycles(
+        OrderedDict([
+            ('mean', udf(lambda v, w: np.average(v, weights=w), DoubleType())(weighted_vol['volume'], weighted_vol['weight'])),
+            ('sum', udf(lambda v, w: (v * w).sum(), LongType())(weighted_vol['volume'], weighted_vol['weight'])),
+        ])
+    ).toPandas()
+
+    result4 = weighted_vol.summarizeCycles(
+        OrderedDict([
+            ('mean', udf(lambda df: np.average(df.volume, weights=df.weight), DoubleType())(weighted_vol[['volume', 'weight']])),
+            ('sum', udf(lambda df: (df.volume * df.weight).sum(), LongType())(weighted_vol[['volume', 'weight']])),
+        ])
+    ).toPandas()
+
+    @udf(DoubleType())
+    def foo(v, w):
+        return np.average(v, weights=w)
+
+    @udf(LongType())
+    def bar(v, w):
+        return (v * w).sum()
+
+    result5 = weighted_vol.summarizeCycles(
+        OrderedDict([
+            ('mean', foo(weighted_vol['volume'], weighted_vol['weight'])),
+            ('sum', bar(weighted_vol['volume'], weighted_vol['weight']))
+        ])
+    ).toPandas()
+
+    @udf(DoubleType())
+    def foo1(df):
+        return np.average(df.volume, weights=df.weight)
+
+    @udf(LongType())
+    def bar1(df):
+        return (df.volume * df.weight).sum()
+
+    result6 = weighted_vol.summarizeCycles(
+        OrderedDict([
+            ('mean', foo1(weighted_vol[['volume', 'weight']])),
+            ('sum', bar1(weighted_vol[['volume', 'weight']]))
+        ])
+    ).toPandas()
+
+    expected_pdf1 = make_pdf([
+        (1000, 150.0, 300,),
+        (1050, 350.0, 700,),
+        (1100, 550.0, 1100,),
+        (1150, 750.0, 1500,),
+        (1200, 950.0, 1900,),
+        (1250, 1150.0, 2300,),
+    ], ["time", "mean", "sum"])
+
+    @udf((DoubleType(), LongType()))
+    def foobar(v, w):
+        foo = np.average(v, weights=w)
+        bar = (v * w).sum()
+        return (foo, bar)
+
+    result7 = weighted_vol.summarizeCycles(
+        {('mean', 'sum'): foobar(weighted_vol['volume'], weighted_vol['weight'])}
+    ).toPandas()
+
+    result8 = weighted_vol.summarizeCycles({
+        "mean": udf(lambda v: v.mean(), DoubleType())(weighted_vol['volume']),
+        "sum": udf(lambda v: v.sum(), LongType())(weighted_vol['volume'])
+    }).toPandas()
+
+    tests_utils.assert_same(result1, expected_pdf1)
+    tests_utils.assert_same(result2, expected_pdf1)
+    tests_utils.assert_same(result3, expected_pdf1)
+    tests_utils.assert_same(result4, expected_pdf1)
+    tests_utils.assert_same(result5, expected_pdf1)
+    tests_utils.assert_same(result6, expected_pdf1)
+    tests_utils.assert_same(result7, expected_pdf1)
+    tests_utils.assert_same(result8, expected_pdf1)
+
+
+def test_udf(flintContext, tests_utils, vol):
+    from ts.flint import udf
+    from pyspark.sql.types import LongType
+
+    @udf(LongType())
+    def foo(v):
+        return v*2
+
+    result1 = vol.withColumn("volume", foo(vol['volume'])).toPandas()
+    result2 = vol.withColumn("volume", udf(lambda v: v * 2, LongType())(vol['volume'])).toPandas()
+
+    expected_pdf1 = make_pdf([
+        (1000, 7, 200,),
+        (1000, 3, 400,),
+        (1050, 3, 600,),
+        (1050, 7, 800,),
+        (1100, 3, 1000,),
+        (1100, 7, 1200,),
+        (1150, 3, 1400,),
+        (1150, 7, 1600,),
+        (1200, 3, 1800,),
+        (1200, 7, 2000,),
+        (1250, 3, 2200,),
+        (1250, 7, 2400,)
+    ], ['time', 'id', 'volume'])
+
+    tests_utils.assert_same(result1, expected_pdf1)
+    tests_utils.assert_same(result2, expected_pdf1)
 
 
 def test_summarizeIntervals(flintContext, tests_utils, summarizers, vol):

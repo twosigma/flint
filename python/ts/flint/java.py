@@ -41,7 +41,7 @@ class Packages:
     @property
     @functools.lru_cache()
     def Summarizers(self):
-        return utils.jvm(self.sc).com.twosigma.flint.timeseries.Summarizers
+        return utils.scala_object(utils.jvm(self.sc).com.twosigma.flint.timeseries, "Summarizers")
 
     @property
     @functools.lru_cache()

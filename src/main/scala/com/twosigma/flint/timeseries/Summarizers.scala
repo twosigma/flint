@@ -26,6 +26,8 @@ import org.apache.spark.sql.types._
 object Summarizers {
   private[timeseries] def rows(column: String): SummarizerFactory = RowsSummarizerFactory(column)
 
+  private[timeseries] def arrow(columns: Seq[String]): SummarizerFactory = ArrowSummarizerFactory(columns)
+
   /**
    * Counts the number of rows.
    *

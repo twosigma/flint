@@ -94,6 +94,14 @@ class SummarizerFactory:
         return self
 
 
+def rows():
+    return SummarizerFactory('rows', 'rows')
+
+
+def arrow(cols):
+    return SummarizerFactory('arrow', cols)
+
+
 def correlation(cols, other=None):
     '''Computes pairwise correlation of columns.
 

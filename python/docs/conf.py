@@ -40,9 +40,11 @@ class Mock(MagicMock):
             return DataFrame
         return Mock()
 
-# Mock these to avoid import errors when running doc generation on readthedocs.
+# Mock these to avoid import errors when running doc generation on
+# readthedocs.
 MOCK_MODULES = ['py4j', 'pyspark', 'pyspark.sql', 'pyspark.sql.types',
-                'pyspark.sql.readwriter', 'pyspark.sql.functions']
+                'pyspark.sql.readwriter', 'pyspark.sql.functions',
+                'pyspark.serializers']
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # -- General configuration ------------------------------------------------
@@ -382,5 +384,5 @@ rst_epilog = '''
 '''
 
 intersphinx_mapping = {
-    'pyspark': ('http://spark.apache.org/docs/1.6.3/api/python/', 'pyspark-inv.txt')
+    'pyspark': ('http://spark.apache.org/docs/2.0.2/api/python/', "pyspark-inv.txt")
 }

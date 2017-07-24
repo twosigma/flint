@@ -170,3 +170,12 @@ Clocks
 
 .. automodule:: ts.flint.clocks
    :members:
+
+
+Functions
+`````````
+
+.. currentmodule:: ts.flint.functions
+
+.. automodule:: ts.flint.functions
+   :members:

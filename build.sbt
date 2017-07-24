@@ -79,7 +79,7 @@ lazy val compilationSettings = scalariformSettings ++ Seq(
 )
 
 lazy val versions = new {
-  val play_json = "2.3.10"
+  val play_json = "2.5.0"
   val commons_math = "3.5"
   val joda_time = "2.9.4"
   val httpclient = "4.3.2" // Note that newer versions need to be configured
@@ -87,6 +87,8 @@ lazy val versions = new {
   val scalatest = "2.2.4"
   val scalacheck = "1.12.6"
   val grizzled_slf4j = "1.3.0"
+  val arrow = "0.4.0"
+  val jackson_module = "2.7.2"
 }
 
 lazy val lazyDependencies = new {
@@ -96,7 +98,7 @@ lazy val lazyDependencies = new {
 }
 
 lazy val dependencySettings = libraryDependencies ++= Seq(
-  "com.typesafe.play" %% "play-json" % versions.play_json,
+  "com.typesafe.play" %% "play-json" % versions.play_json % "test",
   "org.apache.commons" % "commons-math3" % versions.commons_math,
   "joda-time" % "joda-time" % versions.joda_time,
   "org.apache.httpcomponents" % "httpclient" % versions.httpclient,
@@ -105,7 +107,10 @@ lazy val dependencySettings = libraryDependencies ++= Seq(
   lazyDependencies.sparkML,
   lazyDependencies.sparkSQL,
   "org.scalatest" %% "scalatest" % versions.scalatest % "test",
-  "org.scalacheck" %% "scalacheck" % versions.scalacheck % "test"
+  "org.scalacheck" %% "scalacheck" % versions.scalacheck % "test",
+  "org.apache.arrow" % "arrow-vector" % versions.arrow,
+  "com.fasterxml.jackson.module" % "jackson-module-parameter-names" % versions.jackson_module,
+  "com.fasterxml.jackson.module" %% "jackson-module-scala" % versions.jackson_module
 )
 
 lazy val flint = project
@@ -129,3 +134,11 @@ lazy val flint = project
       "java" -> tsOpenSourceHeader
     )
   )
+
+mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) =>
+  {
+    case m if m.startsWith("META-INF/services") => MergeStrategy.filterDistinctLines
+    case m if m.startsWith("META-INF") => MergeStrategy.discard
+    case _ => MergeStrategy.deduplicate
+  }
+}
