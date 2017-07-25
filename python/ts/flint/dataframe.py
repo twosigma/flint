@@ -209,16 +209,17 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         """
         dfmethods = inspect.getmembers(pyspark.sql.DataFrame)
         tsdfmethods = inspect.getmembers(TimeSeriesDataFrame)
+        tsdfmethodnames = [pair[0] for pair in tsdfmethods]
 
-        # Only replace non-private methods and methods nor overriden in TimeSeriesDataFrame
+        # Only replace non-private methods and methods not overridden in TimeSeriesDataFrame
         for name, method in dfmethods:
-            if not name.startswith('_') and name not in tsdfmethods and callable(method):
+            if not name.startswith('_') and name not in tsdfmethodnames and callable(method):
                 setattr(TimeSeriesDataFrame, name, TimeSeriesDataFrame._wrap_df_method(name, method))
 
     def _call_dual_function(self, function, *args, **kwargs):
         if self._jdf:
-            return pyspark.sql.DataFrame.__getattr__(function)(self._jdf, *args, **kwargs)
-        return self._lazy_tsrdd.__getattr__(function)(*args, **kwargs)
+            return getattr(self._jdf, function)(*args, **kwargs)
+        return getattr(self._lazy_tsrdd, function)(*args, **kwargs)
 
     def count(self):
         '''Counts the number of rows in the dataframe
@@ -723,8 +724,8 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
                 def _fn(arrow_bytes):
                     reader = pa.RecordBatchFileReader(pa.BufferReader(arrow_bytes))
-                    assert(reader.num_record_batches == 1,
-                           "Cannot read more than one record batch")
+                    assert reader.num_record_batches == 1, (
+                        'Cannot read more than one record batch')
                     rb = reader.get_batch(0)
                     pdf = rb.to_pandas()
                     inputs = [pdf[index] for index in column_indices]
