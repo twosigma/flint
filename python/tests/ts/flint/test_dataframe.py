@@ -157,9 +157,14 @@ def F(pyspark):
     import pyspark.sql.functions as F
     return F
 
-def make_pdf(data, schema):
+def make_pdf(data, schema, dtypes=None):
     d = {schema[i]:[row[i] for row in data] for i in range(len(schema))}
-    return pd.DataFrame(data=d)[schema]
+    df = pd.DataFrame(data=d)[schema]
+
+    if dtypes:
+        df = df.astype(dict(zip(schema, dtypes)))
+
+    return df
 
 intervals_data = [
     (1000,),
@@ -1165,13 +1170,15 @@ def test_quantile_rank(rankers, tests_utils, price2):
         'result': rankers.quantile('price', 2)
     }).toPandas()
 
+    # SPARK-21163 converts new IntegerType columns to int32 when calling toPandas().
+    # We specify the return type of the 'result' column explicitly as int32 below.
     expected_pdf = make_pdf([
         (0, 1, 1.0, 0),
         (0, 2, 2.0, 1),
         (1, 1, 3.0, 0),
         (1, 2, 4.0, 1),
         (1, 3, 5.0, 1),
-    ], ['time', 'id', 'price', 'result'])
+    ], ['time', 'id', 'price', 'result'], dtypes=[np.int64, np.int64, np.double, np.int32])
     tests_utils.assert_same(new_pdf, expected_pdf)
 
 
@@ -1337,7 +1344,8 @@ def test_addXrefColumn(flintContext, tests_utils):
     pdf = make_pdf([(1451606400000000000, 64106)], ["time", "tid"])
     input_df = flintContext.read.pandas(pdf, StructType([StructField("time", LongType(), True), StructField("tid", IntegerType(), True)]))
     output = input_df.addXrefColumn(('TICKER')).toPandas()
-    expected_pdf = make_pdf([(1451606400000000000, 64106, "CAB")], ["time", "tid", "TICKER"])
+    expected_pdf = make_pdf([(1451606400000000000, 64106, "CAB")], ["time", "tid", "TICKER"],
+                            dtypes=[np.int64, np.int32, np.str])
     tests_utils.assert_same(output, expected_pdf)
 
 
@@ -1348,7 +1356,8 @@ def test_addTidColumn(flintContext, tests_utils):
     input_df = flintContext.read.pandas(make_pdf([(1451606400000000000, "CAB")], ["time", "ticker"]))
     output = input_df.addTidColumn('ticker', 'ACTIVE_3000_US').toPandas()
 
-    expected_pdf = make_pdf([(1451606400000000000, "CAB", 64106)], ["time", "ticker", "tid"])
+    expected_pdf = make_pdf([(1451606400000000000, "CAB", 64106)], ["time", "ticker", "tid"],
+                            dtypes=[np.int64, np.str, np.int32])
     tests_utils.assert_same(output, expected_pdf)
 
 
