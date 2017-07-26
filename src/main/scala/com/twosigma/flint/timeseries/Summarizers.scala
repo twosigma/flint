@@ -535,8 +535,6 @@ object Summarizers {
 
   // TODO: These might be useful to implement
 
-  // def geometricMean
-
   // def describe
 
 }

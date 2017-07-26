@@ -141,4 +141,10 @@ class RangeDependencySpec extends FlatSpec {
     assert(RangeDependency(2, CloseOpen(8, Some(14)), List(Split(3), Split(4))) == dep(2))
     assert(RangeDependency(3, CloseOpen(14, None), List(Split(4))) == dep(3))
   }
+
+  it should "normalize empty headers" in {
+    val emptyHeader: Seq[OrderedPartitionHeader[Int, OrderedRDDPartition]] = Seq.empty
+    assert(RangeDependency.normalize(emptyHeader, BasicNormalizationStrategy).isEmpty)
+    assert(RangeDependency.normalize(emptyHeader, HeavyKeysNormalizationStrategy).isEmpty)
+  }
 }

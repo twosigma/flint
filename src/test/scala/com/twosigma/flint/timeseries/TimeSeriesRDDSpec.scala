@@ -21,8 +21,11 @@ import java.util.concurrent.TimeUnit
 import com.twosigma.flint.timeseries.row.Schema
 import org.scalatest.tagobjects.Slow
 import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
+import com.twosigma.flint.timeseries
+import com.twosigma.flint.timeseries.summarize.summarizer.LagSumSummarizerFactory
+import org.apache.hadoop.mapreduce.jobhistory.HistoryViewer.SummarizedJob
 import org.apache.spark.sql.functions.{ col, udf }
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{ DataFrame, Row }
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ExternalRow }
 
@@ -652,5 +655,4 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
       assert(rows.deep == finalRows.deep)
     }
   }
-
 }

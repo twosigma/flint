@@ -93,26 +93,31 @@ protected[flint] object Summarize {
     skFn: V => SK,
     depth: Int
   ): Map[SK, V2] = {
-    val partiallySummarized: RDD[Map[SK, U]] = rdd.mapPartitions {
-      iter =>
-        // Initialize the initial state.
-        val uPerSK = mutable.HashMap.empty[SK, U]
-        while (iter.hasNext) {
-          val (_, v) = iter.next()
-          val sk = skFn(v)
-          val previousU = uPerSK.getOrElse(sk, summarizer.zero())
-          uPerSK += sk -> summarizer.add(previousU, v)
-        }
-        Iterator(uPerSK)
-    }.map { m => Map[SK, U](m.toSeq: _*) } // Make it immutable to return.
 
-    val mergeOp = (u1: Map[SK, U], u2: Map[SK, U]) => (u1 ++ u2).map {
-      case (sk, _) =>
-        (sk, summarizer.merge(u1.getOrElse(sk, summarizer.zero()), u2.getOrElse(sk, summarizer.zero())))
-    }
+    if (rdd.getNumPartitions == 0) {
+      Map.empty
+    } else {
+      val partiallySummarized: RDD[Map[SK, U]] = rdd.mapPartitions {
+        iter =>
+          // Initialize the initial state.
+          val uPerSK = mutable.HashMap.empty[SK, U]
+          while (iter.hasNext) {
+            val (_, v) = iter.next()
+            val sk = skFn(v)
+            val previousU = uPerSK.getOrElse(sk, summarizer.zero())
+            uPerSK += sk -> summarizer.add(previousU, v)
+          }
+          Iterator(uPerSK)
+      }.map { m => Map[SK, U](m.toSeq: _*) } // Make it immutable to return.
 
-    TreeReduce(partiallySummarized)(mergeOp, depth).map {
-      case (sk, v) => (sk, summarizer.render(v))
+      val mergeOp = (u1: Map[SK, U], u2: Map[SK, U]) => (u1 ++ u2).map {
+        case (sk, _) =>
+          (sk, summarizer.merge(u1.getOrElse(sk, summarizer.zero()), u2.getOrElse(sk, summarizer.zero())))
+      }
+
+      TreeReduce(partiallySummarized)(mergeOp, depth).map {
+        case (sk, v) => (sk, summarizer.render(v))
+      }
     }
   }
 
@@ -139,28 +144,32 @@ protected[flint] object Summarize {
     skFn: V => SK,
     depth: Int
   ): Map[SK, V2] = {
-    // Basically, an RDD of (K, (V, Boolean)) where the boolean flag indicates whether a row is overlapped.
-    val overlappedRdd = OverlappedOrderedRDD(rdd, windowFn).zipOverlapped()
-    val partiallySummarized: RDD[Map[SK, U]] = overlappedRdd.map(_._2).mapPartitions {
-      iter =>
-        // Initialize the initial state.
-        val uPerSK = mutable.HashMap.empty[SK, U]
-        while (iter.hasNext) {
-          val v = iter.next()
-          val sk = skFn(v._1)
-          val previousU = uPerSK.getOrElse(sk, summarizer.zero())
-          uPerSK += sk -> summarizer.addOverlapped(previousU, v)
-        }
-        Iterator(uPerSK)
-    }.map { m => Map[SK, U](m.toSeq: _*) } // Make it immutable to return.
+    if (rdd.getNumPartitions == 0) {
+      Map.empty
+    } else {
+      // Basically, an RDD of (K, (V, Boolean)) where the boolean flag indicates whether a row is overlapped.
+      val overlappedRdd = OverlappedOrderedRDD(rdd, windowFn).zipOverlapped()
+      val partiallySummarized: RDD[Map[SK, U]] = overlappedRdd.map(_._2).mapPartitions {
+        iter =>
+          // Initialize the initial state.
+          val uPerSK = mutable.HashMap.empty[SK, U]
+          while (iter.hasNext) {
+            val v = iter.next()
+            val sk = skFn(v._1)
+            val previousU = uPerSK.getOrElse(sk, summarizer.zero())
+            uPerSK += sk -> summarizer.addOverlapped(previousU, v)
+          }
+          Iterator(uPerSK)
+      }.map { m => Map[SK, U](m.toSeq: _*) } // Make it immutable to return.
 
-    val mergeOp = (u1: Map[SK, U], u2: Map[SK, U]) => (u1 ++ u2).map {
-      case (sk, _) =>
-        (sk, summarizer.merge(u1.getOrElse(sk, summarizer.zero()), u2.getOrElse(sk, summarizer.zero())))
-    }
+      val mergeOp = (u1: Map[SK, U], u2: Map[SK, U]) => (u1 ++ u2).map {
+        case (sk, _) =>
+          (sk, summarizer.merge(u1.getOrElse(sk, summarizer.zero()), u2.getOrElse(sk, summarizer.zero())))
+      }
 
-    TreeReduce(partiallySummarized)(mergeOp, depth).map {
-      case (sk, v) => (sk, summarizer.render(v))
+      TreeReduce(partiallySummarized)(mergeOp, depth).map {
+        case (sk, v) => (sk, summarizer.render(v))
+      }
     }
   }
 

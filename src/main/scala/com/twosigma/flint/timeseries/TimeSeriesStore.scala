@@ -76,7 +76,10 @@ private[timeseries] object TimeSeriesStore {
     val sqlContext = SQLContext.getOrCreate(sc)
     val df = DFConverter.toDataFrame(sqlContext, schema, orderedRdd)
 
-    require(orderedRdd.partitions(0).index == 0, "Partition index should start with zero.")
+    require(
+      orderedRdd.getNumPartitions == 0 || orderedRdd.partitions(0).index == 0,
+      "Partition index should start with zero."
+    )
     // the rdd parameter is not used
     val deps = new OneToOneDependency(null)
     val partInfo = PartitionInfo(orderedRdd.rangeSplits, Seq(deps))

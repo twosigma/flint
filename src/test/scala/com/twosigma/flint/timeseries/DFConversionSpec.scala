@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 import com.twosigma.flint.timeseries.row.Schema
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
@@ -133,15 +134,14 @@ class DFConversionSpec extends TimeSeriesSuite with FlintTestData {
     assert(!TimeSeriesStore.isNormalized(df.sort("data").queryExecution.executedPlan))
   }
 
-  // TODO: This doesn't compile under Spark 2.0.
-  /* it should "preserve partitions of a sorted DF" in {
+  it should "preserve partitions of a sorted DF" in {
     val sortedDf = clockTSRdd.toDF.sort("time")
-    val dfPartitions = sortedDf.mapPartitions {
+    val dfPartitions = sortedDf.rdd.mapPartitions {
       iter => if (iter.isEmpty) Iterator.empty else Iterator(iter.next())
     }.collect().map(_.getLong(0))
 
     val tsrdd = TimeSeriesRDD.fromDF(sortedDf)(isSorted = true, TimeUnit.NANOSECONDS)
     val tsrddPartitions = tsrdd.partInfo.get.splits.map(_.range.begin)
     assert(dfPartitions.toSeq == tsrddPartitions)
-  } */
+  }
 }

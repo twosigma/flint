@@ -26,6 +26,8 @@ import pandas.util.testing as pdt
 from ts.spark import pypusa
 from ts.elastic import test_support
 
+from . import utils
+
 # The fixtures in this test are weird.  Because we don't have pyspark
 # on our path until after we have pypusa add it to our path, we
 # actually can't import a bunch of things, including pyspark.sql.*,
@@ -62,14 +64,13 @@ def reset_env():
 def launcher_params():
     # TODO: run on real datacenters for more thorough integration
     #       tests, but not often
-    default_codebase = '/opt/ts/services/spark-2.0-ts.ts_spark_2_0/'
-    codebase_env = 'FLINT_VATS_CODEBASE'
+    params = {'datacenter': 'local',
+              'spark_conf': {'spark.ui.showConsoleProgress': 'false'},
+              'executor_memory': (1*1024**3),
+              'driver_memory': (4*1024**3)}
 
-    return {'datacenter': 'local',
-            'codebase': os.getenv(codebase_env, default_codebase),
-            'spark_conf': {'spark.ui.showConsoleProgress': 'false'},
-            'executor_memory': (1*1024**3),
-            'driver_memory': (4*1024**3)}
+    params.update(utils.get_codebase_params())
+    return params
 
 
 @pytest.fixture(scope='module')
@@ -1599,6 +1600,19 @@ def test_describe(flintContext):
 
     df = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
     df.describe()
+
+
+def test_empty_df(sc, sqlContext, flintContext, summarizers):
+    from pyspark.sql.types import LongType, StructType, StructField
+    df = sqlContext.createDataFrame(
+        sc.emptyRDD(),
+        schema=StructType([StructField('time', LongType())]))
+    df2 = flintContext.read.dataframe(df)
+    df3 = df2.summarize(summarizers.count())
+    assert(df2.count() == 0)
+    assert(df3.count() == 0)
+    assert(df2.schema == StructType([StructField('time', LongType())]))
+    assert(df3.schema == StructType([StructField('time', LongType()), StructField('count', LongType())]))
 
 
 def shared_test_partition_preserving(flintContext, func, preserve, create = None):

@@ -104,7 +104,6 @@ object OrderedRDD {
  *   - partition range is close-open range [b, e), where b is the first key and e might NOT be the first key
  *     of the next partition;
  *   - a key cannot appear in more than one partition;
- *   - a partition must be non-empty.
  */
 class OrderedRDD[K: ClassTag, V: ClassTag](
   @transient val sc: SparkContext,
@@ -226,45 +225,48 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * @return a new [[OrderedRDD]] with partitions.length == numPartitions
    */
   def coalesce(numPartitions: Int): OrderedRDD[K, V] = {
-    require(
-      numPartitions > 0 && numPartitions <= rangeSplits.length,
-      s"Number of partitions must be within 1 and ${rangeSplits.length}"
-    )
+    require(numPartitions > 0, "Must coalesce to more than 0 partitions")
 
-    // table of ranges and partitions from coalescing
-    val coalesced = (0 until numPartitions).map {
-      i =>
-        // array indices of aggregated partitions
-        val begin = ((i.toLong * rangeSplits.length) / numPartitions).toInt
-        val end = (((i.toLong + 1) * rangeSplits.length) / numPartitions).toInt
+    // Do nothing if trying to coalescing to a greater number than the current partitions.
+    // This is consistent with DataFrame behavior.
+    if (numPartitions >= getNumPartitions) {
+      return this
+    } else {
+      // table of ranges and partitions from coalescing
+      val coalesced = (0 until numPartitions).map {
+        i =>
+          // array indices of aggregated partitions
+          val begin = ((i.toLong * rangeSplits.length) / numPartitions).toInt
+          val end = (((i.toLong + 1) * rangeSplits.length) / numPartitions).toInt
 
-        // ranges and partitions that will be coalesced together
-        val mySplits = rangeSplits.slice(begin, end)
-        val coalescedRanges = CloseOpen(
-          mySplits(0).range.begin,
-          mySplits(mySplits.length - 1).range.end
-        )
-        val coalescedPartitions = mySplits.map(_.partition)
-        (i, coalescedRanges, coalescedPartitions)
+          // ranges and partitions that will be coalesced together
+          val mySplits = rangeSplits.slice(begin, end)
+          val coalescedRanges = CloseOpen(
+            mySplits(0).range.begin,
+            mySplits(mySplits.length - 1).range.end
+          )
+          val coalescedPartitions = mySplits.map(_.partition)
+          (i, coalescedRanges, coalescedPartitions)
+      }
+
+      // array of RangeSplits with new partition index
+      val coalescedSplits = coalesced.map {
+        x => RangeSplit(OrderedRDDPartition(x._1).asInstanceOf[Partition], x._2)
+      }
+
+      // dependencies to parent RDD
+      val parents = coalesced.map { x => x._1 -> x._3 }.toMap
+      val dep = new NarrowDependency(self) {
+        override def getParents(partitionId: Int): mutable.ArraySeq[Int] =
+          parents(partitionId).map(_.index)
+      }
+
+      // return new OrderedRDD
+      new OrderedRDD[K, V](sc, coalescedSplits, Seq(dep))(
+        (partition, context) =>
+          PartitionsIterator(self, parents(partition.index), context)
+      )
     }
-
-    // array of RangeSplits with new partition index
-    val coalescedSplits = coalesced.map{
-      x => RangeSplit(OrderedRDDPartition(x._1).asInstanceOf[Partition], x._2)
-    }
-
-    // dependencies to parent RDD
-    val parents = coalesced.map { x => x._1 -> x._3 }.toMap
-    val dep = new NarrowDependency(self) {
-      override def getParents(partitionId: Int): mutable.ArraySeq[Int] =
-        parents(partitionId).map(_.index)
-    }
-
-    // return new OrderedRDD
-    new OrderedRDD[K, V](sc, coalescedSplits, Seq(dep))({
-      case (partition, context) =>
-        PartitionsIterator(self, parents(partition.index), context)
-    })
   }
 
   /**

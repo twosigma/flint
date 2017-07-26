@@ -51,7 +51,6 @@ object Conversion {
     } else {
       keyRdd
     }
-
     require(rdd.partitions.length == keys.partitions.length)
 
     // Gather header information for each partition from the given `rdd` via the `keyRdd`.
@@ -76,7 +75,7 @@ object Conversion {
         } else {
           Seq.empty
         })
-    }.reduce(_ ++ _).map {
+    }.fold(Seq.empty)(_ ++ _).map {
       // Convert the partition type back. This is a trick to avoid propagating the partition of
       // parent rdd all around.
       hdr =>

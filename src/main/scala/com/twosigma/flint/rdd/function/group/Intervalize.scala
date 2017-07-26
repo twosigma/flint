@@ -20,10 +20,11 @@ import com.twosigma.flint.rdd._
 
 import scala.collection.Searching._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{ NarrowDependency, OneToOneDependency, Partition, TaskContext }
+import org.apache.spark._
 
 import scala.reflect.ClassTag
 import grizzled.slf4j.Logger
+import org.apache.spark.broadcast.Broadcast
 
 object Intervalize {
 
@@ -54,6 +55,19 @@ object Intervalize {
     }
   }
 
+  private def broadcastClock[K: ClassTag](sparkContext: SparkContext, clock: Array[K]): Broadcast[Array[K]] = {
+    val INTERVALS_PER_YEAR = 365 * 24 * 12
+    val NUMBER_OF_YEAR = 20
+    val BYTES_PER_INTERVAL = 8
+    // 20 years of 5 min interval is about 16M
+    val maxClocksize = NUMBER_OF_YEAR * INTERVALS_PER_YEAR * BYTES_PER_INTERVAL
+    if (clock.length > maxClocksize) {
+      logger.warn(s"Broadcast clock is bigger than ${maxClocksize / 1024 / 1024} M. " +
+        s"Please provide a smaller time range.")
+    }
+    sparkContext.broadcast(clock)
+  }
+
   /**
    * Intervalize an [[OrderedRDD]] by mapping its keys to the begin or the end of an interval where
    * they fall into. Intervals are defined by the provided `clock`.
@@ -82,40 +96,38 @@ object Intervalize {
       i += 1
     }
 
-    val rddBegin = rdd.rangeSplits.head.range.begin
-    val rddEnd = rdd.rangeSplits.last.range.end
+    if (rdd.rangeSplits.isEmpty) {
+      // TODO: This should be FlintContext.emptyOrderedRDD similar to sc.emptyRDD
+      Conversion.fromSortedRDD(rdd.sc.emptyRDD[(K, (K, V))])
+    } else {
+      val rddBegin = rdd.rangeSplits.head.range.begin
+      val rddEnd = rdd.rangeSplits.last.range.end
 
-    // Optimization: Reduce the size of the boardcast clock if possible
-    val from = clock.search(rddBegin) match {
-      case Found(idx) => Math.max(0, idx - 1) // -1 because beginInclusive can be false
-      case InsertionPoint(idx) => Math.max(0, idx - 1) // between idx - 1 and idx
-    }
-
-    val until = rddEnd.fold(clock.size) { end =>
-      clock.search(end) match {
-        // +2 because: (1) until is exclusive (2) need to include one more interval towards the end
-        case Found(idx) => Math.min(clock.size, idx + 2)
-        case InsertionPoint(idx) => Math.min(clock.size, idx + 2)
+      // Optimization: Reduce the size of the broadcast clock if possible
+      val from = clock.search(rddBegin) match {
+        case Found(idx) => Math.max(0, idx - 1) // -1 because beginInclusive can be false
+        case InsertionPoint(idx) => Math.max(0, idx - 1) // between idx - 1 and idx
       }
-    }
 
-    val trimedClock = clock.slice(from, until)
-    // 20 years of 5 min interval is about 16M
-    val maxClocksize = 20 * 365 * 24 * 12 * 8
-    if (trimedClock.size > maxClocksize) {
-      logger.warn(s"Boardcast clock is bigger than ${maxClocksize / 1024 / 1024} M. " +
-        s"Please provide a smaller time range.")
-    }
+      val until = rddEnd.fold(clock.length) { end =>
+        clock.search(end) match {
+          // +2 because: (1) until is exclusive (2) need to include one more interval towards the end
+          case Found(idx) => Math.min(clock.length, idx + 2)
+          case InsertionPoint(idx) => Math.min(clock.length, idx + 2)
+        }
+      }
 
-    val broadcastClock = rdd.sparkContext.broadcast(trimedClock)
-    val intervalized = rdd.map {
-      case (k, v) => (round(k, broadcastClock.value, beginInclusive), (k, v))
-    }.filter(_._1.isDefined).map {
-      case (k, v) => (k.get, v)
-    }
+      val trimmedClock = clock.slice(from, until)
+      val broadcast = broadcastClock(rdd.sparkContext, trimmedClock)
+      val intervalized = rdd.map {
+        case (k, v) => (round(k, broadcast.value, beginInclusive), (k, v))
+      }.filter(_._1.isDefined).map {
+        case (k, v) => (k.get, v)
+      }
 
-    // Normalize the above rdd such that rows with the same keys won't spread across multiple partitions.
-    Conversion.fromSortedRDD(intervalized)
+      // Normalize the above rdd such that rows with the same keys won't spread across multiple partitions.
+      Conversion.fromSortedRDD(intervalized)
+    }
   }
 
   /**

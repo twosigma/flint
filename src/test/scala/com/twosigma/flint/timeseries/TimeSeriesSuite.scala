@@ -197,7 +197,9 @@ trait TimeSeriesSuite extends FlintSuite {
     }
 
   /**
-   * Assert two [[TimeSeriesRDD]] are equal. Works with comparing rows with nested structure.
+   * Assert two [[TimeSeriesRDD]] contains the same data.
+   * The partitioning and ranges of the two [[TimeSeriesRDD]] can be different.
+   * Works with comparing rows with nested structure.
    */
   def assertEquals(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
     assert(rdd1.schema == rdd2.schema)
@@ -210,7 +212,32 @@ trait TimeSeriesSuite extends FlintSuite {
   }
 
   /**
-   * Taken from ttps://github.com/apache/spark/blob/f48461ab2bdb91cd00efa5a5ec4b0b2bc361e7a2/sql/core/src/test/scala/org/apache/spark/sql/QueryTest.scala#L299
+   * Assert two [[TimeSeriesRDD]] are identical.
+   * Two [[TimeSeriesRDD]] are identical if:
+   * 1. Data in each partitions are the same.
+   * 2. Partition ranges are the same
+   * 3. Number of partitions are the same
+   */
+  def assertIdentical(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+    assert(rdd1.schema == rdd2.schema)
+    assert(rdd1.orderedRdd.getPartitionRanges == rdd2.orderedRdd.getPartitionRanges)
+    assert(
+      rdd1.orderedRdd.partitions.map(_.index).deep ==
+        rdd2.orderedRdd.partitions.map(_.index).deep
+    )
+
+    val rows1 = rdd1.rdd.mapPartitions {
+      iter => Iterator(iter.toArray)
+    }.map(rows => rows.map(prepareRow)).collect()
+    val rows2 = rdd2.rdd.mapPartitions {
+      iter => Iterator(iter.toArray)
+    }.map(rows => rows.map(prepareRow)).collect()
+
+    assert(rows1.deep == rows2.deep)
+  }
+
+  /**
+   * Taken from https://github.com/apache/spark/blob/f48461ab2bdb91cd00efa5a5ec4b0b2bc361e7a2/sql/core/src/test/scala/org/apache/spark/sql/QueryTest.scala#L299
    */
   def prepareRow(row: Row): Row = {
     Row.fromSeq(row.toSeq.map {

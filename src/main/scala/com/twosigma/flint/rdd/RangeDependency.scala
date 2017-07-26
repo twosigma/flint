@@ -38,9 +38,8 @@ private[rdd] object RangeDependency {
     headers: Seq[OrderedPartitionHeader[K, P]],
     normalizationStrategy: PartitionNormalizationStrategy = HeavyKeysNormalizationStrategy
   )(implicit ord: Ordering[K]): Seq[RangeDependency[K, P]] = {
-    require(headers.nonEmpty, "Need at least one partition")
-
     val sortedHeaders = headers.sortBy(_.partition.index).toArray
+
     // Assume partitions are sorted, i.e. the keys of ith partition are less or equal than those of (i + 1)th partition.
     sortedHeaders.reduceOption {
       (h1, h2) =>
@@ -76,22 +75,6 @@ private[rdd] object RangeDependency {
   }
 }
 
-/*
- *  Copyright 2015-2016 TWO SIGMA OPEN SOURCE, LLC
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- */
-
 /**
  * Represent the partition, the first key, and possibly the distinct second key of a partition.
  * Note that the type of partition must be the same type of partition where those keys come from.
@@ -121,12 +104,26 @@ private[rdd] trait PartitionNormalizationStrategy {
    * Return a sequence of close-open ranges from a sequence of [[OrderedPartitionHeader]]s that could be
    * used to define the ranges of normalized partitions.
    */
-  def normalize[K, P <: Partition](
+  final def normalize[K, P <: Partition](
+    headers: Seq[OrderedPartitionHeader[K, P]]
+  )(
+    implicit
+    ord: Ordering[K]
+  ): Seq[CloseOpen[K]] = {
+    if (headers.isEmpty) {
+      Seq.empty
+    } else {
+      doNormalize(headers)(ord)
+    }
+  }
+
+  def doNormalize[K, P <: Partition](
     headers: Seq[OrderedPartitionHeader[K, P]]
   )(
     implicit
     ord: Ordering[K]
   ): Seq[CloseOpen[K]]
+
 }
 
 private[rdd] object BasicNormalizationStrategy extends PartitionNormalizationStrategy {
@@ -152,12 +149,13 @@ private[rdd] object BasicNormalizationStrategy extends PartitionNormalizationStr
    * - `[8, 14)` depends on partitions 3, 4;
    * - `[14, +infinity)` depends on partitions 4.
    */
-  override def normalize[K, P <: Partition](
+  override def doNormalize[K, P <: Partition](
     headers: Seq[OrderedPartitionHeader[K, P]]
   )(
     implicit
     ord: Ordering[K]
   ): Seq[CloseOpen[K]] = {
+
     // Collect all existing second keys which could be an empty set.
     val secondKeys = headers.filter(_.secondKey.isDefined).map {
       _.secondKey.get
@@ -208,12 +206,13 @@ private[rdd] object HeavyKeysNormalizationStrategy extends PartitionNormalizatio
    * [8, 14)
    * [14, +infinity)
    */
-  override def normalize[K, P <: Partition](
+  override def doNormalize[K, P <: Partition](
     headers: Seq[OrderedPartitionHeader[K, P]]
   )(
     implicit
     ord: Ordering[K]
   ): Seq[CloseOpen[K]] = {
+
     val sortedHeaders = headers.sortBy(_.partition.index)
 
     val partitionBoundaries = sortedHeaders.head.firstKey +: sortedHeaders.tail.map {

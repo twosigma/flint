@@ -109,6 +109,10 @@ lazy val dependencySettings = libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % versions.scalatest % "test",
   "org.scalacheck" %% "scalacheck" % versions.scalacheck % "test",
   "org.apache.arrow" % "arrow-vector" % versions.arrow,
+  // These jackson modules are not directly used by Flint. We need to put it
+  // there because Spark 2.0.2 uses Jackson 2.6 and Arrow uses Jackson
+  // 2.7. We should be able to remove these once we moved to newer Spark
+  // version.
   "com.fasterxml.jackson.module" % "jackson-module-parameter-names" % versions.jackson_module,
   "com.fasterxml.jackson.module" %% "jackson-module-scala" % versions.jackson_module
 )
