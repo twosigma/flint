@@ -165,6 +165,9 @@ def make_pdf(data, schema, dtypes=None):
     if dtypes:
         df = df.astype(dict(zip(schema, dtypes)))
 
+    if 'time' in df.columns:
+        df = df.assign(time=pd.to_datetime(df['time'], unit='ns'))
+
     return df
 
 intervals_data = [
@@ -412,6 +415,10 @@ def test_addColumnsForCycle(pyspark_types, tests_utils, price, vol3):
 def test_merge(pyspark_types, tests_utils, price):
     price1 = price.filter(price.time > 1100)
     price2 = price.filter(price.time <= 1100)
+    assert price1.count() > 0
+    assert price2.count() > 0
+    assert price1.count() < price.count()
+    assert price2.count() < price.count()
     merged_price = price1.merge(price2)
     tests_utils.assert_same(merged_price.toPandas(), price.toPandas())
 
@@ -471,11 +478,11 @@ def test_futureLeftJoin(pyspark_types, tests_utils, price, vol):
     ], ["time", "id", "price", "volume", "time2"])
 
     new_pdf = price.futureLeftJoin(vol.withColumn("time2", vol.time.cast(pyspark_types.LongType())),
-                                     tolerance=pd.Timedelta("100ns"),
-                                     key=["id"], strict_lookahead=True).toPandas()
+                                   tolerance=pd.Timedelta("100ns"),
+                                   key=["id"], strict_lookahead=True).toPandas()
     new_pdf1 = price.futureLeftJoin(vol.withColumn("time2", vol.time.cast(pyspark_types.LongType())),
-                                     tolerance=pd.Timedelta("100ns"),
-                                     key="id", strict_lookahead=True).toPandas()
+                                    tolerance=pd.Timedelta("100ns"),
+                                    key="id", strict_lookahead=True).toPandas()
     tests_utils.assert_same(new_pdf, new_pdf1)
     tests_utils.assert_same(new_pdf, expected_pdf)
 
@@ -1226,6 +1233,10 @@ def test_mixed_udfs(rankers, pyspark, price2):
         (1, 3, 5.0, .75, .75),
     ], ['time', 'id', 'price', 'flint', 'python'])
 
+    # np.isclose doesn't handle datetimes, so we have to cast the time
+    # column to int before using it.
+    actual = actual.assign(time=actual['time'].astype(np.int64))
+    expected = expected.assign(time=expected['time'].astype(np.int64))
     # For some reason, we need to raise the tolerence threshold for comparing the python udf column
     assert np.all(np.isclose(actual, expected, atol=1e-5)), "Left: {}\nRight: {}".format(actual, expected)
 
@@ -1289,14 +1300,15 @@ def test_addWindows(tests_utils, windows, vol):
 
 
 def test_shiftTime(tests_utils, price):
+    delta = pd.Timedelta('1000ns')
     expected_pdf = price.toPandas()
-    expected_pdf.time += 1000
-    new_pdf = price.shiftTime(pd.Timedelta("1000ns")).toPandas()
+    expected_pdf.time += delta
+    new_pdf = price.shiftTime(delta).toPandas()
     tests_utils.assert_same(new_pdf, expected_pdf, "forwards")
 
     expected_pdf = price.toPandas()
-    expected_pdf.time -= 1000
-    new_pdf = price.shiftTime(pd.Timedelta("1000ns"), backwards=True).toPandas()
+    expected_pdf.time -= delta
+    new_pdf = price.shiftTime(delta, backwards=True).toPandas()
     tests_utils.assert_same(new_pdf, expected_pdf, "backwards")
 
 def test_shiftTime_windows(flintContext, tests_utils, windows):
@@ -1584,14 +1596,17 @@ def test_df_orderBy(flintContext):
     assert(df._tsrdd_part_info is None)
 
 
-def test_withColumn_time(flintContext):
+def test_withColumn_time(flintContext, tests_utils):
     from ts.flint import TimeSeriesDataFrame
     from pyspark.sql import DataFrame
 
-    df = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
+    pdf = make_pdf(forecast_data, ["time", "id", "forecast"])
+    df = flintContext.read.pandas(pdf)
     df = df.withColumn("time", df.time * 2)
     assert(not isinstance(df, TimeSeriesDataFrame))
     assert(isinstance(df, DataFrame))
+    expected = pdf.assign(time=pdf['time'].astype(np.int64) * 2)
+    tests_utils.assert_same(df.toPandas(), expected)
 
 
 def test_describe(flintContext):
@@ -1669,7 +1684,7 @@ def get_nonempty_partitions(df):
     return [pdf for pdf in pdfs if not pdf.empty]
 
 
-def assert_partition_equals (df1, df2):
+def assert_partition_equals(df1, df2):
     partitions1 = get_nonempty_partitions(df1)
     partitions2 = get_nonempty_partitions(df2)
 
@@ -1680,7 +1695,9 @@ def assert_partition_equals (df1, df2):
 
 def assert_sorted(df):
     pdf = df.toPandas()
-    assert (np.diff(pdf.time) >= 0).all()
+    if len(pdf.index) < 2:
+        return
+    assert np.diff(pdf.time).min() >= np.timedelta64(0)
 
 
 def assert_partition_preserving(input_df, func, preserve):

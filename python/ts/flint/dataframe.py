@@ -202,19 +202,17 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         return _new_method
 
-    @staticmethod
-    def _override_df_methods():
+    @classmethod
+    def _override_df_methods(cls):
         """Overrides :class:`DataFrame` methods and wraps returned :class:`DataFrame` objects
         as :class:`TimeSeriesDataFrame` objects
         """
-        dfmethods = inspect.getmembers(pyspark.sql.DataFrame)
-        tsdfmethods = inspect.getmembers(TimeSeriesDataFrame)
-        tsdfmethodnames = [pair[0] for pair in tsdfmethods]
-
+        methods = inspect.getmembers(cls, predicate=inspect.isfunction)
         # Only replace non-private methods and methods not overridden in TimeSeriesDataFrame
-        for name, method in dfmethods:
-            if not name.startswith('_') and name not in tsdfmethodnames and callable(method):
-                setattr(TimeSeriesDataFrame, name, TimeSeriesDataFrame._wrap_df_method(name, method))
+        for name, method in methods:
+            if (not name.startswith('_')
+                    and inspect.getmodule(method) == pyspark.sql.dataframe):
+                setattr(cls, name, cls._wrap_df_method(name, method))
 
     def _call_dual_function(self, function, *args, **kwargs):
         if self._jdf:
