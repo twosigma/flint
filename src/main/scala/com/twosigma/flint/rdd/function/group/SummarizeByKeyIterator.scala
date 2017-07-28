@@ -45,26 +45,23 @@ import scala.collection.JavaConverters._
  * // (1000L, Array((2, 0.02), (2, 0.04)))
  * }}}
  */
-private[rdd] case class SummarizeByKeyIterator[K, V, SK, U, V2](
+private[rdd] class SummarizeByKeyIterator[K, V, SK, U, V2](
   iter: Iterator[(K, V)],
   skFn: V => SK,
   summarizer: Summarizer[V, U, V2]
-)(implicit tag: ClassTag[V], ord: Ordering[K]) extends Iterator[(K, (SK, V2))] {
-  private val bufferedIter = iter.buffered
+)(implicit tag: ClassTag[V], ord: Ordering[K])
+  extends Iterator[(K, (SK, V2))]
+  with AutoCloseable {
+  private[this] val bufferedIter = iter.buffered
 
-  private var currentKey: K = _
+  private[this] var currentKey: K = _
+
   // We use a mutable linked hash map in order to preserve the secondary key ordering.
-  private val intermediates: util.LinkedHashMap[SK, U] = new util.LinkedHashMap()
+  private[this] val intermediates: util.LinkedHashMap[SK, U] =
+    new util.LinkedHashMap()
 
-  // This class is tested independently of Spark. In test, TaskContext can be null.
-  if (TaskContext.get != null) {
-    TaskContext.get.addTaskCompletionListener { _ => cleanup() }
-  }
-
-  private def cleanup(): Unit =
-    intermediates.asScala.toMap.values.foreach{ u => summarizer.close(u) }
-
-  override def hasNext: Boolean = !intermediates.isEmpty || bufferedIter.hasNext
+  override def hasNext: Boolean =
+    !intermediates.isEmpty || bufferedIter.hasNext
 
   // Update intermediates with next key if bufferedIter.hasNext.
   private def nextKey(): Unit = if (bufferedIter.hasNext) {
@@ -91,5 +88,10 @@ private[rdd] case class SummarizeByKeyIterator[K, V, SK, U, V2](
     } else {
       Iterator.empty.next()
     }
+  }
+
+  override def close(): Unit = intermediates.asScala.toMap.values.foreach {
+    u =>
+      summarizer.close(u)
   }
 }

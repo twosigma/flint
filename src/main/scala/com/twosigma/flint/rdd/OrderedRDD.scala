@@ -493,12 +493,14 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * @param skFn A function that extracts a secondary key from a row.
    * @return an [[OrderedRDD]] of grouped rows with the same key. The ordering of rows in each group is preserved.
    */
-  def groupByKey[SK](skFn: V => SK): OrderedRDD[K, Array[V]] = {
+  def groupByKey[SK](skFn: V => SK): OrderedRDD[K, Array[V]] =
     new OrderedRDD[K, Array[V]](sc, rangeSplits, Seq(new OneToOneDependency(self)))(
-      (p, tc) => SummarizeByKeyIterator(iterator(p, tc), skFn, new RowsSummarizer[V])
-        .map { case (k, (_, v)) => (k, v) }
+      (p, tc) => {
+        val iter = new SummarizeByKeyIterator(iterator(p, tc), skFn, new RowsSummarizer[V])
+        tc.addTaskCompletionListener((_) => iter.close())
+        iter.map { case (k, (_, v)) => (k, v) }
+      }
     )
-  }
 
   /**
    * Takes an ordered RDD and summarizes it using the summarizer provided
@@ -515,11 +517,14 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * @tparam V2 the output type which will determine the value of the summarizer.
    * @return an [[OrderedRDD]] of summarized rows with the same key. The ordering of each key is preserved.
    */
-  def summarizeByKey[SK, U, V2: ClassTag](skFn: V => SK, summarizer: Summarizer[V, U, V2]): OrderedRDD[K, (SK, V2)] = {
+  def summarizeByKey[SK, U, V2: ClassTag](skFn: V => SK, summarizer: Summarizer[V, U, V2]): OrderedRDD[K, (SK, V2)] =
     new OrderedRDD[K, (SK, V2)](sc, rangeSplits, Seq(new OneToOneDependency(self)))(
-      (p, tc) => SummarizeByKeyIterator(iterator(p, tc), skFn, summarizer)
+      (p, tc) => {
+        val iter = new SummarizeByKeyIterator(iterator(p, tc), skFn, summarizer)
+        tc.addTaskCompletionListener((_) => iter.close())
+        iter
+      }
     )
-  }
 
   /**
    * Intervalize this [[OrderedRDD]] by mapping its keys to the begin or the end of an interval
