@@ -251,12 +251,42 @@ object TimeSeriesRDD {
     timeUnit: TimeUnit,
     timeColumn: String = timeColumnName
   ): TimeSeriesRDD = {
+    val canonizedDf = canonizeDF(dataFrame, isSorted, timeUnit, timeColumn)
+    fromDFWithPartInfo(canonizedDf, None)
+  }
+
+  /**
+   * Prepare [[DataFrame]] for conversion to [[TimeSeriesRDD]]. The list of requirements:
+   * 1) Time column should exist, and it should be named `time`.
+   * 2) [[DataFrame]] should be sorted by `time`.
+   * 3) Timestamps should be converted to nanoseconds.
+   * 4) `time` should be the first column.
+   * We try to avoid overwriting or renaming `time` column, because these operations change it's attribute id, and
+   * Catalyst partitioning metadata no longer matches the attribute, causing issues in TimeSeriesStore.isNormalized:
+   * {{{
+   * df("time").expr                             // time#25L
+   * val df2 = df.withColumn("time", df("time"))
+   * df2("time").expr                            // time#67L
+   * df2.queryExecution.executedPlan.outputPartitioning  //rangepartitioning(time#25L ASC, 200) - original time column
+   * }}}
+   *
+   * @return canonized [[DataFrame]]
+   */
+  private[flint] def canonizeDF(
+    dataFrame: DataFrame,
+    isSorted: Boolean,
+    timeUnit: TimeUnit,
+    timeColumn: String
+  ): DataFrame = {
     require(
       !dataFrame.columns.contains(timeColumnName) || timeColumn == timeColumnName,
       "Cannot use another column as timeColumn while a column with name `time` exists"
     )
-
-    val df = dataFrame.withColumn(timeColumnName, dataFrame(timeColumn))
+    val df = if (timeColumn == timeColumnName) {
+      dataFrame
+    } else {
+      dataFrame.withColumnRenamed(timeColumn, timeColumnName)
+    }
     requireSchema(df.schema)
 
     val convertedDf = convertDfTimestamps(df, timeUnit)
@@ -268,8 +298,7 @@ object TimeSeriesRDD {
       convertedDf.select(timeColumnName, nonTimeColumns: _*)
     }
 
-    val sortedDf = if (isSorted) { timeFirstDf } else { timeFirstDf.sort(timeColumnName) }
-    fromDFWithPartInfo(sortedDf, None)
+    if (isSorted) { timeFirstDf } else { timeFirstDf.sort(timeColumnName) }
   }
 
   @PythonApi
@@ -281,12 +310,9 @@ object TimeSeriesRDD {
     deps: Seq[Dependency[_]],
     rangeSplits: Array[RangeSplit[Long]]
   ): TimeSeriesRDD = {
-    val df = dataFrame.withColumnRenamed(timeColumn, timeColumnName)
-    requireSchema(df.schema)
-    val convertedDf = convertDfTimestamps(df, timeUnit)
-
+    val canonizedDf = canonizeDF(dataFrame, isSorted = true, timeUnit, timeColumn)
     val partitionInfo = PartitionInfo(rangeSplits, deps)
-    TimeSeriesRDD.fromDFWithPartInfo(convertedDf, Some(partitionInfo))
+    TimeSeriesRDD.fromDFWithPartInfo(canonizedDf, Some(partitionInfo))
   }
 
   /**

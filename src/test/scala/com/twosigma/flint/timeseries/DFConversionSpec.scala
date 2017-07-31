@@ -20,7 +20,6 @@ import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 import com.twosigma.flint.timeseries.row.Schema
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
@@ -132,6 +131,16 @@ class DFConversionSpec extends TimeSeriesSuite with FlintTestData {
     assert(!TimeSeriesStore.isNormalized(df.repartition(col("time")).queryExecution.executedPlan))
 
     assert(!TimeSeriesStore.isNormalized(df.sort("data").queryExecution.executedPlan))
+  }
+
+  it should "correctly canonize normalized DataFrame" in {
+    val df = clockTSRdd.toDF.withColumn("data", col("time") * 100)
+    val withWrongOrder = df.select("data", "time").sort("time")
+
+    val canonized = TimeSeriesRDD.canonizeDF(withWrongOrder, isSorted = true, TimeUnit.NANOSECONDS, "time")
+    // columns should be reordered, but it shouldn't break normalization
+    assert(canonized.schema.fieldNames.head == "time")
+    assert(TimeSeriesStore.isNormalized(canonized.queryExecution.executedPlan))
   }
 
   it should "preserve partitions of a sorted DF" in {
