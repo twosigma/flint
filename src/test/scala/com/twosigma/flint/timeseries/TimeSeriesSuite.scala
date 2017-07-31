@@ -228,10 +228,11 @@ trait TimeSeriesSuite extends FlintSuite {
 
     val rows1 = rdd1.rdd.mapPartitions {
       iter => Iterator(iter.toArray)
-    }.map(rows => rows.map(prepareRow)).collect()
+    }.collect().map(_.map(prepareRow))
+
     val rows2 = rdd2.rdd.mapPartitions {
       iter => Iterator(iter.toArray)
-    }.map(rows => rows.map(prepareRow)).collect()
+    }.collect().map(_.map(prepareRow))
 
     assert(rows1.deep == rows2.deep)
   }
