@@ -450,6 +450,55 @@ object Summarizers {
     )
 
   /**
+   * Finds the exponential weighted moving average over a column. Similar to exponential smoothing, this maintains
+   * an EMA for the series (x_1, x_2, ...) as well as the series (1.0, 1.0, ...). The only difference is
+   * that this series does not have an initial zero-valued term injected before each series.
+   *
+   * The weight is defined as follows for the i-th value:
+   * <pre><code>decay(t<sub>i</sub>, t<sub>n</sub>) x<sub>i</sub></code>
+   * </pre>
+   * where <pre><code>decay(t<sub>i</sub>, t<sub>n</sub>)</code></pre>
+   * is the decay between the timestamps jointly specified by timestampsToPeriods and alpha, i.e.
+   * <pre><code>decay(t<sub>i</sub>, t<sub>n</sub>) = exp(timestampsToPeriods(t<sub>i</sub>, t<sub>n</sub>) * ln(1 - alpha)) </code>
+   * </pre>
+   * If constantPeriod is true, then decay is defined as follows:
+   * <pre><code>decay(t<sub>i</sub>, t<sub>n</sub>) = exp((n - i) * ln(1 - alpha)) </code>
+   * </pre>
+   *
+   * The primary EMA keeps track of the sum of the weighted values, whereas the auxiliary EMA keeps track of the sum of
+   * the weights.
+   *
+   * Finally, we take
+   * <pre><code>(EMA (X))<sub>i</sub> = (EMA<sub>p</sub> (X))<sub>i</sub> / (EMA<sub>a</sub> (X))<sub>i</sub> </code>
+   * </pre>
+   *
+   * @param xColumn              Name of column containing series to be smoothed
+   * @param timeColumn           Name of column containing the timestamp
+   * @param alpha                Parameter setting the decay rate of the average
+   * @param timestampsToPeriods  Function that given two timestamps, returns how many periods should be considered to
+   *                             have passed between them
+   * @param constantPeriods      Whether to assume that the number of periods between rows is constant (c = 1), or use
+   *                             timestampsToPeriods to calculate it.
+   * @return a [[SummarizerFactory]] which provides a summarizer to calculate the exponentially smoothed
+   *         series
+   */
+  def ewma(
+    xColumn: String,
+    timeColumn: String = TimeSeriesRDD.timeColumnName,
+    alpha: Double = 0.05,
+    timestampsToPeriods: (Long, Long) => Double = (t1: Long, t2: Long) =>
+      (t2 - t1) / (24 * 60 * 60 * 1e9),
+    constantPeriods: Boolean = false
+  ): SummarizerFactory =
+    ExponentialWeightedMovingAverageSummarizerFactory(
+      xColumn,
+      timeColumn,
+      alpha,
+      timestampsToPeriods,
+      constantPeriods
+    )
+
+  /**
    * Calculates the min for a column.
    *
    * The output schema is:
