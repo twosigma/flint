@@ -54,7 +54,7 @@ case class ExtremeSummarizer[E](
   tag: ClassTag[E],
   order: Ordering[_],
   outputColumnName: String
-) extends Summarizer with FilterNullInput {
+) extends FlippableSummarizer with FilterNullInput {
   private val Sequence(Seq(column)) = requiredColumns
   private val columnIndex = inputSchema.fieldIndex(column)
 

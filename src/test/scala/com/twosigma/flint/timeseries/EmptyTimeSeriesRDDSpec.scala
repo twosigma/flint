@@ -90,8 +90,7 @@ class EmptyTimeSeriesRDDSpec extends TimeSeriesSuite {
     )
 
     val overlappableSummarizers = Seq(
-      LagSumSummarizerFactory("v1", "100ns"),
-      Summarizers.driscollKraayRegression("v1", Seq("v2"))
+      LagSumSummarizerFactory("v1", "100ns")
     )
 
     for (tsrdd <- emptyTSRdds) {
@@ -164,39 +163,11 @@ class EmptyTimeSeriesRDDSpec extends TimeSeriesSuite {
       assertIdentical(tsrdd2, tsrdd2.merge(tsrdd))
       assertIdentical(tsrdd2, tsrdd.merge(tsrdd2))
 
-      // Empty table window join non-empty table
-      for (summarizer <- summarizers) {
-        assertEmpty(tsrdd.summarizeWindows(Windows.pastAbsoluteTime("100ns"), summarizer))
-        assertEmpty(tsrdd.summarizeWindows(Windows.pastAbsoluteTime("100ns"), summarizer, key = Seq("id")))
-
-        assertEmpty(tsrdd.summarizeWindows(Windows.pastAbsoluteTime("100ns"), summarizer, otherRdd = tsrdd2))
-        assertEmpty(
-          tsrdd.summarizeWindows(
-            Windows.pastAbsoluteTime("100ns"), summarizer, key = Seq("id"), otherRdd = tsrdd2
-          )
-        )
-      }
-
       // Empty table self window with overlappable
       for (summarizer <- overlappableSummarizers) {
         assertEmpty(tsrdd.summarizeWindows(Windows.pastAbsoluteTime("100ns"), summarizer))
         assertEmpty(tsrdd.summarizeWindows(Windows.pastAbsoluteTime("100ns"), summarizer, key = Seq("id")))
       }
-
-      // Non-empty table window join empty table.
-      assertIdentical(
-        tsrdd2.summarizeWindows(
-          Windows.pastAbsoluteTime("100ns"), Summarizers.count(), otherRdd = tsrdd
-        ),
-        tsrdd2.addColumns("count" -> LongType -> { _ => 0L })
-      )
-
-      assertIdentical(
-        tsrdd2.summarizeWindows(
-          Windows.pastAbsoluteTime("100ns"), Summarizers.count(), key = Seq("id"), otherRdd = tsrdd
-        ),
-        tsrdd2.addColumns("count" -> LongType -> { _ => 0L })
-      )
     }
   }
 }

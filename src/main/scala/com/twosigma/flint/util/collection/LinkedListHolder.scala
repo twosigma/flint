@@ -45,4 +45,13 @@ private[flint] class LinkedListHolder[V](l: JLinkedList[V]) {
     }
     result
   }
+
+  def foldRight[U](u: U)(op: (U, V) => U): U = {
+    var result = u
+    val iter = l.descendingIterator()
+    while (iter.hasNext) {
+      result = op(result, iter.next())
+    }
+    result
+  }
 }

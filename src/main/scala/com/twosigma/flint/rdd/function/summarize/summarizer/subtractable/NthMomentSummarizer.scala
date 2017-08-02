@@ -64,8 +64,7 @@ case class NthMomentSummarizer(moment: Int)
       u1
     } else {
       val newCount = u1.count + u2.count
-      u2.nthMoment.subtract(u1.nthMoment)
-      val delta = u2.nthMoment.value
+      val delta = u2.nthMoment.value - u1.nthMoment.value
 
       u1.nthMoment.add(u2.count * delta / newCount)
       u1.count = newCount

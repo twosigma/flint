@@ -151,20 +151,17 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
   }
 
   it should "pass summarizer property test" in {
-    summarizerPropertyTest(AllProperties)(Summarizers.exponentialSmoothing(
-      xColumn = "x1",
-      timestampsToPeriods = (a, b) => (b - a) / 100.0,
-      exponentialSmoothingType = "current"
-    ))
-    summarizerPropertyTest(AllProperties)(Summarizers.exponentialSmoothing(
-      xColumn = "x2",
-      timestampsToPeriods = (a, b) => (b - a) / 100.0,
-      exponentialSmoothingType = "previous"
-    ))
-    summarizerPropertyTest(AllProperties)(Summarizers.exponentialSmoothing(
-      xColumn = "x3",
-      timestampsToPeriods = (a, b) => (b - a) / 100.0,
-      exponentialSmoothingType = "linear"
-    ))
+    val primingPeriods = Seq(0.0, 1.0)
+    val exponentialSmoothingTypes = Seq("current", "previous", "linear")
+    val exponentialSmoothingConventions = Seq("core", "convolution")
+    for (pp <- primingPeriods; est <- exponentialSmoothingTypes; esc <- exponentialSmoothingConventions) {
+      summarizerPropertyTest(AllProperties)(Summarizers.exponentialSmoothing(
+        xColumn = "x1",
+        timestampsToPeriods = (a, b) => (b - a) / 100.0,
+        primingPeriods = pp,
+        exponentialSmoothingType = est,
+        exponentialSmoothingConvention = esc
+      ))
+    }
   }
 }

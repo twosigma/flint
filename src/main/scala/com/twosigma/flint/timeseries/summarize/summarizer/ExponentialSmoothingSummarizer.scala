@@ -78,7 +78,7 @@ case class ExponentialSmoothingSummarizer(
   timestampsToPeriods: (Long, Long) => Double,
   exponentialSmoothingType: ExponentialSmoothingType,
   exponentialSmoothingConvention: ExponentialSmoothingConvention
-) extends Summarizer with FilterNullInput {
+) extends FlippableSummarizer with FilterNullInput {
   private val Sequence(Seq(xColumn, timeColumn)) = requiredColumns
   private val xColumnId = inputSchema.fieldIndex(xColumn)
   private val timeColumnId = inputSchema.fieldIndex(timeColumn)

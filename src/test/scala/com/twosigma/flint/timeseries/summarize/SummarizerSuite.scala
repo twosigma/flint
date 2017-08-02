@@ -188,6 +188,47 @@ class SummarizerSuite extends TimeSeriesSuite {
     override def toString: String = "LeftIdentityProperty"
   }
 
+  // Check that a + b does not modify b
+  // This invariant is necessary for Flipper
+  class ImmutableRightMergeProperty extends SummarizerProperty {
+    override def test(
+      timeSeriesRdd: TimeSeriesRDD,
+      summarizerFactory: SummarizerFactory
+    ): Unit = {
+      val summarizer = summarizerFactory.apply(timeSeriesRdd.schema)
+      val rows = timeSeriesRdd.toDF.queryExecution.toRdd.map(_.copy).take(100)
+      val (aRows, bRows) = rows.splitAt(50)
+      var a = summarizer.zero()
+      var bMerged = summarizer.zero()
+      var bUnmerged = summarizer.zero()
+      aRows.foreach { row =>
+        a = summarizer.add(a, row)
+      }
+      bRows.foreach { row =>
+        bMerged = summarizer.add(bMerged, row)
+        bUnmerged = summarizer.add(bUnmerged, row)
+      }
+      val toExternalRow = CatalystTypeConvertersWrapper.toScalaRowConverter(
+        summarizer.outputSchema
+      )
+      summarizer.merge(a, bMerged)
+
+      assertAlmostEquals(
+        toExternalRow(summarizer.render(bMerged)),
+        toExternalRow(summarizer.render(bUnmerged))
+      )
+
+      summarizer.merge(summarizer.zero(), bMerged)
+
+      assertAlmostEquals(
+        toExternalRow(summarizer.render(bMerged)),
+        toExternalRow(summarizer.render(bUnmerged))
+      )
+    }
+
+    override def toString: String = "ImmutableRightMergeProperty"
+  }
+
   // Check if (a + b) + c - a = b + c
   class LeftSubtractableProperty extends SummarizerProperty {
     override def test(
@@ -340,7 +381,8 @@ class SummarizerSuite extends TimeSeriesSuite {
     new AssociativeLawProperty,
     new RightIdentityProperty,
     new LeftIdentityProperty,
-    new IdentityProperty
+    new IdentityProperty,
+    new ImmutableRightMergeProperty
   )
 
   lazy val AllPropertiesAndSubtractable: Seq[SummarizerProperty] = AllProperties ++ Seq(

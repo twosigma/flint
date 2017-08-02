@@ -23,7 +23,7 @@ import scala.reflect.ClassTag
  * Get the k largest elements defined by order
  */
 case class ExtremesSummarizer[T](val k: Int, implicit val tag: ClassTag[T], ordering: Ordering[T])
-  extends Summarizer[T, PriorityQueue[T], Array[T]] {
+  extends FlippableSummarizer[T, PriorityQueue[T], Array[T]] {
 
   // To find the k largest, we use a min heap, so the order needs to be reversed.
   override def zero(): PriorityQueue[T] = PriorityQueue.empty(ordering.reverse)

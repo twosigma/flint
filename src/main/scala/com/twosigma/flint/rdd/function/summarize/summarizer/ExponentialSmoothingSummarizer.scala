@@ -71,7 +71,7 @@ case class ExponentialSmoothingSummarizer(
   timestampsToPeriods: (Long, Long) => Double,
   exponentialSmoothingType: ExponentialSmoothingType,
   exponentialSmoothingConvention: ExponentialSmoothingConvention
-) extends Summarizer[SmoothingRow, ExponentialSmoothingState, ExponentialSmoothingOutput] {
+) extends FlippableSummarizer[SmoothingRow, ExponentialSmoothingState, ExponentialSmoothingOutput] {
   private val logDecayPerPeriod = math.log(1.0 - alpha)
 
   @inline

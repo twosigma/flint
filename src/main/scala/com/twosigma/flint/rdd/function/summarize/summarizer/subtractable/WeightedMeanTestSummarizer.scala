@@ -99,8 +99,7 @@ case class WeightedMeanTestSummarizer()
     } else if (u2.count == 0L) {
       u1
     } else {
-      u2.mean.subtract(u1.mean)
-      val delta = u2.mean.value
+      val delta = u2.mean.value - u1.mean.value
       val oldSumWeight = u1.sumWeight.value
 
       u1.sumWeight.add(u2.sumWeight)

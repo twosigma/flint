@@ -40,10 +40,23 @@ class LinkedListHolderSpec extends FlatSpec {
 
   it should "foldLeft correctly" in {
     import com.twosigma.flint.util.collection.Implicits._
-    val l = new JLinkedList[Int]()
-    assert(l.foldLeft(1)(_ + _) == 1)
-    val n = 10
-    l.addAll((1 to n).asJava)
-    assert(l.foldLeft(0)(_ + _) == 55)
+    val l = new JLinkedList[Char]()
+    assert(l.foldLeft("")(_ + _) == "")
+    l.add('a')
+    l.add('b')
+    l.add('c')
+    l.add('d')
+    assert(l.foldLeft("")(_ + _) == "abcd")
+  }
+
+  it should "foldRight correctly" in {
+    import com.twosigma.flint.util.collection.Implicits._
+    val l = new JLinkedList[Char]()
+    assert(l.foldRight("")(_ + _) == "")
+    l.add('a')
+    l.add('b')
+    l.add('c')
+    l.add('d')
+    assert(l.foldRight("")(_ + _) == "dcba")
   }
 }

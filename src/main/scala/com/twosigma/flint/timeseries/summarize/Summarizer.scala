@@ -19,7 +19,7 @@ package com.twosigma.flint.timeseries.summarize
 import scala.reflect.runtime.universe.{ TypeTag, typeTag }
 import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.{ OverlappableSummarizer => OOverlappableSummarizer }
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ LeftSubtractableSummarizer => OLeftSubtractableSummarizer, LeftSubtractableOverlappableSummarizer => OLeftSubtractableOverlappableSummarizer }
-import com.twosigma.flint.rdd.function.summarize.summarizer.{ Summarizer => OSummarizer }
+import com.twosigma.flint.rdd.function.summarize.summarizer.{ FlippableSummarizer => OFlippableSummarizer, Summarizer => OSummarizer }
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.summarizer.PredicateSummarizerFactory
 import com.twosigma.flint.timeseries.window.TimeWindow
@@ -217,6 +217,11 @@ trait Summarizer extends OSummarizer[InternalRow, Any, InternalRow] with InputVa
   final override def render(u: Any): InternalRow = fromV(summarizer.render(toU(u)))
 
   final override def close(u: Any): Unit = summarizer.close(toU(u))
+}
+
+trait FlippableSummarizer extends Summarizer with OFlippableSummarizer[InternalRow, Any, InternalRow] {
+
+  override val summarizer: OFlippableSummarizer[T, U, V]
 }
 
 trait LeftSubtractableSummarizer extends Summarizer with OLeftSubtractableSummarizer[InternalRow, Any, InternalRow] {
