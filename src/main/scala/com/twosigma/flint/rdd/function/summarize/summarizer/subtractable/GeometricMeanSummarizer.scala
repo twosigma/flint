@@ -23,9 +23,9 @@ class GeometricMeanSummarizer extends ProductSummarizer {
     } else if (u.zeroCount > 0L) {
       0.0
     } else if (u.isPositive) {
-      Math.exp(u.sumOfLogs.getValue() / u.count)
+      Math.exp(u.sumOfLogs.value / u.count)
     } else {
-      -Math.exp(u.sumOfLogs.getValue() / u.count)
+      -Math.exp(u.sumOfLogs.value / u.count)
     }
   }
 }

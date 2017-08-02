@@ -24,7 +24,7 @@ case class NthMomentState(var count: Long, nthMoment: Kahan)
 case class NthMomentSummarizer(moment: Int)
   extends LeftSubtractableSummarizer[Double, NthMomentState, Double] {
   require(moment >= 0)
-  override def zero(): NthMomentState = NthMomentState(0, Kahan())
+  override def zero(): NthMomentState = NthMomentState(0, new Kahan())
 
   override def add(u: NthMomentState, t: Double): NthMomentState = {
     val newCount = u.count + 1L
@@ -33,7 +33,7 @@ case class NthMomentSummarizer(moment: Int)
     if (newCount == 1L) {
       curMoment.add(data)
     } else {
-      val delta = data - curMoment.getValue()
+      val delta = data - curMoment.value
       curMoment.add(delta / newCount)
     }
     u.count = newCount
@@ -49,7 +49,7 @@ case class NthMomentSummarizer(moment: Int)
       val newCount = u.count - 1L
       val curMoment = u.nthMoment
       val data = scala.math.pow(t, moment.toDouble)
-      val delta = data - curMoment.getValue()
+      val delta = data - curMoment.value
       curMoment.add(-delta / newCount)
       u.count = newCount
 
@@ -64,7 +64,8 @@ case class NthMomentSummarizer(moment: Int)
       u1
     } else {
       val newCount = u1.count + u2.count
-      val delta = u2.nthMoment.subtract(u1.nthMoment)
+      u2.nthMoment.subtract(u1.nthMoment)
+      val delta = u2.nthMoment.value
 
       u1.nthMoment.add(u2.count * delta / newCount)
       u1.count = newCount
@@ -73,5 +74,5 @@ case class NthMomentSummarizer(moment: Int)
     }
   }
 
-  override def render(u: NthMomentState): Double = u.nthMoment.getValue()
+  override def render(u: NthMomentState): Double = u.nthMoment.value
 }

@@ -45,7 +45,7 @@ case class CorrelationSummarizer()
 
   override def zero(): CorrelationState = CorrelationState(
     0,
-    Kahan(),
+    new Kahan(),
     meanSummarizer.zero(),
     meanSummarizer.zero(),
     varianceSummarizer.zero(),
@@ -126,7 +126,7 @@ case class CorrelationSummarizer()
     if (u.count == 0L) {
       CorrelationOutput(Double.NaN, Double.NaN, Double.NaN, 0L)
     } else {
-      val covariance = u.covariance.getValue() / u.count
+      val covariance = u.covariance.value / u.count
       val xDev = sqrt(varianceSummarizer.render(u.xVariance).nthCentralMoment(2))
       val yDev = sqrt(varianceSummarizer.render(u.yVariance).nthCentralMoment(2))
       // correlation should be in [-1.0, 1.0] interval

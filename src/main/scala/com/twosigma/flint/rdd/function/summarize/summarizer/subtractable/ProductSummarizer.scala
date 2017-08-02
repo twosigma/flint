@@ -41,7 +41,7 @@ case class ProductState(
  * with the sum of logs approach as we cannot take the log of a negative number.
  */
 class ProductSummarizer extends LeftSubtractableSummarizer[Double, ProductState, Double] {
-  def zero(): ProductState = ProductState(0L, 0L, true, Kahan())
+  def zero(): ProductState = ProductState(0L, 0L, true, new Kahan())
 
   def add(u: ProductState, data: Double): ProductState = {
     if (data == 0.0) {
@@ -84,9 +84,9 @@ class ProductSummarizer extends LeftSubtractableSummarizer[Double, ProductState,
     } else if (u.zeroCount > 0L) {
       0.0
     } else if (u.isPositive) {
-      Math.exp(u.sumOfLogs.getValue())
+      Math.exp(u.sumOfLogs.value)
     } else {
-      -Math.exp(u.sumOfLogs.getValue())
+      -Math.exp(u.sumOfLogs.value)
     }
   }
 }

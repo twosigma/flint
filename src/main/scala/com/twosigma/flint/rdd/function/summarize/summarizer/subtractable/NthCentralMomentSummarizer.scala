@@ -27,7 +27,7 @@ case class NthCentralMomentState(
   moments: Array[Kahan]
 )
 
-case class NthCentralMomentOutput(val count: Long, val moments: Array[Double]) {
+case class NthCentralMomentOutput(count: Long, moments: Array[Double]) {
 
   def nthCentralMoment(moment: Int): Double = moment match {
     case 1 => 0
@@ -36,7 +36,7 @@ case class NthCentralMomentOutput(val count: Long, val moments: Array[Double]) {
 }
 
 // This summarizer uses mutable state
-case class NthCentralMomentSummarizer(val moment: Int)
+case class NthCentralMomentSummarizer(moment: Int)
   extends LeftSubtractableSummarizer[Double, NthCentralMomentState, NthCentralMomentOutput] {
   require(moment > 0)
   val binomials: Array[Array[Double]] = {
@@ -52,14 +52,14 @@ case class NthCentralMomentSummarizer(val moment: Int)
   }
 
   override def zero(): NthCentralMomentState =
-    NthCentralMomentState(0, Kahan(), Array.fill(moment - 1)(Kahan()))
+    NthCentralMomentState(0, new Kahan(), Array.fill(moment - 1)(new Kahan()))
 
   override def add(
     u: NthCentralMomentState,
     data: Double
   ): NthCentralMomentState = {
-    val prevMean = u.mean.getValue()
-    val prevMoments = u.moments.map(_.getValue())
+    val prevMean = u.mean.value
+    val prevMoments = u.moments.map(_.value)
 
     u.count += 1L
     if (u.count == 1L) {
@@ -102,7 +102,7 @@ case class NthCentralMomentSummarizer(val moment: Int)
     if (u.count == 1L) {
       zero()
     } else {
-      val prevMean = u.mean.getValue()
+      val prevMean = u.mean.value
       val newMean = (prevMean * u.count - data) / (u.count - 1L)
 
       val delta = data - newMean
@@ -122,7 +122,7 @@ case class NthCentralMomentSummarizer(val moment: Int)
         for (k <- 1 to p - 2) {
           deltaOverCountRunningProduct *= deltaOverCount
           u.moments(p - 2).add(
-            -binomials(p - 2)(k - 1) * u.moments(p - k - 2).getValue() * deltaOverCountRunningProduct
+            -binomials(p - 2)(k - 1) * u.moments(p - k - 2).value * deltaOverCountRunningProduct
           )
         }
 
@@ -144,9 +144,9 @@ case class NthCentralMomentSummarizer(val moment: Int)
       u1
     } else {
       val newCount = u1.count + u2.count
-      val meanDelta = u2.mean.getValue() - u1.mean.getValue()
+      val meanDelta = u2.mean.value - u1.mean.value
 
-      val prevMoments1 = u1.moments.map(_.getValue())
+      val prevMoments1 = u1.moments.map(_.value)
 
       u1.mean.add(u2.count * meanDelta / newCount)
 
@@ -176,7 +176,7 @@ case class NthCentralMomentSummarizer(val moment: Int)
         .add(
           binomials(p - 2)(k - 1) *
             (pow(-u2.count.toDouble / newCount, k.toDouble) * prevMoments1(p - k - 2) +
-              pow(u1.count.toDouble / newCount, k.toDouble) * u2.moments(p - k - 2).getValue()) *
+              pow(u1.count.toDouble / newCount, k.toDouble) * u2.moments(p - k - 2).value) *
               pow(meanDelta, k.toDouble)
         )
     }
@@ -189,7 +189,7 @@ case class NthCentralMomentSummarizer(val moment: Int)
   }
 
   override def render(u: NthCentralMomentState): NthCentralMomentOutput = {
-    val moments = u.moments.map(_.getValue() / u.count)
+    val moments = u.moments.map(_.value / u.count)
     NthCentralMomentOutput(u.count, moments)
   }
 }

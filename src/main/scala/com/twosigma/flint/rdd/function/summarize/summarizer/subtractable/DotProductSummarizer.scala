@@ -18,10 +18,23 @@ package com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 
 import com.twosigma.flint.math.Kahan
 
-class DotProductSummarizer extends LeftSubtractableSummarizer[(Double, Double), Kahan, Double] {
-  def zero(): Kahan = Kahan()
-  def add(u: Kahan, data: (Double, Double)): Kahan = u.add(data._1 * data._2)
-  def subtract(u: Kahan, data: (Double, Double)): Kahan = u.add(-data._1 * data._2)
-  def merge(u1: Kahan, u2: Kahan): Kahan = u1.add(u2)
-  def render(u: Kahan): Double = u.getValue()
+class DotProductSummarizer
+  extends LeftSubtractableSummarizer[(Double, Double), Kahan, Double] {
+
+  def zero(): Kahan = new Kahan()
+
+  def add(u: Kahan, data: (Double, Double)): Kahan = {
+    u.add(data._1 * data._2)
+    u
+  }
+  def subtract(u: Kahan, data: (Double, Double)): Kahan = {
+    u.add(-data._1 * data._2)
+    u
+  }
+  def merge(u1: Kahan, u2: Kahan): Kahan = {
+    u1.add(u2)
+    u1
+  }
+
+  def render(u: Kahan): Double = u.value
 }
