@@ -37,6 +37,7 @@ object ExponentialSmoothingConvention extends Enumeration {
   type ExponentialSmoothingConvention = Value
   val Core = Value("core")
   val Convolution = Value("convolution")
+  val Legacy = Value("legacy")
 }
 
 object ExponentialSmoothingSummarizer {

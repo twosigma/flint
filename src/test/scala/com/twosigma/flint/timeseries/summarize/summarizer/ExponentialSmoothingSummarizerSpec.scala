@@ -53,8 +53,7 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
   private def test(
     primingPeriods: Double,
     exponentialSmoothingType: String,
-    exponentialSmoothingConvention: String,
-    conventionColumnName: String
+    exponentialSmoothingConvention: String
   ): Unit = {
     init
     val results = timeSeriesRdd.addSummaryColumns(Summarizers.exponentialSmoothing(
@@ -68,7 +67,7 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
 
     results.rdd.collect().foreach{ row =>
       val predVal = row.getAs[Double](ExponentialSmoothingSummarizer.esColumn)
-      val trueVal = row.getAs[Double](s"expected_${conventionColumnName}_$exponentialSmoothingType")
+      val trueVal = row.getAs[Double](s"expected_${exponentialSmoothingConvention}_$exponentialSmoothingType")
       if (predVal.isNaN) {
         assert(trueVal.isNaN)
       } else {
@@ -90,43 +89,60 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
     })
   }
 
+  it should "decay using half life correctly" in {
+    init
+    val results = timeSeriesRdd.addSummaryColumns(Summarizers.emaHalfLife(
+      xColumn = "price",
+      halfLifeDuration = "100ns"
+    ))
+    results.rdd.collect().foreach(row => {
+      val predVal = row.getAs[Double](ExponentialSmoothingSummarizer.esColumn)
+      val trueVal = row.getAs[Double]("expected_legacy_previous")
+      if (predVal.isNaN) {
+        assert(trueVal.isNaN)
+      } else {
+        assert(predVal === trueVal)
+      }
+    })
+  }
+
   it should "interpolate using previous point core correctly" in {
-    test(0, "previous", "core", "core")
+    test(0, "previous", "core")
   }
 
   it should "interpolate using current point core correctly" in {
-    test(0, "current", "core", "core")
+    test(0, "current", "core")
   }
 
   it should "interpolate linearly using core correctly" in {
-    test(0, "linear", "core", "core")
+    test(0, "linear", "core")
   }
 
   it should "interpolate using previous point convolution correctly" in {
-    test(0, "previous", "convolution", "convolution")
+    test(0, "previous", "convolution")
   }
 
   it should "interpolate using current point convolution correctly" in {
-    test(0, "current", "convolution", "convolution")
+    test(0, "current", "convolution")
   }
 
   it should "interpolate linearly using convolution correctly" in {
-    test(0, "linear", "convolution", "convolution")
+    test(0, "linear", "convolution")
   }
 
   it should "interpolate using previous point legacy correctly" in {
-    // We keep primingPeriods set to 1 (the default) to match injecting a point at time 0.
-    test(1, "previous", "convolution", "legacy")
+    // primingPeriods should be ignored for the legacy convention.
+    test(1, "previous", "legacy")
   }
 
   it should "interpolate using current point legacy correctly" in {
-    // We keep primingPeriods set to 1 (the default) to match injecting a point at time 0.
-    test(1, "current", "convolution", "legacy")
+    // primingPeriods should be ignored for the legacy convention.
+    test(2, "current", "legacy")
   }
 
   it should "interpolate linearly using legacy correctly" in {
-    // We keep primingPeriods set to 1 (the default) to match injecting a point at time 0.
-    test(1, "linear", "convolution", "legacy")
+    // primingPeriods should be ignored for the legacy convention.
+    test(3, "linear", "legacy")
   }
 
   it should "smooth sin correctly" in {

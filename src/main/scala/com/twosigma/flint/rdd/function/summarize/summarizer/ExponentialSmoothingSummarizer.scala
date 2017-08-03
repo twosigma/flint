@@ -147,9 +147,17 @@ case class ExponentialSmoothingSummarizer(
 
   override def render(u: ExponentialSmoothingState): ExponentialSmoothingOutput = {
     if (u.count > 0L) {
+      // For legacy, we inject a point at time 0 instead of utilizing the primingPeriods parameter.
+      val actualPrimingPeriods = exponentialSmoothingConvention match {
+        case ExponentialSmoothingConvention.Legacy =>
+          timestampsToPeriods(0L, u.firstRow.get.time)
+        case _ =>
+          primingPeriods
+      }
+
       // Account for priming periods
-      val primedPrimaryESValue = interpolateForInterval(0.0, u.firstRow.get.x, primingPeriods)
-      val primedAuxiliaryESValue = interpolateForInterval(0.0, 1.0, primingPeriods)
+      val primedPrimaryESValue = interpolateForInterval(0.0, u.firstRow.get.x, actualPrimingPeriods)
+      val primedAuxiliaryESValue = interpolateForInterval(0.0, 1.0, actualPrimingPeriods)
       val periods = timestampsToPeriods(u.firstRow.get.time, u.prevRow.get.time) max 0
       val finalPrimaryESValue = decayForInterval(primedPrimaryESValue, periods) + u.primaryESValue
       val finalAuxiliaryESValue = decayForInterval(primedAuxiliaryESValue, periods) + u.auxiliaryESValue
@@ -159,6 +167,8 @@ case class ExponentialSmoothingSummarizer(
           ExponentialSmoothingOutput(finalPrimaryESValue)
         case ExponentialSmoothingConvention.Core =>
           ExponentialSmoothingOutput(finalPrimaryESValue / finalAuxiliaryESValue)
+        case ExponentialSmoothingConvention.Legacy =>
+          ExponentialSmoothingOutput(finalPrimaryESValue)
       }
     } else {
       ExponentialSmoothingOutput(Double.NaN)
