@@ -966,6 +966,12 @@ def test_summary_linearRegression(pyspark, summarizers, tests_utils, price, fore
     joined = price.leftJoin(forecast, key="id")
     result = joined.summarize(summarizers.linear_regression("price", ["forecast"])).collect()
 
+def test_summary_ema_halflife(pyspark, summarizers, tests_utils, price, forecast):
+    """
+    Test the python binding for ema_halflife. This does NOT test the correctness of the ema.
+    """
+    result = price.summarize(summarizers.ema_halflife("price", "1d")).collect()
+
 def test_summary_max(pyspark, summarizers, tests_utils, forecast):
     expected_pdf = make_pdf([
         (0, 6.4,)

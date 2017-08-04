@@ -66,7 +66,7 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
     ))
 
     results.rdd.collect().foreach{ row =>
-      val predVal = row.getAs[Double](ExponentialSmoothingSummarizer.esColumn)
+      val predVal = row.getAs[Double]("price_ema")
       val trueVal = row.getAs[Double](s"expected_${exponentialSmoothingConvention}_$exponentialSmoothingType")
       if (predVal.isNaN) {
         assert(trueVal.isNaN)
@@ -83,7 +83,7 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
       timestampsToPeriods = (a, b) => (b - a) / 100.0
     ), Seq("id"))
     results.rdd.collect().foreach(row => {
-      val predVal = row.getAs[Double](ExponentialSmoothingSummarizer.esColumn)
+      val predVal = row.getAs[Double]("price_ema")
       val trueVal = row.getAs[Double]("expected")
       assert(predVal === trueVal)
     })
@@ -96,7 +96,7 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
       halfLifeDuration = "100ns"
     ))
     results.rdd.collect().foreach(row => {
-      val predVal = row.getAs[Double](ExponentialSmoothingSummarizer.esColumn)
+      val predVal = row.getAs[Double]("price_ema")
       val trueVal = row.getAs[Double]("expected_legacy_previous")
       if (predVal.isNaN) {
         assert(trueVal.isNaN)
@@ -160,7 +160,7 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
       timestampsToPeriods = nanosToDays
     ), Seq("id"))
     rdd.rdd.collect().foreach(row => {
-      val predVal = row.getAs[Double](ExponentialSmoothingSummarizer.esColumn)
+      val predVal = row.getAs[Double]("value_ema")
       val trueVal = row.getAs[Double]("expected")
       assert(predVal === trueVal)
     })

@@ -123,7 +123,7 @@ case class ExponentialSmoothingSummarizer(
     } else if (u2.count == 0L) {
       u1
     } else {
-      require(u1.prevRow.get.time < u2.prevRow.get.time)
+      require(u1.prevRow.get.time <= u2.prevRow.get.time)
       val newU = zero()
       val gapPeriods = timestampsToPeriods(u1.prevRow.get.time, u2.firstRow.get.time)
       val u2Periods = timestampsToPeriods(u2.firstRow.get.time, u2.prevRow.get.time)

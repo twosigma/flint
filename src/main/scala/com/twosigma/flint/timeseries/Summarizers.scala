@@ -411,6 +411,11 @@ object Summarizers {
    * <pre><code>(EMA (X))<sub>i</sub> = (EMA<sub>p</sub> (X))<sub>i</sub> </code>
    * </pre>
    *
+   * See doc/ema.md for details on different EMA implementations.
+   *
+   * The output schema is:
+   *   - "<xColumn>_ema": [[DoubleType]], the exponential moving average of the rows.
+   *
    * @param xColumn                         Name of column containing series to be smoothed
    * @param timeColumn                      Name of column containing the timestamp
    * @param alpha                           The proportion by which the average will decay over one period
@@ -477,6 +482,8 @@ object Summarizers {
    * <pre><code>(EMA (X))<sub>i</sub> = (EMA<sub>p</sub> (X))<sub>i</sub> / (EMA<sub>a</sub> (X))<sub>i</sub> </code>
    * </pre>
    *
+   * See doc/ema.md for details on different EMA implementations.
+   *
    * @param xColumn              Name of column containing series to compute the EMA
    * @param timeColumn           Name of column containing the timestamp
    * @param alpha                Parameter setting the decay rate of the average
@@ -507,6 +514,10 @@ object Summarizers {
    * previous in-house implementation.
    *
    * See exponentialSmoothing for an explanation of how the EMA is calculated.
+   * See doc/ema.md for details on different EMA implementations.
+   *
+   * The output schema is:
+   *   - "<xColumn>_ema": [[DoubleType]], the exponential moving average of the rows.
    *
    * @param xColumn                         Name of column containing series to compute the EMA
    * @param timeColumn                      Name of column containing the timestamp

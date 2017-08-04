@@ -38,6 +38,7 @@ __all__ = [
     'count',
     'covariance',
     'dot_product',
+    'ema_halflife',
     'geometric_mean',
     'kurtosis',
     'linear_regression',
@@ -190,6 +191,31 @@ def dot_product(x_column, y_column):
     :type y_column: str
     '''
     return SummarizerFactory('dotProduct', x_column, y_column)
+
+
+def ema_halflife(column, halflife_duration, time_column='time', ema_type='previous', ema_convention='legacy'):
+    '''Calculates the exponential moving average given a specified half life. Supports the same default behaviors
+    as the previous in-house implementation.
+
+    See doc/ema.md for details on different EMA implementations.
+
+    **Adds columns:**
+
+    <column>_ema (*float*)
+        The exponential moving average of the column
+
+    :param column: name of the column to be summarized
+    :type column: str
+    :param halflife_duration: string representing duration of the half life
+    :type halflife_duration: str
+    :param time_column: Name of the time column.
+    :type time_column: str
+    :param ema_type: the interpolation type of the ema - options are 'previous', 'current', and 'linear'
+    :type: ema_type: str
+    :param ema_convention: the convention used to compute the final output - options are 'convolution', 'core', and
+        'legacy'
+    '''
+    return SummarizerFactory('emaHalfLife', column, halflife_duration, time_column, ema_type, ema_convention)
 
 
 def geometric_mean(column):

@@ -40,14 +40,6 @@ object ExponentialSmoothingConvention extends Enumeration {
   val Legacy = Value("legacy")
 }
 
-object ExponentialSmoothingSummarizer {
-  val esColumn: String = "exponentialSmoothing"
-
-  val outputSchema = Schema.of(
-    esColumn -> DoubleType
-  )
-}
-
 case class ExponentialSmoothingSummarizerFactory(
   xColumn: String,
   timeColumn: String,
@@ -98,12 +90,12 @@ case class ExponentialSmoothingSummarizer(
     exponentialSmoothingConvention
   )
 
+  override val schema: StructType = Schema.of(s"${xColumn}_ema" -> DoubleType)
+
   override def toT(r: InternalRow): SmoothingRow = SmoothingRow(
     time = r.getLong(timeColumnId),
     x = xExtractor(r)
   )
-
-  override val schema = ExponentialSmoothingSummarizer.outputSchema
 
   override def fromV(o: ExponentialSmoothingOutput): GenericInternalRow = {
     new GenericInternalRow(Array[Any](

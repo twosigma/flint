@@ -97,7 +97,12 @@ within about 20 rows.
 
 ## Flint implementation
 
-There are currently two EMA implementations we are exploring in Flint, which will be referred to as EWMA and
+### EMA Half Life
+
+This implementation mimics the in-house behavior. It takes in a specified half life, as well as the convention and type
+mentioned above.
+
+There are also currently two new EMA implementations we are exploring in Flint, which will be referred to as EWMA and
 ExponentialSmoothing. EWMA uses the adjusted weightings similar to pandas, while ExponentialSmoothing does not
 (`adjust=False` in pandas). However, both allow for variable time periods just as in the in-house implementation.
 
@@ -145,9 +150,10 @@ incorporate those changes to ExponentialSmoothing.
 
 It is possible there are some slight issues in the in-house implementation (`CORE` and `CONVOLUTION` both don't include
 the first row, `PREVIOUS_POINT` doesn't include the current row) though it is unclear if those are bugs or features.
+Because EMA Half Life matches this implementation exactly, the same issues exist.
 
-In order to mimic the behavior of the in-house implementation with ExponentialSmoothing (including the aforementioned
-issues), one can specify the proper interpolation type and set `primingPeriods` to the following:
+Alternatively, one can mimic the behavior of the in-house implementation with ExponentialSmoothing (including the
+aforementioned issues) by specifying the proper interpolation type and setting `primingPeriods` to the following:
 
 `LEGACY`: `primingPeriods` = The number of periods from time 0 to the first row.
 
