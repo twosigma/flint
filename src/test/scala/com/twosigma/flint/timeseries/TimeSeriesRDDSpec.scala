@@ -542,6 +542,13 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
     assert(result.collect().deep == expectedData.map(_._2).deep)
   }
 
+  it should "`deleteColumns` if there are columns with a period in it's name" in {
+    val extendedTsRdd = volTSRdd.addColumns("column.name.with.period" -> IntegerType -> {_ => 1})
+    val result = extendedTsRdd.deleteColumns("volume")
+
+    assert(result.schema.fields.length == 3)
+  }
+
   it should "`lookBackwardClock` correctly" in {
     val result = priceTSRdd.lookBackwardClock("1000ns")
     val expectedData = priceTSRdd.collect().map {

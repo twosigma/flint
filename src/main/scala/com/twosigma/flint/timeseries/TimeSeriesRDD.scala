@@ -1233,9 +1233,7 @@ class TimeSeriesRDDImpl private[timeseries] (
   def deleteColumns(columns: String*): TimeSeriesRDD = withUnshuffledDataFrame {
     require(!columns.contains(timeColumnName), "You can't delete the time column!")
 
-    val columnSet = columns.toSet
-    val remainingColumns = schema.fields.map(_.name).filterNot(name => columnSet.contains(name))
-    dataStore.dataFrame.select(remainingColumns.head, remainingColumns.tail: _*)
+    dataStore.dataFrame.drop(columns: _*)
   }
 
   def renameColumns(fromTo: (String, String)*): TimeSeriesRDD = withUnshuffledDataFrame {
