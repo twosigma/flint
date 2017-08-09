@@ -720,6 +720,12 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                 fn, t = udf._fn_and_type(udf_column)
                 column_indices = udf_column.column_indices
 
+                for index in column_indices:
+                    if index is None:
+                        raise ValueError(
+                            'Column passed to the udf function must be a column in the DataFrame, '
+                            'i.e, df[col]. Other types of Column are not supported.')
+
                 def _fn(arrow_bytes):
                     reader = pa.RecordBatchFileReader(pa.BufferReader(arrow_bytes))
                     assert reader.num_record_batches == 1, (

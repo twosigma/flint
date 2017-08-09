@@ -16,6 +16,7 @@
 
 import functools
 
+import py4j
 import pyspark
 from pyspark import SparkContext
 from pyspark.sql.functions import UserDefinedFunction
@@ -24,6 +25,8 @@ from pyspark.sql.types import StringType, DataType
 from .udf import _tuple_to_struct
 
 __all__ = ['udf']
+
+ATTRIBUTE_REFERENCE_CLS = 'org.apache.spark.sql.catalyst.expressions.AttributeReference'
 
 class FlintUserDefinedFunction(UserDefinedFunction):
     # A subclass of UserDefinedFunction with modification to the
@@ -38,6 +41,8 @@ class FlintUserDefinedFunction(UserDefinedFunction):
         # `DataFrame`, we take all columns from the `DataFrame`.  We
         # also store the column indices of input so we can pass the
         # correct args to the user function
+        sc = SparkContext._active_spark_context
+
         pyspark_cols = []
         column_indices = []
         for col in cols:
@@ -46,10 +51,25 @@ class FlintUserDefinedFunction(UserDefinedFunction):
                 column_indices.append(df.columns)
                 pyspark_cols += [df[c] for c in df.columns]
             elif isinstance(col, pyspark.sql.Column):
-                column_indices.append(col._jc.expr().name())
+                jexpr = col._jc.expr()
+                # If the column is not an attribute reference, we
+                # cannot use it's name for column indices. Instead we
+                # set column indices to be None for non attribute
+                # reference and deal with it later when column indices
+                # are used.
+                if py4j.java_gateway.is_instance_of(
+                        sc._gateway,
+                        jexpr,
+                        ATTRIBUTE_REFERENCE_CLS):
+                    column_indices.append(jexpr.name())
+                else:
+                    column_indices.append(None)
+
                 pyspark_cols.append(col)
 
-        sc = SparkContext._active_spark_context
+        print(pyspark_cols)
+        print(column_indices)
+
         udf_col = super(FlintUserDefinedFunction, self).__call__(*pyspark_cols)
         udf_col.column_indices = column_indices
 

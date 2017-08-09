@@ -660,14 +660,15 @@ def test_summarizeCycles_udf(tests_utils, vol, pyspark, F):
 
 def test_udf(flintContext, tests_utils, vol):
     from ts.flint import udf
+    import pyspark.sql.functions as F
     from pyspark.sql.types import LongType
 
     @udf(LongType())
-    def foo(v):
+    def foo(v, w):
         return v*2
 
-    result1 = vol.withColumn("volume", foo(vol['volume'])).toPandas()
-    result2 = vol.withColumn("volume", udf(lambda v: v * 2, LongType())(vol['volume'])).toPandas()
+    result1 = vol.withColumn("volume", foo(vol['volume'], F.lit(42))).toPandas()
+    result2 = vol.withColumn("volume", udf(lambda v, w: v*2, LongType())(vol['volume'], F.lit(42))).toPandas()
 
     expected_pdf1 = make_pdf([
         (1000, 7, 200,),
