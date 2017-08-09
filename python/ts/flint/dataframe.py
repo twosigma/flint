@@ -701,6 +701,15 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             import pyarrow as pa
 
             columns = summarizer
+
+            # Check if illegal columns exists
+            for col in columns.values():
+                for index in col.column_indices:
+                    if index is None:
+                        raise ValueError(
+                            'Column passed to the udf function must be a column in the DataFrame, '
+                            'i.e, df[col]. Other types of Column are not supported.')
+
             arrow_column_prefix = "__tmp_" + str(uuid.uuid4())[:8]
             required_col_names = list(set(itertools.chain(
                 *[udf._children_column_names(col) for col in columns.values()])))
@@ -719,12 +728,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                 children_names = udf._children_column_names(udf_column)
                 fn, t = udf._fn_and_type(udf_column)
                 column_indices = udf_column.column_indices
-
-                for index in column_indices:
-                    if index is None:
-                        raise ValueError(
-                            'Column passed to the udf function must be a column in the DataFrame, '
-                            'i.e, df[col]. Other types of Column are not supported.')
 
                 def _fn(arrow_bytes):
                     reader = pa.RecordBatchFileReader(pa.BufferReader(arrow_bytes))

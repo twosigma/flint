@@ -333,9 +333,6 @@ def test_py4j(flint, tests_utils, sc):
     tests_utils.assert_java_object_exists(jpkg.WaiterClient, "WaiterClient")
     tests_utils.assert_java_object_exists(jpkg.Summarizers, "Summarizers")
     tests_utils.assert_java_object_exists(jpkg.Windows, "Window")
-    tests_utils.assert_java_object_exists(jpkg.alf, "alf")
-    tests_utils.assert_java_object_exists(jpkg.alf.defaultAlfRequestsPerPartition, "alf.defaultAlfRequestsPerPartition")
-    tests_utils.assert_java_object_exists(jpkg.alf.defaultWaiterConfig, "alf.defaultWaiterConfig")
     tests_utils.assert_java_object_exists(jpkg.PartitionPreservingOperation, "PartitionPreservingOperation")
     tests_utils.assert_java_object_exists(jpkg.OrderPreservingOperation, "OrderPreservingOperation")
 
@@ -563,6 +560,7 @@ def test_summarizeCycles_udf(tests_utils, vol, pyspark, F):
     from ts.flint import udf
     from pyspark.sql.types import DoubleType, LongType
     from collections import OrderedDict
+    import pyspark.sql.functions as F
 
     weighted_vol = vol.withColumn('weight', F.lit(1))
 
@@ -1318,6 +1316,7 @@ def test_shiftTime(tests_utils, price):
     new_pdf = price.shiftTime(delta, backwards=True).toPandas()
     tests_utils.assert_same(new_pdf, expected_pdf, "backwards")
 
+
 def test_shiftTime_windows(flintContext, tests_utils, windows):
 
     def to_nanos(dt):
@@ -1354,103 +1353,6 @@ def test_shiftTime_windows(flintContext, tests_utils, windows):
     ], ['time'])
     result2 = dates.shiftTime(windows.future_trading_time('1day', 'US')).toPandas()
     tests_utils.assert_same(result2, expected2)
-
-
-# Not really human, but requires jobsystem creds and tsmoto doesn't have them.
-@pytest.mark.human
-@pytest.mark.net
-def test_addXrefColumn(flintContext, tests_utils):
-    from pyspark.sql.types import StructType, StructField, LongType, IntegerType
-    pdf = make_pdf([(1451606400000000000, 64106)], ["time", "tid"])
-    input_df = flintContext.read.pandas(pdf, StructType([StructField("time", LongType(), True), StructField("tid", IntegerType(), True)]))
-    output = input_df.addXrefColumn(('TICKER')).toPandas()
-    expected_pdf = make_pdf([(1451606400000000000, 64106, "CAB")], ["time", "tid", "TICKER"],
-                            dtypes=[np.int64, np.int32, np.str])
-    tests_utils.assert_same(output, expected_pdf)
-
-
-# Not really human, but requires jobsystem creds and tsmoto doesn't have them.
-@pytest.mark.human
-@pytest.mark.net
-def test_addTidColumn(flintContext, tests_utils):
-    input_df = flintContext.read.pandas(make_pdf([(1451606400000000000, "CAB")], ["time", "ticker"]))
-    output = input_df.addTidColumn('ticker', 'ACTIVE_3000_US').toPandas()
-
-    expected_pdf = make_pdf([(1451606400000000000, "CAB", 64106)], ["time", "ticker", "tid"],
-                            dtypes=[np.int64, np.str, np.int32])
-    tests_utils.assert_same(output, expected_pdf)
-
-
-# Not really human, but requires jobsystem creds and tsmoto doesn't have them.
-@pytest.mark.human
-@pytest.mark.net
-def test_shiftToNextClosestTradingTime(flintContext, tests_utils):
-    # 12/25/2016, 2:00:00 AM
-    input_df = flintContext.read.pandas(make_pdf([(1482649200000000000, 64106)], ["time", "id"]))
-    output = input_df.shiftToNextClosestTradingTime('US').toPandas()
-
-    # 12/27/2016 9:30:00AM ET - US stock exchanges opened on Tuesday after Christmas
-    expected_pdf = make_pdf([(1482849000000000000, 64106)], ["time", "id"])
-    tests_utils.assert_same(output, expected_pdf)
-
-
-# Not really human, but requires jobsystem creds and tsmoto doesn't have them.
-# TODO: This doesn't work with Spark 2.0 branch. Will fix this separately.
-# @pytest.mark.human
-# @pytest.mark.net
-# def test_addFutureSeriesSequenceTidColumn(flintContext, tests_utils):
-#     from pyspark.sql.types import StructType, StructField, LongType, IntegerType
-#     pdf = make_pdf([(1451606400000000000, 37261721)], ["time", "tid"])
-#     input = flintContext.read.pandas(pdf, StructType([StructField("time", LongType(), True), StructField("tid", IntegerType(), True)]))
-#     output = input.addFutureSeriesSequenceTidColumn().toPandas()
-
-#     expected_pdf = make_pdf([(1451606400000000000, 37261721, 11186134)], ["time", "tid", "futureSeriesTid"])
-#     tests_utils.assert_same(output, expected_pdf)
-
-
-# Not really human, but requires jobsystem creds and tsmoto doesn't have them.
-@pytest.mark.human
-@pytest.mark.net
-def test_read_uri(flintContext):
-    from ts.data import tsdata_http
-    uri = 'tsdata:/price/ts/golden/u.ACTIVE_3000_US'
-    begin = '20010101'
-    end = '20010201'
-    spark_df = flintContext.read.uri(uri, begin, end)
-    pandas_df = tsdata_http.load_dataframe(uri, (begin, end))
-
-    assert spark_df.count() == len(pandas_df.index)
-
-
-# Not really human, but requires jobsystem creds and tsmoto doesn't have them.
-@pytest.mark.human
-@pytest.mark.net
-def test_read_alf(flintContext):
-    from ts.data import tsdata_http
-    uri = 'tsdata:/price/ts/golden/u.ACTIVE_3000_US'
-    begin = '20010101'
-    end = '20010201'
-    spark_df = flintContext.read.alf(uri, begin, end)
-    pandas_df = tsdata_http.load_dataframe(uri, (begin, end))
-
-    assert spark_df.count() == len(pandas_df.index)
-
-
-@pytest.mark.net
-def test_read_dataframe_begin_end(sqlContext, flintContext, tests_utils):
-    test_url="hdfs:///user/tsram/spark_example_data/tsdata/price/ts/datasys/6558"
-    df = sqlContext.read.parquet(test_url)
-
-    begin = "20100101"
-    end = "20110101"
-
-    begin_nanos = tests_utils.to_nanos(begin)
-    end_nanos = tests_utils.to_nanos(end)
-
-    df = flintContext.read.dataframe(df, begin, end)
-    df2 = df.filter(df.time >= begin_nanos).filter(df.time < end_nanos)
-
-    assert(df.count() == df2.count())
 
 
 def test_uniform_clocks(sqlContext, clocks):

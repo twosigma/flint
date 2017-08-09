@@ -67,9 +67,6 @@ class FlintUserDefinedFunction(UserDefinedFunction):
 
                 pyspark_cols.append(col)
 
-        print(pyspark_cols)
-        print(column_indices)
-
         udf_col = super(FlintUserDefinedFunction, self).__call__(*pyspark_cols)
         udf_col.column_indices = column_indices
 
