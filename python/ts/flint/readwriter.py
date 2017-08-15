@@ -15,7 +15,6 @@
 #
 
 from pyspark.sql import DataFrame
-from pyspark.sql.readwriter import DataFrameReader, DataFrameWriter
 
 from . import java
 from . import utils
@@ -57,9 +56,7 @@ class TSDataFrameReader(object):
 
         return TimeSeriesDataFrame._from_pandas(
             df, schema, self._flintContext._sqlContext,
-            time_column=time_column,
-            is_sorted=is_sorted,
-            unit=unit)
+            is_sorted=is_sorted)
 
     def _df_between(self, df, begin, end, time_column, unit):
         """Filter a Python dataframe to contain data between begin (inclusive) and end (exclusive)

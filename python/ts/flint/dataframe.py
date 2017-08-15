@@ -85,11 +85,9 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
     DEFAULT_UNIT = "ns"
     '''The units of the timestamps present in :attr:`DEFAULT_TIME_COLUMN`.
 
-    Acceptable values are: ``'s'``, ``'ms'``, ``'us'``, ``'ns'``.
-
     '''
 
-    def __init__(self, df, sql_ctx, *, time_column=DEFAULT_TIME_COLUMN, is_sorted=True, unit=DEFAULT_UNIT, tsrdd_part_info=None):
+    def __init__(self, df, sql_ctx, *, is_sorted=True, tsrdd_part_info=None):
         '''
         :type df: pyspark.sql.DataFrame
         :type sql_ctx: pyspark.sql.SqlContext
@@ -102,7 +100,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         :param tsrdd_part_info: Partition info
         :type tsrdd_part_info: Option[com.twosigma.flint.timeseries.PartitionInfo]
         '''
-        self._time_column = time_column
+        self._time_column = self.DEFAULT_TIME_COLUMN
         self._is_sorted = is_sorted
         self._tsrdd_part_info = tsrdd_part_info
 
@@ -112,7 +110,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         super().__init__(self._jdf, sql_ctx)
 
         self._jpkg = java.Packages(self._sc)
-        self._junit = utils.junit(self._sc, unit) if isinstance(unit,str) else unit
+        self._junit = utils.junit(self._sc, self.DEFAULT_UNIT)
 
         if tsrdd_part_info:
             if not is_sorted:
@@ -169,9 +167,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             if self._jpkg.OrderPreservingOperation.isDerivedFrom(self._jdf, df._jdf):
                 tsdf_args = {
                     "df": df,
-                    "sql_ctx": df.sql_ctx,
-                    "time_column": self._time_column,
-                    "unit": self._junit
+                    "sql_ctx": df.sql_ctx
                 }
 
                 tsdf_args['is_sorted'] = self._is_sorted and self._jpkg.OrderPreservingOperation.isOrderPreserving(self._jdf, df._jdf)
@@ -226,17 +222,14 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         return TimeSeriesDataFrame(df,
                                    df.sql_ctx,
                                    time_column=time_column,
-                                   is_sorted=is_sorted,
-                                   unit=unit)
+                                   is_sorted=is_sorted)
 
     @staticmethod
-    def _from_pandas(df, schema, sql_ctx, *, time_column, is_sorted, unit):
+    def _from_pandas(df, schema, sql_ctx, *, is_sorted):
         df = sql_ctx.createDataFrame(df, schema)
         return TimeSeriesDataFrame(df,
                                    sql_ctx,
-                                   time_column=time_column,
-                                   is_sorted=is_sorted,
-                                   unit=unit)
+                                   is_sorted=is_sorted)
 
     def _timedelta_ns(self, varname, timedelta, *, default=None):
         """Transforms pandas.Timedelta to a ns string with appropriate checks
@@ -335,8 +328,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         return TimeSeriesDataFrame(df,
                                    df.sql_ctx,
-                                   time_column=self._time_column,
-                                   unit=self._junit,
                                    tsrdd_part_info=tsdf._tsrdd_part_info)
 
     def merge(self, other):
