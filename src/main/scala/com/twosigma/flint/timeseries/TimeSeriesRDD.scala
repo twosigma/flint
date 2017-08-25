@@ -298,7 +298,11 @@ object TimeSeriesRDD {
       convertedDf.select(timeColumnName, nonTimeColumns: _*)
     }
 
-    if (isSorted) { timeFirstDf } else { timeFirstDf.sort(timeColumnName) }
+    if (isSorted || TimeSeriesStore.isSorted(timeFirstDf.queryExecution.executedPlan)) {
+      timeFirstDf
+    } else {
+      timeFirstDf.sort(timeColumnName)
+    }
   }
 
   @PythonApi

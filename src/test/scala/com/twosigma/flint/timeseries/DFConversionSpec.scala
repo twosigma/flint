@@ -124,13 +124,19 @@ class DFConversionSpec extends TimeSeriesSuite with FlintTestData {
 
   it should "correctly use Catalyst partitioning information" in {
     val df = clockTSRdd.toDF.withColumn("data", col("time") * 100)
-    assert(!TimeSeriesStore.isNormalized(df.queryExecution.executedPlan))
+    assert(!TimeSeriesStore.isClustered(df.queryExecution.executedPlan))
 
-    assert(TimeSeriesStore.isNormalized(df.sort("time").queryExecution.executedPlan))
-    assert(!TimeSeriesStore.isNormalized(df.sort(col("time").desc).queryExecution.executedPlan))
-    assert(!TimeSeriesStore.isNormalized(df.repartition(col("time")).queryExecution.executedPlan))
+    assert(TimeSeriesStore.isClustered(df.sort("time").queryExecution.executedPlan))
 
-    assert(!TimeSeriesStore.isNormalized(df.sort("data").queryExecution.executedPlan))
+    assert(TimeSeriesStore.isClustered(df.sort(col("time").desc).queryExecution.executedPlan))
+    assert(!TimeSeriesStore.isSorted(df.sort(col("time").desc).queryExecution.executedPlan))
+
+    assert(TimeSeriesStore.isClustered(df.repartition(col("time")).queryExecution.executedPlan))
+    assert(!TimeSeriesStore.isSorted(df.repartition(col("time")).queryExecution.executedPlan))
+
+    assert(!TimeSeriesStore.isClustered(df.sort("data").queryExecution.executedPlan))
+
+    assert(!TimeSeriesStore.isSorted(df.sort("data", "time").queryExecution.executedPlan))
   }
 
   it should "correctly canonize normalized DataFrame" in {
@@ -140,7 +146,7 @@ class DFConversionSpec extends TimeSeriesSuite with FlintTestData {
     val canonized = TimeSeriesRDD.canonizeDF(withWrongOrder, isSorted = true, TimeUnit.NANOSECONDS, "time")
     // columns should be reordered, but it shouldn't break normalization
     assert(canonized.schema.fieldNames.head == "time")
-    assert(TimeSeriesStore.isNormalized(canonized.queryExecution.executedPlan))
+    assert(TimeSeriesStore.isClustered(canonized.queryExecution.executedPlan))
   }
 
   it should "preserve partitions of a sorted DF" in {
@@ -152,5 +158,16 @@ class DFConversionSpec extends TimeSeriesSuite with FlintTestData {
     val tsrdd = TimeSeriesRDD.fromDF(sortedDf)(isSorted = true, TimeUnit.NANOSECONDS)
     val tsrddPartitions = tsrdd.partInfo.get.splits.map(_.range.begin)
     assert(dfPartitions.toSeq == tsrddPartitions)
+
+    tsrdd.validate()
+  }
+
+  it should "correctly convert a DataFrame sorted by time,id" in {
+    val df = clockTSRdd.toDF.withColumn("ids", array(lit(2), lit(1), lit(0)))
+      .withColumn("id", explode(col("ids")))
+      .drop("ids")
+      .sort("time", "id")
+    val tsrdd = TimeSeriesRDD.fromDF(df)(isSorted = true, TimeUnit.NANOSECONDS)
+    tsrdd.validate()
   }
 }

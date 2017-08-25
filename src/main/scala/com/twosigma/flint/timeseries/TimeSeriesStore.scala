@@ -22,7 +22,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{ Ascending, AttributeReference, SortOrder }
-import org.apache.spark.sql.catalyst.plans.physical.OrderedDistribution
+import org.apache.spark.sql.catalyst.plans.physical.{ ClusteredDistribution, OrderedDistribution }
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.storage.StorageLevel
@@ -59,8 +59,14 @@ private[timeseries] object TimeSeriesStore {
       val timeColumnIndex = schema.fieldIndex(TimeSeriesRDD.timeColumnName)
       val keyRdd = internalRows.mapPartitions { rows => rows.map(_.getLong(timeColumnIndex)) }
 
-      val normalized = isNormalized(dataFrame.queryExecution.executedPlan)
-      val orderedRdd = OrderedRDD.fromRDD(pairRdd, KeyPartitioningType(isSorted = true, normalized), keyRdd)
+      // The input DataFrame is sorted already, along with clustered distribution it's normalized
+      val isNormalized = isClustered(dataFrame.queryExecution.executedPlan)
+
+      val orderedRdd = OrderedRDD.fromRDD(
+        pairRdd,
+        KeyPartitioningType(isSorted = true, isNormalized = isNormalized),
+        keyRdd
+      )
       TimeSeriesStore(orderedRdd, schema)
   }
 
@@ -109,23 +115,38 @@ private[timeseries] object TimeSeriesStore {
     }
   }
 
-  /**
-   * Looks at the physical plan, and verifies output distribution.
-   *
-   * @param executedPlan  a given [[SparkPlan]]
-   * @return true if a data frame is already normalized, and false otherwise.
-   */
-  private[timeseries] def isNormalized(executedPlan: SparkPlan): Boolean = {
+  private def getTimeAttribute(executedPlan: SparkPlan): AttributeReference = {
     val timeAttributes = executedPlan.output.collect {
       case reference: AttributeReference => reference
     }.filter(_.name == TimeSeriesRDD.timeColumnName)
 
-    require(timeAttributes.size == 1)
+    require(timeAttributes.size == 1, s"Time attribute is not unique. $timeAttributes")
 
-    val attribute = timeAttributes.head
-    // OrderedDistribution is a strictly stronger guarantee than [[ClusteredDistribution]]
-    // (see https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/plans/physical/partitioning.scala)
-    val requiredDistribution = OrderedDistribution(Seq(SortOrder(attribute, Ascending)))
+    return timeAttributes.head
+  }
+
+  /**
+   * Check whether output distribution says the DataFrame is sorted
+   * @param executedPlan
+   * @return
+   */
+  private[timeseries] def isSorted(executedPlan: SparkPlan): Boolean = {
+    val timeAttribute = getTimeAttribute(executedPlan)
+    val requiredDistribution = OrderedDistribution(Seq(SortOrder(timeAttribute, Ascending)))
+    executedPlan.outputPartitioning.satisfies(requiredDistribution)
+  }
+
+  /**
+   * Check whether output distribution says the DataFrame is clustered.
+   *
+   * Note: This doesn't not check the ordering of time column
+   *
+   * @param executedPlan  a given [[SparkPlan]]
+   * @return true if a data frame is already clustered, and false otherwise.
+   */
+  private[timeseries] def isClustered(executedPlan: SparkPlan): Boolean = {
+    val timeAttribute = getTimeAttribute(executedPlan)
+    val requiredDistribution = ClusteredDistribution(Seq(timeAttribute))
     executedPlan.outputPartitioning.satisfies(requiredDistribution)
   }
 }
