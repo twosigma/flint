@@ -53,7 +53,13 @@ def cleanup():
 
 
 def reset_env():
-    os.environ = dict(original_environ)
+    cleaned_env = dict(original_environ)
+    # pytest sets some env vars it expects to still be there, but if we delete
+    # them here, it explodes
+    for k, v in os.environ.items():
+        if k.startswith('PYTEST_'):
+            cleaned_env[k] = v
+    os.environ = cleaned_env
     sys.path = list(original_sys_path)
     metastore_db = os.path.join(os.getcwd(), 'metastore_db')
     if os.path.isdir(metastore_db):
