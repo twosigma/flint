@@ -53,13 +53,17 @@ trait TimeSeriesSuite extends FlintSuite {
   /**
    * Assert if two arrays of doubles are equal within additive precision `defaultAdditivePrecision`.
    */
-  def assertAlmostEquals(thisArray: Array[Double], thatArray: Array[Double]): Unit =
+  def assertAlmostEquals(
+    thisArray: Array[Double],
+    thatArray: Array[Double]
+  ): Unit =
     (thisArray zip thatArray).map { case (x, y) => assertAlmostEquals(x, y) }
 
   /**
    * Assert if two doubles are equal within additive precision `defaultAdditivePrecision`.
    */
-  def assertAlmostEquals(x: Double, y: Double): Unit = assert(x.isNaN && y.isNaN || x === y)
+  def assertAlmostEquals(x: Double, y: Double): Unit =
+    assert(x.isNaN && y.isNaN || x === y)
 
   /**
    * Assert if two rows have the same values within additive precision `defaultAdditivePrecision`.
@@ -72,7 +76,11 @@ trait TimeSeriesSuite extends FlintSuite {
     thisRow.schema.foreach { col =>
       col.dataType match {
         case BooleanType =>
-          assert(thisRow.getAs[Boolean](col.name) == thatRow.getAs[Boolean](col.name))
+          assert(
+            thisRow.getAs[Boolean](col.name) == thatRow.getAs[Boolean](
+              col.name
+            )
+          )
         case IntegerType =>
           assert(thisRow.getAs[Int](col.name) == thatRow.getAs[Int](col.name))
         case LongType =>
@@ -84,7 +92,10 @@ trait TimeSeriesSuite extends FlintSuite {
             thisRow.getAs[Float](col.name) === thatRow.getAs[Float](col.name)
           )
         case DoubleType =>
-          assertAlmostEquals(thisRow.getAs[Double](col.name), thatRow.getAs[Double](col.name))
+          assertAlmostEquals(
+            thisRow.getAs[Double](col.name),
+            thatRow.getAs[Double](col.name)
+          )
         case ArrayType(IntegerType, _) =>
           assert(
             thisRow.getAs[mutable.WrappedArray[Int]](col.name).deep ==
@@ -128,7 +139,10 @@ trait TimeSeriesSuite extends FlintSuite {
   /**
    * Assert two [[TimeSeriesRDD]] are equal row by row in order.
    */
-  def assertAlmostEquals(thisTSRdd: TimeSeriesRDD, otherTSRdd: TimeSeriesRDD): Unit =
+  def assertAlmostEquals(
+    thisTSRdd: TimeSeriesRDD,
+    otherTSRdd: TimeSeriesRDD
+  ): Unit =
     (thisTSRdd.collect() zip otherTSRdd.collect()).foreach {
       case (thisRow, thatRow) => assertAlmostEquals(thisRow, thatRow)
     }
@@ -157,15 +171,17 @@ trait TimeSeriesSuite extends FlintSuite {
     if (filepath.endsWith(".gz")) {
       codec = "gzip"
     }
-    CSV.from(
-      sqlContext,
-      s"file://$source",
-      header = header,
-      sorted = sorted,
-      schema = schema,
-      dateFormat = dateFormat,
-      codec = codec
-    ).repartition(defaultPartitionParallelism)
+    CSV
+      .from(
+        sqlContext,
+        s"file://$source",
+        header = header,
+        sorted = sorted,
+        schema = schema,
+        dateFormat = dateFormat,
+        codec = codec
+      )
+      .repartition(defaultPartitionParallelism)
   }
 
   def fromParquet(
@@ -176,13 +192,15 @@ trait TimeSeriesSuite extends FlintSuite {
     if (filepath.endsWith(".gz")) {
       codec = "gzip"
     }
-    TimeSeriesRDD.fromParquet(
-      sc,
-      s"file://$source"
-    )(
-        isSorted = sorted,
-        timeUnit = TimeUnit.NANOSECONDS
-      ).repartition(defaultPartitionParallelism)
+    TimeSeriesRDD
+      .fromParquet(
+        sc,
+        s"file://$source"
+      )(
+          isSorted = sorted,
+          timeUnit = TimeUnit.NANOSECONDS
+        )
+      .repartition(defaultPartitionParallelism)
   }
 
   /**
@@ -220,19 +238,27 @@ trait TimeSeriesSuite extends FlintSuite {
    */
   def assertIdentical(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
     assert(rdd1.schema == rdd2.schema)
-    assert(rdd1.orderedRdd.getPartitionRanges == rdd2.orderedRdd.getPartitionRanges)
+    assert(
+      rdd1.orderedRdd.getPartitionRanges == rdd2.orderedRdd.getPartitionRanges
+    )
     assert(
       rdd1.orderedRdd.partitions.map(_.index).deep ==
         rdd2.orderedRdd.partitions.map(_.index).deep
     )
 
-    val rows1 = rdd1.rdd.mapPartitions {
-      iter => Iterator(iter.toArray)
-    }.collect().map(_.map(prepareRow))
+    val rows1 = rdd1.rdd
+      .mapPartitions { iter =>
+        Iterator(iter.toArray)
+      }
+      .collect()
+      .map(_.map(prepareRow))
 
-    val rows2 = rdd2.rdd.mapPartitions {
-      iter => Iterator(iter.toArray)
-    }.collect().map(_.map(prepareRow))
+    val rows2 = rdd2.rdd
+      .mapPartitions { iter =>
+        Iterator(iter.toArray)
+      }
+      .collect()
+      .map(_.map(prepareRow))
 
     assert(rows1.deep == rows2.deep)
   }
@@ -251,16 +277,23 @@ trait TimeSeriesSuite extends FlintSuite {
     })
   }
 
-  protected def insertNullRows(rdd: TimeSeriesRDD, cols: String*): TimeSeriesRDD = {
+  protected def insertNullRows(
+    rdd: TimeSeriesRDD,
+    cols: String*
+  ): TimeSeriesRDD = {
     val schema = rdd.schema
-    val newRdd = rdd.rdd.flatMap{
-      case row: Row =>
-        val nullRows = cols.map(rdd.schema.fieldIndex).map {
-          case index =>
-            new GenericRowWithSchema(row.toSeq.updated(index, null).toArray, schema)
-        }
-        row +: nullRows
+    val newRdd = rdd.rdd.flatMap { row: Row =>
+      val nullRows = cols.map(rdd.schema.fieldIndex).map { index =>
+        new GenericRowWithSchema(
+          row.toSeq.updated(index, null).toArray,
+          schema
+        )
+      }
+      row +: nullRows
     }
-    TimeSeriesRDD.fromRDD(newRdd, schema)(true, scala.concurrent.duration.NANOSECONDS)
+    TimeSeriesRDD.fromRDD(newRdd, schema)(
+      true,
+      scala.concurrent.duration.NANOSECONDS
+    )
   }
 }

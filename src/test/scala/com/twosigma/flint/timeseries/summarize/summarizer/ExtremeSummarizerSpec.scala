@@ -50,48 +50,48 @@ class ExtremeSummarizerSpec extends SummarizerSuite {
     val extreme = result.first().getAs[T](outputColumn)
     val outputType = result.schema(outputColumn).dataType
 
-    assert(outputType == dataType, s"${outputType}")
-    assert(trueExtreme === extreme, s"extreme: ${extreme}, trueExtreme: ${trueExtreme}, data: ${data.toSeq}")
+    assert(outputType == dataType, s"$outputType")
+    assert(trueExtreme === extreme, s"extreme: $extreme, trueExtreme: $trueExtreme, data: ${data.toSeq}")
   }
 
   "MaxSummarizer" should "compute double max correctly" in {
     val rand = new Random()
-    test[Double](DoubleType, { _: Row => rand.nextDouble() }, Summarizers.max _, math.max, "x", "x_max")
+    test[Double](DoubleType, { _: Row => rand.nextDouble() }, Summarizers.max, math.max, "x", "x_max")
   }
 
   it should "compute long max correctly" in {
     val rand = new Random()
-    test[Long](LongType, { _: Row => rand.nextLong() }, Summarizers.max _, math.max, "x", "x_max")
+    test[Long](LongType, { _: Row => rand.nextLong() }, Summarizers.max, math.max, "x", "x_max")
   }
 
   it should "compute float max correctly" in {
     val rand = new Random()
-    test[Float](FloatType, { _: Row => rand.nextFloat() }, Summarizers.max _, math.max, "x", "x_max")
+    test[Float](FloatType, { _: Row => rand.nextFloat() }, Summarizers.max, math.max, "x", "x_max")
   }
 
   it should "compute int max correctly" in {
     val rand = new Random()
-    test[Int](IntegerType, { _: Row => rand.nextInt() }, Summarizers.max _, math.max, "x", "x_max")
+    test[Int](IntegerType, { _: Row => rand.nextInt() }, Summarizers.max, math.max, "x", "x_max")
   }
 
   "MinSummarizer" should "compute double min correctly" in {
     val rand = new Random()
-    test[Double](DoubleType, { _: Row => rand.nextDouble() }, Summarizers.min _, math.min, "x", "x_min")
+    test[Double](DoubleType, { _: Row => rand.nextDouble() }, Summarizers.min, math.min, "x", "x_min")
   }
 
   it should "compute long min correctly" in {
     val rand = new Random()
-    test[Long](LongType, { _: Row => rand.nextLong() }, Summarizers.min _, math.min, "x", "x_min")
+    test[Long](LongType, { _: Row => rand.nextLong() }, Summarizers.min, math.min, "x", "x_min")
   }
 
   it should "compute float min correctly" in {
     val rand = new Random()
-    test[Float](FloatType, { _: Row => rand.nextFloat() }, Summarizers.min _, math.min, "x", "x_min")
+    test[Float](FloatType, { _: Row => rand.nextFloat() }, Summarizers.min, math.min, "x", "x_min")
   }
 
   it should "compute int min correctly" in {
     val rand = new Random()
-    test[Int](IntegerType, { _: Row => rand.nextInt() }, Summarizers.min _, math.min, "x", "x_min")
+    test[Int](IntegerType, { _: Row => rand.nextInt() }, Summarizers.min, math.min, "x", "x_min")
   }
 
   it should "pass summarizer property test" in {

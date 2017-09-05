@@ -19,16 +19,23 @@ package com.twosigma.flint.timeseries
 import com.twosigma.flint.annotation.PythonApi
 import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingConvention.ExponentialSmoothingConvention
 import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingType.ExponentialSmoothingType
-import com.twosigma.flint.timeseries.summarize.{ LeftSubtractableOverlappableSummarizerFactory, OverlappableSummarizerFactory, SummarizerFactory }
+import com.twosigma.flint.timeseries.summarize.{
+  LeftSubtractableOverlappableSummarizerFactory,
+  OverlappableSummarizerFactory,
+  SummarizerFactory
+}
 import com.twosigma.flint.timeseries.summarize.summarizer._
 import org.apache.spark.sql.types._
 
 import scala.concurrent.duration.Duration
 
 object Summarizers {
-  private[timeseries] def rows(column: String): SummarizerFactory = RowsSummarizerFactory(column)
 
-  private[timeseries] def arrow(columns: Seq[String]): SummarizerFactory = ArrowSummarizerFactory(columns)
+  private[timeseries] def rows(column: String): SummarizerFactory =
+    RowsSummarizerFactory(column)
+
+  private[timeseries] def arrow(columns: Seq[String]): SummarizerFactory =
+    ArrowSummarizerFactory(columns)
 
   /**
    * Counts the number of rows.
@@ -78,7 +85,10 @@ object Summarizers {
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the weighted mean,
    *         weighted deviation, weighted t-stat, and the count of observations.
    */
-  def weightedMeanTest(valueColumn: String, weightColumn: String): SummarizerFactory =
+  def weightedMeanTest(
+    valueColumn: String,
+    weightColumn: String
+  ): SummarizerFactory =
     WeightedMeanTestSummarizerFactory(valueColumn, weightColumn)
 
   /**
@@ -101,7 +111,8 @@ object Summarizers {
    * @param column The column expected to calculate the standard deviation
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the standard deviation.
    */
-  def stddev(column: String): SummarizerFactory = StandardDeviationSummarizerFactory(column)
+  def stddev(column: String): SummarizerFactory =
+    StandardDeviationSummarizerFactory(column)
 
   /**
    * Calculates the variance for a column. This applies Bessel's correction.
@@ -112,17 +123,44 @@ object Summarizers {
    * @param column The column expected to calculate the variance
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the variance.
    */
-  def variance(column: String): SummarizerFactory = VarianceSummarizerFactory(column)
+  def variance(column: String): SummarizerFactory =
+    VarianceSummarizerFactory(column)
 
   /**
    * Calculates the covariance between two columns
    *
    * The output schema is:
-   *  - "<columnX>_<columnY>_covariance": [[DoubleType]], the covariance of `columnX` and `columnY`
+   *  - "<xColumn>_<yColumn>_covariance": [[DoubleType]], the covariance of `xColumn` and `yColumn`
    *
+   * @param xColumn      A column to compute covariance
+   * @param yColumn      The other column to compute covariance
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the covariance.
    */
-  def covariance(columnX: String, columnY: String): SummarizerFactory = CovarianceSummarizerFactory(columnX, columnY)
+  def covariance(xColumn: String, yColumn: String): SummarizerFactory =
+    CovarianceSummarizerFactory(xColumn, yColumn)
+
+  /**
+   * Calculates the unbiased weighted covariance between two columns
+   *
+   * The output schema is:
+   *  - "<xColumn>_<yColumn>_<weightColumn>_weightedCovariance": [[DoubleType]], the weighted covariance of
+   *    `xColumn` and `yColumn` with weight `weightColumn`.
+   *
+   * @param xColumn      A column to compute covariance
+   * @param yColumn      The other column to compute covariance
+   * @param weightColumn The column whose values will be served as weights
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the covariance.
+   */
+  def weightedCovariance(
+    xColumn: String,
+    yColumn: String,
+    weightColumn: String
+  ): SummarizerFactory =
+    WeightedCovarianceSummarizerFactory(
+      xColumn,
+      yColumn,
+      weightColumn
+    )
 
   /**
    * Computes the z-score with the option for out-of-sample calculation.
@@ -135,7 +173,10 @@ object Summarizers {
    *                                  unbiased sample standard deviation excluding current observation.
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate z-score.
    */
-  def zScore(column: String, includeCurrentObservation: Boolean): SummarizerFactory =
+  def zScore(
+    column: String,
+    includeCurrentObservation: Boolean
+  ): SummarizerFactory =
     ZScoreSummarizerFactory(column, includeCurrentObservation)
 
   /**
@@ -148,7 +189,8 @@ object Summarizers {
    * @param n      The order of moment expected to calculate.
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate n-th moment.
    */
-  def nthMoment(column: String, n: Int): SummarizerFactory = NthMomentSummarizerFactory(column, n)
+  def nthMoment(column: String, n: Int): SummarizerFactory =
+    NthMomentSummarizerFactory(column, n)
 
   /**
    * Compute the n-th central moment.
@@ -160,7 +202,8 @@ object Summarizers {
    * @param n      The order of moment expected to calculate.
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate n-th central moment.
    */
-  def nthCentralMoment(column: String, n: Int): SummarizerFactory = NthCentralMomentSummarizerFactory(column, n)
+  def nthCentralMoment(column: String, n: Int): SummarizerFactory =
+    NthCentralMomentSummarizerFactory(column, n)
 
   /**
    * Compute correlations for all possible pairs in `columns`.
@@ -174,9 +217,15 @@ object Summarizers {
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate correlation
    *         between all different columns.
    */
-  def correlation(columns: String*): SummarizerFactory = columns.combinations(2).map {
-    case Seq(colX, colY) => CorrelationSummarizerFactory(colX, colY).asInstanceOf[SummarizerFactory]
-  }.reduce(Summarizers.compose(_, _))
+  def correlation(columns: String*): SummarizerFactory =
+    columns
+      .combinations(2)
+      .map {
+        case Seq(colX, colY) =>
+          CorrelationSummarizerFactory(colX, colY)
+            .asInstanceOf[SummarizerFactory]
+      }
+      .reduce(Summarizers.compose(_, _))
 
   /**
    * Compute correlations between all possible pairs of columns where the left is one of `columns` and the right is
@@ -193,11 +242,18 @@ object Summarizers {
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate correlation
    *         between all different columns.
    */
-  def correlation(xColumns: Seq[String], yColumns: Seq[String]): SummarizerFactory = {
+  def correlation(
+    xColumns: Seq[String],
+    yColumns: Seq[String]
+  ): SummarizerFactory = {
     val duplicateColumns = xColumns.intersect(yColumns)
-    require(duplicateColumns.isEmpty, s"Found duplicate input columns: ${duplicateColumns}")
+    require(
+      duplicateColumns.isEmpty,
+      s"Found duplicate input columns: $duplicateColumns"
+    )
     (for (xColumn <- xColumns; yColumn <- yColumns)
-      yield CorrelationSummarizerFactory(xColumn, yColumn).asInstanceOf[SummarizerFactory])
+      yield CorrelationSummarizerFactory(xColumn, yColumn)
+      .asInstanceOf[SummarizerFactory])
       .reduce(Summarizers.compose(_, _))
   }
 
@@ -220,7 +276,7 @@ object Summarizers {
    *   - "akaikeIC": [[DoubleType]], the Akaike information criterion.
    *   - "bayesIC": [[DoubleType]], the Bayes information criterion.
    *   - "cond": [[DoubleType]], the condition number Gramian matrix, i.e. X^TX.
-   *   - "const_columns": [[ArrayType]] of [[StringType], the list of variables in `xColumns` that are constants.
+   *   - "const_columns": [[ArrayType]] of [[StringType]], the list of variables in `xColumns` that are constants.
    *
    *
    * @param yColumn               Name of column containing the dependent variable.
@@ -267,14 +323,14 @@ object Summarizers {
     weightColumn: String,
     shouldIntercept: Boolean,
     shouldIgnoreConstants: Boolean
-  ): SummarizerFactory = OLSRegression(
-    yColumn = yColumn,
-    xColumns = xColumns,
-    weightColumn,
-    shouldIntercept = shouldIntercept,
-    shouldIgnoreConstants = shouldIgnoreConstants,
-    constantErrorBound = 1.0E-12
-  )
+  ): SummarizerFactory =
+    OLSRegression(
+      yColumn = yColumn,
+      xColumns = xColumns,
+      weightColumn,
+      shouldIntercept = shouldIntercept,
+      shouldIgnoreConstants = shouldIgnoreConstants
+    )
 
   @PythonApi(until = "0.2.1")
   private def OLSRegression(
@@ -302,7 +358,8 @@ object Summarizers {
    *          to 1.0.
    * @return a [[SummarizerFactory]] which could provide a summarizer to compute the quantiles.
    */
-  def quantile(column: String, p: Seq[Double]): SummarizerFactory = QuantileSummarizerFactory(column, p.toArray)
+  def quantile(column: String, p: Seq[Double]): SummarizerFactory =
+    QuantileSummarizerFactory(column, p.toArray)
 
   /**
    * Return a summarizer that is composed of multiple summarizers.
@@ -325,10 +382,16 @@ object Summarizers {
    */
   def compose(summarizers: SummarizerFactory*): SummarizerFactory = {
     summarizers.partition(_.isInstanceOf[OverlappableSummarizerFactory]) match {
-      case (Seq(), nonOverlappables) => nonOverlappables.reduce(CompositeSummarizerFactory)
-      case (overlappables, Seq()) => overlappables.map(_.asInstanceOf[OverlappableSummarizerFactory])
-        .reduce(OverlappableCompositeSummarizerFactory)
-      case _ => throw new IllegalArgumentException(s"Can't compose overlappable and non-overlappable summarizers.")
+      case (Seq(), nonOverlappables) =>
+        nonOverlappables.reduce(CompositeSummarizerFactory)
+      case (overlappables, Seq()) =>
+        overlappables
+          .map(_.asInstanceOf[OverlappableSummarizerFactory])
+          .reduce(OverlappableCompositeSummarizerFactory)
+      case _ =>
+        throw new IllegalArgumentException(
+          s"Can't compose overlappable and non-overlappable summarizers."
+        )
     }
   }
 
@@ -560,7 +623,8 @@ object Summarizers {
    * @param column The column expected to calculate the min.
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the min.
    */
-  def min(column: String): SummarizerFactory = ExtremeSummarizerFactory(column, ExtremeSummarizerType.Min)
+  def min(column: String): SummarizerFactory =
+    ExtremeSummarizerFactory(column, ExtremeSummarizerType.Min)
 
   /**
    * Calculates the max for a column.
@@ -571,7 +635,8 @@ object Summarizers {
    * @param column The column expected to calculate the max.
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the max.
    */
-  def max(column: String): SummarizerFactory = ExtremeSummarizerFactory(column, ExtremeSummarizerType.Max)
+  def max(column: String): SummarizerFactory =
+    ExtremeSummarizerFactory(column, ExtremeSummarizerType.Max)
 
   /**
    * Calculates the product for a column.
@@ -582,19 +647,21 @@ object Summarizers {
    * @param column Name of column for which to calculate the product.
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the product.
    */
-  def product(column: String): SummarizerFactory = ProductSummarizerFactory(column)
+  def product(column: String): SummarizerFactory =
+    ProductSummarizerFactory(column)
 
   /**
    * Calculates the dot product for two columns.
    *
    * The output schema is:
-   *   - "<columnX>_<columnY>_dotProduct": [[DoubleType]], the dot product of the two columns.
+   *   - "<xColumn>_<yColumn>_dotProduct": [[DoubleType]], the dot product of the two columns.
    *
-   * @param columnX Name of the first column.
-   * @param columnY Name of the second column.
+   * @param xColumn Name of the first column.
+   * @param yColumn Name of the second column.
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the dot product.
    */
-  def dotProduct(columnX: String, columnY: String): SummarizerFactory = DotProductSummarizerFactory(columnX, columnY)
+  def dotProduct(xColumn: String, yColumn: String): SummarizerFactory =
+    DotProductSummarizerFactory(xColumn, yColumn)
 
   /**
    * Calculates the geometric mean for a column.
@@ -605,7 +672,8 @@ object Summarizers {
    * @param column Name of column for which to calculate the geometric mean.
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the geometric mean.
    */
-  def geometricMean(column: String): SummarizerFactory = GeometricMeanSummarizerFactory(column)
+  def geometricMean(column: String): SummarizerFactory =
+    GeometricMeanSummarizerFactory(column)
 
   /**
    * Calculates the skewness for a column. This is the third standardized moment.
@@ -616,10 +684,11 @@ object Summarizers {
    * @param column Name of the column to calculate skewness.
    * @return a [[SummarizerFactory]] which provides a summarizer to calculate skewness.
    */
-  def skewness(column: String): SummarizerFactory = StandardizedMomentSummarizerFactory(
-    column,
-    StandardizedMomentSummarizerType.Skewness
-  )
+  def skewness(column: String): SummarizerFactory =
+    StandardizedMomentSummarizerFactory(
+      column,
+      StandardizedMomentSummarizerType.Skewness
+    )
 
   /**
    * Calculates the excess kurtosis for a column. This is the fourth standardized moment subtracted by 3.
@@ -630,13 +699,9 @@ object Summarizers {
    * @param column Name of the column to calculate kurtosis.
    * @return a [[SummarizerFactory]] which provides a summarizer to calculate kurtosis.
    */
-  def kurtosis(column: String): SummarizerFactory = StandardizedMomentSummarizerFactory(
-    column,
-    StandardizedMomentSummarizerType.Kurtosis
-  )
-
-  // TODO: These might be useful to implement
-
-  // def describe
-
+  def kurtosis(column: String): SummarizerFactory =
+    StandardizedMomentSummarizerFactory(
+      column,
+      StandardizedMomentSummarizerType.Kurtosis
+    )
 }

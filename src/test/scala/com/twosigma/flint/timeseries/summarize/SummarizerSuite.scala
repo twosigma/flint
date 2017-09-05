@@ -60,6 +60,12 @@ class SummarizerSuite extends TimeSeriesSuite {
         },
         "x3" -> { (_: Long, _: Int, rand: util.Random) =>
           rand.nextDouble()
+        },
+        "w1" -> { (_: Long, _: Int, rand: util.Random) =>
+          1.0
+        },
+        "w2" -> { (_: Long, _: Int, rand: util.Random) =>
+          Math.abs(rand.nextDouble())
         }
       ),
       numSlices = defaultPartitionParallelism,
@@ -86,6 +92,12 @@ class SummarizerSuite extends TimeSeriesSuite {
         },
         "x3" -> { (_: Long, _: Int, rand: util.Random) =>
           rand.nextDouble() + 1.0
+        },
+        "w1" -> { (_: Long, _: Int, rand: util.Random) =>
+          1.0
+        },
+        "w2" -> { (_: Long, _: Int, rand: util.Random) =>
+          Math.abs(rand.nextDouble())
         }
       ),
       numSlices = defaultPartitionParallelism,
@@ -377,6 +389,7 @@ class SummarizerSuite extends TimeSeriesSuite {
     override def toString: String = "SubtractIdentityProperty"
   }
 
+  // A.k.a properties that are required by Flippable
   lazy val AllProperties = Seq(
     new AssociativeLawProperty,
     new RightIdentityProperty,

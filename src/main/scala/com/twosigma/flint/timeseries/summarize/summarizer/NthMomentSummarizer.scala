@@ -45,7 +45,7 @@ case class NthMomentSummarizer(
   private final val doubleGetter = asDoubleExtractor(inputSchema(columnIndex).dataType, columnIndex)
 
   override val summarizer = NMSummarizer(moment)
-  override val schema = Schema.of(s"${column}_${moment}thMoment" -> DoubleType)
+  override val schema: StructType = Schema.of(s"${column}_${moment}thMoment" -> DoubleType)
 
   override def toT(r: InternalRow): T = doubleGetter(r)
 
