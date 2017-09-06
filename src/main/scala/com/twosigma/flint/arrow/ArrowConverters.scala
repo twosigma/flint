@@ -248,7 +248,7 @@ private[flint] abstract class PrimitiveColumnWriter(val ordinal: Int)
 
   def getFieldType(dtype: ArrowType): FieldType = FieldType.nullable(dtype)
 
-  def valueVector: BaseDataValueVector
+  def valueVector: BaseValueVector
   def valueMutator: BaseMutator
 
   def setNull(): Unit

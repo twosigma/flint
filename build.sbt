@@ -87,7 +87,7 @@ lazy val versions = new {
   val scalatest = "2.2.4"
   val scalacheck = "1.12.6"
   val grizzled_slf4j = "1.3.0"
-  val arrow = "0.4.0"
+  val arrow = "0.6.0"
   val jackson_module = "2.7.2"
 }
 
