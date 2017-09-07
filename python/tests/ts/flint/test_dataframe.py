@@ -1361,6 +1361,240 @@ def test_shiftTime_windows(flintContext, tests_utils, windows):
     tests_utils.assert_same(result2, expected2)
 
 
+# Not really human, but requires jobsystem creds and tsmoto doesn't have them.
+@pytest.mark.human
+@pytest.mark.net
+def test_addXrefColumn(flintContext, tests_utils):
+    from pyspark.sql.types import StructType, StructField, LongType, IntegerType
+    pdf = make_pdf([(1451606400000000000, 64106)], ["time", "tid"])
+    input_df = flintContext.read.pandas(pdf, StructType([StructField("time", LongType(), True), StructField("tid", IntegerType(), True)]))
+    output = input_df.addXrefColumn(('TICKER')).toPandas()
+    expected_pdf = make_pdf([(1451606400000000000, 64106, "CAB")], ["time", "tid", "TICKER"],
+                            dtypes=[np.int64, np.int32, np.str])
+    tests_utils.assert_same(output, expected_pdf)
+
+
+# Not really human, but requires jobsystem creds and tsmoto doesn't have them.
+@pytest.mark.human
+@pytest.mark.net
+def test_addTidColumn(flintContext, tests_utils):
+    input_df = flintContext.read.pandas(make_pdf([(1451606400000000000, "CAB")], ["time", "ticker"]))
+    output = input_df.addTidColumn('ticker', 'ACTIVE_3000_US').toPandas()
+
+    expected_pdf = make_pdf([(1451606400000000000, "CAB", 64106)], ["time", "ticker", "tid"],
+                            dtypes=[np.int64, np.str, np.int32])
+    tests_utils.assert_same(output, expected_pdf)
+
+
+# Not really human, but requires jobsystem creds and tsmoto doesn't have them.
+@pytest.mark.human
+@pytest.mark.net
+def test_shiftToNextClosestTradingTime(flintContext, tests_utils):
+    # 12/25/2016, 2:00:00 AM
+    input_df = flintContext.read.pandas(make_pdf([(1482649200000000000, 64106)], ["time", "id"]))
+    output = input_df.shiftToNextClosestTradingTime('US').toPandas()
+
+    # 12/27/2016 9:30:00AM ET - US stock exchanges opened on Tuesday after Christmas
+    expected_pdf = make_pdf([(1482849000000000000, 64106)], ["time", "id"])
+    tests_utils.assert_same(output, expected_pdf)
+
+
+# Not really human, but requires jobsystem creds and tsmoto doesn't have them.
+# TODO: This doesn't work with Spark 2.0 branch. Will fix this separately.
+# @pytest.mark.human
+# @pytest.mark.net
+# def test_addFutureSeriesSequenceTidColumn(flintContext, tests_utils):
+#     from pyspark.sql.types import StructType, StructField, LongType, IntegerType
+#     pdf = make_pdf([(1451606400000000000, 37261721)], ["time", "tid"])
+#     input = flintContext.read.pandas(pdf, StructType([StructField("time", LongType(), True), StructField("tid", IntegerType(), True)]))
+#     output = input.addFutureSeriesSequenceTidColumn().toPandas()
+
+#     expected_pdf = make_pdf([(1451606400000000000, 37261721, 11186134)], ["time", "tid", "futureSeriesTid"])
+#     tests_utils.assert_same(output, expected_pdf)
+
+
+# Not really human, but requires jobsystem creds and tsmoto doesn't have them.
+@pytest.mark.human
+@pytest.mark.net
+def test_read_uri(flintContext):
+    from ts.data import tsdata_http
+    uri = 'tsdata:/price/ts/golden/u.ACTIVE_3000_US'
+    begin = '20010101'
+    end = '20010201'
+    spark_df = flintContext.read.uri(uri, begin, end)
+    pandas_df = tsdata_http.load_dataframe(uri, (begin, end))
+
+    assert spark_df.count() == len(pandas_df.index)
+
+
+def test_reader_parameters(flintContext):
+    from ts.flint import utils as flint_utils
+    reader = (flintContext.read.
+              option("numPartitions", 5).
+              option("partitionGranularity", '30d').
+              option("columns", ['x', 'y', 'z']).
+              option('timeUnit', 'ns').
+              option('timeColumn', 'test_time').
+              option("listOption", [1,2,3]).
+              option("boolOption", False).
+              range('20170101', '2017-02-01', timezone='America/New_York'))
+
+    options = reader._extra_options
+    params = reader._parameters
+
+    assert options['numPartitions'] == "5"
+    assert options['partitionGranularity'] == "30d"
+
+    assert params.range().beginNanos() == pd.Timestamp('20170101', tz='America/New_York').value
+    assert params.range().endNanos()   == pd.Timestamp('20170201', tz='America/New_York').value
+    assert params.columnsOrNull() == flint_utils.list_to_seq(flintContext._sc, ['x', 'y', 'z'])
+
+    assert params.timeUnit().toString() == 'NANOSECONDS'
+    assert params.timeColumn() == 'test_time'
+
+    assert options['listOption'] == '1,2,3'
+    assert options['boolOption'] == 'False'
+
+
+def test_reader_reconcile_args(flintContext):
+    from ts.flint import utils as flint_utils
+    reader = flintContext.read._reconcile_reader_args(
+        begin='20170101',
+        end='20170201',
+        numPartitions=10,
+        columns=['x', 'y', 'z']
+    )
+    params = reader._parameters
+    options = reader._extra_options
+
+    assert params.range().beginNanos() == pd.Timestamp('20170101').value
+    assert params.range().endNanos() == pd.Timestamp('20170201').value
+    assert params.columnsOrNull() == flint_utils.list_to_seq(flintContext._sc, ['x', 'y', 'z'])
+    assert options['numPartitions'] == '10'
+
+
+def test_reader_multiple_options(flintContext):
+    from ts.flint import utils as flint_utils
+    reader = flintContext.read.options(
+        columns=['x', 'y', 'z'],
+        numPartitions=10,
+        timeUnit='ms'
+    )
+    options = reader._extra_options
+    params = reader._parameters
+    assert options['columns'] == 'x,y,z'
+    assert params.columnsOrNull() == flint_utils.list_to_seq(flintContext._sc, ['x', 'y', 'z'])
+    assert params.timeUnitString() == 'ms'
+    assert options['numPartitions'] == '10'
+
+
+def test_reader_range(flintContext):
+    """
+    It should parse begin / end ranges as datetime, integers in YYYYMMDD format,
+    or strings parsable by ``pd.Timestamp``.
+    """
+    import pytz
+    expected_begin = pd.Timestamp('20170101', tz='UTC')
+    expected_end = pd.Timestamp('20170201', tz='UTC')
+
+    # using timezone-aware datetime
+    reader1 = flintContext.read.range(
+        pytz.timezone("America/New_York").localize(
+            datetime.datetime(2016, 12, 31, 19, 0, 0)),
+        pytz.timezone("America/New_York").localize(
+            datetime.datetime(2017, 1, 31, 19, 0, 0)))
+    assert reader1._parameters.range().beginNanos() == expected_begin.value
+    assert reader1._parameters.range().endNanos()   == expected_end.value
+
+    # Using integers
+    reader2 = flintContext.read.range(20170101, 20170201)
+    assert reader2._parameters.range().beginNanos() == expected_begin.value
+    assert reader2._parameters.range().endNanos()   == expected_end.value
+
+    # Using Timestamps
+    reader3 = flintContext.read.range(
+        pd.Timestamp('2017-01-01', tz='UTC'),
+        pd.Timestamp('2017-02-01', tz='UTC')
+    )
+    assert reader3._parameters.range().beginNanos() == expected_begin.value
+    assert reader3._parameters.range().endNanos()   == expected_end.value
+
+
+def test_reader_missing_range(pyspark, flintContext):
+    """It should raise an IllegalArgumentException when the range is not set"""
+    from pyspark.sql.utils import IllegalArgumentException
+
+    with pytest.raises(IllegalArgumentException):
+        flintContext.read._parameters.range().beginNanos()
+
+    with pytest.raises(IllegalArgumentException):
+        reader1 = flintContext.read.range(None, '20170101')
+        reader1._parameters.range().beginNanos()
+
+    with pytest.raises(IllegalArgumentException):
+        reader2 = flintContext.read.range('20170101', None)
+        reader2._parameters.range().endNanos()
+
+
+def test_eval_groovy(flintContext):
+    '''Check that we can evaluate a Groovy dcat script into a TimeSeriesDataFrame.'''
+    begin = '19700101'
+    end = '20370101'
+    script = '''
+    long startTime = 1262304000000;
+
+    def maps = (0..10).collect {
+        [
+            time: startTime + (it * 1000L),
+            n: it * 1.0d,
+            s: "a" * it
+        ]
+    }
+
+    mapsToTable(
+        maps: maps,
+        types: [n: Double, s: String],
+        timeKey: "time",
+        timeUnit: "ms",
+    )
+    '''
+    df = flintContext.read.eval_groovy(script, begin, end)
+    assert df.count() == 11
+    assert 'time' in df.columns
+    assert 'n' in df.columns
+    assert 's' in df.columns
+
+
+def test_eval_groovy_failure(flintContext):
+    '''Check that we get an error when evaluating a groovy script that
+    doesn't return a StreamingTableFactory.'''
+    begin = '19700101'
+    end = '20370101'
+    script = '''
+    [1, 2, 3, 4, 5]
+    '''
+    import pyspark.sql.utils
+    with pytest.raises(pyspark.sql.utils.IllegalArgumentException):
+        df = flintContext.read.eval_groovy(script, begin, end)
+
+
+@pytest.mark.net
+def test_read_dataframe_begin_end(sqlContext, flintContext, tests_utils):
+    # Data goes from time 1000 to 1250
+    pdf = make_pdf(vol_data, ['time', 'id', 'volume'])
+    df = sqlContext.createDataFrame(pdf)
+    begin_nanos, end_nanos = 1100, 1200
+
+    df = flintContext.read.range(pd.Timestamp(begin_nanos), pd.Timestamp(end_nanos)).dataframe(df)
+    expected_df = df.filter(df.time >= begin_nanos).filter(df.time < end_nanos)
+    expected = expected_df.count()
+    assert(df.count() == expected)
+
+    begin_str, end_str = pd.Timestamp(begin_nanos).isoformat(), pd.Timestamp(end_nanos).isoformat()
+    df2 = flintContext.read.dataframe(df, begin_str, end_str)
+    assert(df2.count() == expected)
+
+
 def test_uniform_clocks(sqlContext, clocks):
     df = clocks.uniform(sqlContext, '1d', '0s', '2016-11-07', '2016-11-17')
     assert(df.count() == 11)
