@@ -13,7 +13,7 @@ Converting other data sources to TimeSeriesDataFrame
 ----------------------------------------------------
 
 You can also use a :class:`ts.flint.FlintContext` to convert an
-existing |pandas_DataFrame|_ or :class:`pyspark.sql.DataFrame` to a
+existing :class:`pandas.DataFrame` or :class:`pyspark.sql.DataFrame` to a
 :class:`ts.flint.TimeSeriesDataFrame` in order to take
 advantage of its time-aware functionality:
 

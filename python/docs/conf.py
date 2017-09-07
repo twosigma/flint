@@ -375,14 +375,13 @@ texinfo_documents = [
 # working with the convention of replacing dots with underscores, I
 # don't know if that's necessary.
 rst_epilog = '''
-.. |pandas_DataFrame| replace:: ``pandas.DataFrame``
-.. _pandas_DataFrame: http://pandas.pydata.org/pandas-docs/stable/generated/pandas.DataFrame.htm
-
 .. |scala_concurrent_duration_Duration| replace:: ``scala.concurrent.duration.Duration``
 .. _scala_concurrent_duration_Duration: http://www.scala-lang.org/api/2.11.7/#scala.concurrent.duration.Duration
 
 '''
 
 intersphinx_mapping = {
-    'pyspark': ('http://spark.apache.org/docs/2.0.2/api/python/', "pyspark-inv.txt")
+    'python': ('http://docs.python.org/3/', 'python.inv'),
+    'pyspark': ('http://spark.apache.org/docs/2.0.2/api/python/', 'pyspark.inv'),
+    'pandas': ('http://pandas.pydata.org/pandas-docs/stable/', 'pandas.inv')
 }
