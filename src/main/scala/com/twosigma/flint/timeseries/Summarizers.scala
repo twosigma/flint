@@ -258,6 +258,25 @@ object Summarizers {
   }
 
   /**
+   * Calculates the Pearson weighted correlation between two columns
+   *
+   * The output schema is:
+   *  - "<xColumn>_<yColumn>_<weightColumn>_weightedCorrelation": [[DoubleType]], the weighted correlation of
+   *    `xColumn` and `yColumn` with weight `weightColumn`.
+   *
+   * @param xColumn      A column to compute correlation
+   * @param yColumn      The other column to compute correlation
+   * @param weightColumn The column whose values will be served as weights
+   * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the correlation.
+   */
+  def weightedCorrelation(
+    xColumn: String,
+    yColumn: String,
+    weightColumn: String
+  ): SummarizerFactory =
+    WeightedCorrelationSummarizerFactory(xColumn, yColumn, weightColumn)
+
+  /**
    * Performs a weighted multiple OLS linear regression of the values in several columns against values
    * in another column, using values from yet another column as the weights.
    *

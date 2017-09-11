@@ -22,8 +22,8 @@ package com.twosigma.flint.rdd.function.summarize.summarizer
  * u + a = s.add(u, a)
  * u1 + u2 = s.merge(u1, u2)
  */
-
 trait Summarizer[T, U, V] extends Serializable {
+
   /**
    *  @return the initial state of this summarizer.
    */
