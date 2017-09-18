@@ -966,17 +966,19 @@ def test_summary_correlation(pyspark, summarizers, tests_utils, price, forecast)
 
 
 def test_summary_weighted_correlation(pyspark, summarizers, tests_utils, price, forecast):
-    expected_pdf = make_pdf([
-        (0, -1.96590909091,)
-    ], ["time", "price_forecast_weight_weightedCorrelation"])
-
     import pyspark.sql.functions as F
-    joined = price.leftJoin(forecast, key="id").withColumn('weight', F.lit(1.0))
+    joined = price.leftJoin(forecast, key="id").withColumn('weight', F.lit(1.0)).withColumn('weight2', F.lit(42.0))
     result = joined.summarize(summarizers.weighted_correlation("price", "forecast", "weight")).toPandas()
-    result2 = joined.summarize(summarizers.correlation("price", "forecast")).toPandas()
+    result2 = joined.summarize(summarizers.weighted_correlation("price", "forecast", "weight2")).toPandas()
+    expected = joined.summarize(summarizers.correlation("price", "forecast")).toPandas()
 
-    print(result2)
-    pdt.assert_frame_equal(result, expected_pdf)
+    assert(np.isclose(
+        result['price_forecast_weight_weightedCorrelation'][0],
+        expected['price_forecast_correlation'][0]))
+
+    assert(np.isclose(
+        result2['price_forecast_weight2_weightedCorrelation'][0],
+        expected['price_forecast_correlation'][0]))
 
 
 def test_summary_linearRegression(pyspark, summarizers, tests_utils, price, forecast):
