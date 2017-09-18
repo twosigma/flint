@@ -9,4 +9,3 @@ pandas
 scipy
 pytest
 pytest-cov
-pytest-benchmark
