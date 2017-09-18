@@ -981,6 +981,7 @@ def test_summary_max(pyspark, summarizers, tests_utils, forecast):
     expected_pdf = make_pdf([
         (0, 6.4,)
     ], ["time", "forecast_max"])
+
     result = forecast.summarize(summarizers.max("forecast")).toPandas()
     pdt.assert_frame_equal(result, expected_pdf)
 
@@ -988,6 +989,7 @@ def test_summary_mean(pyspark, summarizers, tests_utils, price, forecast):
     expected_pdf = make_pdf([
         (0, 3.25,)
     ], ["time", "price_mean"])
+
     joined = price.leftJoin(forecast, key="id")
     result = joined.summarize(summarizers.mean("price")).toPandas()
     pdt.assert_frame_equal(result, expected_pdf)
@@ -996,6 +998,7 @@ def test_summary_weighted_mean(pyspark, summarizers, tests_utils, price, vol):
     expected_pdf = make_pdf([
         (0, 4.166667, 1.547494, 8.237545, 12,)
         ], ["time", "price_volume_weightedMean", "price_volume_weightedStandardDeviation", "price_volume_weightedTStat", "price_volume_observationCount"])
+
     joined = price.leftJoin(vol, key="id")
     result = joined.summarize(summarizers.weighted_mean("price", "volume")).toPandas()
 
@@ -1005,6 +1008,7 @@ def test_summary_min(pyspark, summarizers, tests_utils, forecast):
     expected_pdf = make_pdf([
         (0, -9.6,)
     ], ["time", "forecast_min"])
+
     result = forecast.summarize(summarizers.min("forecast")).toPandas()
     pdt.assert_frame_equal(result, expected_pdf)
 
@@ -1012,6 +1016,7 @@ def test_summary_quantile(sc, summarizers, forecast):
     expected_pdf = make_pdf([
         (0, -2.22, 1.75)
     ], ["time", "forecast_0.2quantile", "forecast_0.5quantile"])
+
     result = forecast.summarize(summarizers.quantile("forecast", (0.2, 0.5))).toPandas()
     pdt.assert_frame_equal(result, expected_pdf)
 
@@ -1020,25 +1025,36 @@ def test_summary_stddev(pyspark, summarizers, tests_utils, price, forecast):
         (0, 1.802775638,)
     ], ["time", "price_stddev"])
     joined = price.leftJoin(forecast, key="id")
+
     result = joined.summarize(summarizers.stddev("price")).toPandas()
     pdt.assert_frame_equal(result, expected_pdf)
-
 
 def test_summary_variance(pyspark, summarizers, tests_utils, price, forecast):
     expected_pdf = make_pdf([
         (0, 3.25,)
     ], ["time", "price_variance"])
+
     joined = price.leftJoin(forecast, key="id")
     result = joined.summarize(summarizers.variance("price")).toPandas()
     pdt.assert_frame_equal(result, expected_pdf)
-
 
 def test_summary_covariance(pyspark, summarizers, tests_utils, price, forecast):
     expected_pdf = make_pdf([
         (0, -1.802083333,)
     ], ["time", "price_forecast_covariance"])
+
     joined = price.leftJoin(forecast, key="id")
     result = joined.summarize(summarizers.covariance("price", "forecast")).toPandas()
+    pdt.assert_frame_equal(result, expected_pdf)
+
+def test_summary_weighted_covariance(pyspark, summarizers, tests_utils, price, forecast):
+    expected_pdf = make_pdf([
+        (0, -1.96590909091,)
+    ], ["time", "price_forecast_weight_weightedCovariance"])
+
+    import pyspark.sql.functions as F
+    joined = price.leftJoin(forecast, key="id").withColumn('weight', F.lit(2.0))
+    result = joined.summarize(summarizers.weighted_covariance("price", "forecast", "weight")).toPandas()
     pdt.assert_frame_equal(result, expected_pdf)
 
 def test_summary_product(pyspark, summarizers, tests_utils, price):

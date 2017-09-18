@@ -166,15 +166,33 @@ def covariance(x_column, y_column):
 
     **Adds columns:**
 
-    <column_x>_<column_y>_covariance (*float*)
-        covariance of column_x and column_y
+    <x_column>_<y_column>_covariance (*float*)
+        covariance of x_column and y_column
 
-    :param column_x: name of column X
-    :type column_x: str
-    :param column_y: name of column y
-    :type column_y: str
+    :param x_column: name of column X
+    :type x_column: str
+    :param y_column: name of column y
+    :type y_column: str
     '''
     return SummarizerFactory('covariance', x_column, y_column)
+
+
+def weighted_covariance(x_column, y_column, weight_column):
+    '''Computes unbiased weighted covariance of two columns.
+
+    **Adds columns:**
+
+    <x_column>_<y_column>_<weight_column>_weightedCovariance (*float*)
+        covariance of x_column and y_column
+
+    :param x_column: name of column X
+    :type x_column: str
+    :param y_column: name of column y
+    :type y_column: str
+    :param weight_column: name of weight column
+    :type weight_column: str
+    '''
+    return SummarizerFactory('weightedCovariance', x_column, y_column, weight_column)
 
 
 def dot_product(x_column, y_column):
