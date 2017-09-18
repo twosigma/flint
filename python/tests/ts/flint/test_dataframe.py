@@ -964,6 +964,21 @@ def test_summary_correlation(pyspark, summarizers, tests_utils, price, forecast)
     tests_utils.assert_same(results[4][1]["price_forecast_correlation"], -0.021896121374023046, "forecast: 0")
     tests_utils.assert_same(results[4][1]["price_forecast_correlationTStat"], -0.04380274440368827, "forecastTStat: 0")
 
+
+def test_summary_weighted_correlation(pyspark, summarizers, tests_utils, price, forecast):
+    expected_pdf = make_pdf([
+        (0, -1.96590909091,)
+    ], ["time", "price_forecast_weight_weightedCorrelation"])
+
+    import pyspark.sql.functions as F
+    joined = price.leftJoin(forecast, key="id").withColumn('weight', F.lit(1.0))
+    result = joined.summarize(summarizers.weighted_correlation("price", "forecast", "weight")).toPandas()
+    result2 = joined.summarize(summarizers.correlation("price", "forecast")).toPandas()
+
+    print(result2)
+    pdt.assert_frame_equal(result, expected_pdf)
+
+
 def test_summary_linearRegression(pyspark, summarizers, tests_utils, price, forecast):
     """
     Test the python binding for linearRegression. This does NOT test the correctness of the regression.

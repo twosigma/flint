@@ -53,6 +53,8 @@ __all__ = [
     'stddev',
     'sum',
     'variance',
+    'weighted_correlation',
+    'weighted_covariance',
     'weighted_mean',
     'zscore',
 ]
@@ -147,6 +149,24 @@ def correlation(cols, other=None):
         return SummarizerFactory('correlation', cols)
     else:
         return SummarizerFactory('correlation', cols, other)
+
+
+def weighted_correlation(x_column, y_column, weight_column):
+    '''Computes unbiased weighted correlation of two columns.
+
+    **Adds columns:**
+
+    <x_column>_<y_column>_<weight_column>_weightedCorrelation (*float*)
+        covariance of x_column and y_column
+
+    :param x_column: name of column X
+    :type x_column: str
+    :param y_column: name of column y
+    :type y_column: str
+    :param weight_column: name of weight column
+    :type weight_column: str
+    '''
+    return SummarizerFactory('weightedCorrelation', x_column, y_column, weight_column)
 
 
 def count():

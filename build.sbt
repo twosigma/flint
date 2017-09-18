@@ -143,6 +143,7 @@ mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) =>
   {
     case m if m.startsWith("META-INF/services") => MergeStrategy.filterDistinctLines
     case m if m.startsWith("META-INF") => MergeStrategy.discard
+    case m if m.startsWith("git.properties") => MergeStrategy.discard
     case _ => MergeStrategy.deduplicate
   }
 }
