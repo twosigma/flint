@@ -152,12 +152,12 @@ def correlation(cols, other=None):
 
 
 def weighted_correlation(x_column, y_column, weight_column):
-    '''Computes unbiased weighted correlation of two columns.
+    '''Computes weighted correlation of two columns.
 
     **Adds columns:**
 
     <x_column>_<y_column>_<weight_column>_weightedCorrelation (*float*)
-        covariance of x_column and y_column
+        correlation of x_column and y_column
 
     :param x_column: name of column X
     :type x_column: str
