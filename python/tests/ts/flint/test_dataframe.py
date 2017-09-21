@@ -71,7 +71,11 @@ def launcher_params():
     # TODO: run on real datacenters for more thorough integration
     #       tests, but not often
     params = {'datacenter': 'local',
-              'spark_conf': {'spark.ui.showConsoleProgress': 'false'},
+              'spark_conf': {'spark.ui.showConsoleProgress': 'false',
+                             # pyarrow 0.6 doesn't work with
+                             # list<struct>, which is needed for a few
+                             # tests
+                             'spark.sql.execution.arrow.enable': 'false'},
               'executor_memory': (1*1024**3),
               'driver_memory': (4*1024**3)}
 
