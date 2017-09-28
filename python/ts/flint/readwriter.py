@@ -199,15 +199,18 @@ class TSDataFrameReader(object):
             is_sorted=is_sorted,
             unit=self._parameters.timeUnitString())
 
-    def _df_between(self, df, begin, end, time_column, junit):
+    def _df_between(self, df, begin_nanos, end_nanos, time_column):
         """Filter a Python dataframe to contain data between begin (inclusive) and end (exclusive)
 
         :return: :class:`pyspark.sql.DataFrame`
         """
-        jdf = df._jdf
-        new_jdf = self._jpkg.TimeSeriesRDD.DFBetween(jdf, begin, end, junit, time_column)
+        if begin_nanos:
+            df = df.filter(df[time_column] >= begin_nanos)
 
-        return DataFrame(new_jdf, self._sqlContext)
+        if end_nanos:
+            df = df.filter(df[time_column] < end_nanos)
+
+        return df
 
     def dataframe(self, df, begin=None, end=None, *,
                   timezone='UTC',
@@ -266,13 +269,12 @@ class TSDataFrameReader(object):
             timeUnit=unit
         )
 
-        begin = self._parameters.range().beginFlintString()
-        end = self._parameters.range().endFlintString()
         time_column = self._parameters.timeColumn()
-        jtimeunit = self._parameters.timeUnit()
+        begin_nanos = self._parameters.range().beginNanosOrNull()
+        end_nanos = self._parameters.range().endNanosOrNull()
 
-        if begin or end:
-            df = self._df_between(df, begin, end, time_column, jtimeunit)
+        if begin_nanos or end_nanos:
+            df = self._df_between(df, begin_nanos, end_nanos, time_column)
 
         return TimeSeriesDataFrame._from_df(
             df,

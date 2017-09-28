@@ -17,6 +17,7 @@
 package com.twosigma.flint.timeseries
 
 import java.util.concurrent.TimeUnit
+import javax.annotation.Nullable
 
 import com.twosigma.flint.FlintConf
 import com.twosigma.flint.annotation.PythonApi
@@ -149,28 +150,52 @@ object TimeSeriesRDD {
    * Filter a [[org.apache.spark.sql.DataFrame]] to contain data within a time range
    *
    * @param dataFrame  A [[org.apache.spark.sql.DataFrame]].
-   * @param begin      Begin time of the returned [[DataFrame]], inclusive
-   * @param end        End time of the returnred [[DataFrame]], exclusive
+   * @param begin      Optional begin time of the returned [[DataFrame]], inclusive
+   * @param end        Optional end time of the returned [[DataFrame]], exclusive
    * @param timeUnit   Optional. The time unit under time column which could be
    *                   [[scala.concurrent.duration.NANOSECONDS]],[[scala.concurrent.duration.MILLISECONDS]], etc.
    * @param timeColumn Optional. The name of column in `df` that specifies the column name for time. Default: "time"
    * @return a [[org.apache.spark.sql.DataFrame]].
    */
+  @deprecated("0.3.4", "No longer used by Python bindings")
   @PythonApi
   private[flint] def DFBetween(
     dataFrame: DataFrame,
-    begin: String,
-    end: String,
+    @Nullable begin: String,
+    @Nullable end: String,
     timeUnit: TimeUnit = NANOSECONDS,
     timeColumn: String = timeColumnName
   ): DataFrame = {
+    val beginNanos = Option(begin).map(TimeFormat.parse(_, timeUnit = timeUnit))
+    val endNanos = Option(end).map(TimeFormat.parse(_, timeUnit = timeUnit))
+
+    DFBetween(dataFrame, beginNanos, endNanos, timeColumn = timeColumn)
+  }
+
+  /**
+   *
+   * @param dataFrame     A [[org.apache.spark.sql.DataFrame]].
+   * @param beginNanosOpt Optional begin time of the returned [[DataFrame]] in nanoseconds, inclusive
+   * @param endNanosOpt   Optional end time of the returned [[DataFrame]] in nanoseconds, exclusive
+   * @param timeColumn    Optional. The name of column in `dataFrame` that specifies the column name for time.
+   * @return a [[org.apache.spark.sql.DataFrame]].
+   */
+  private[flint] def DFBetween(
+    dataFrame: DataFrame,
+    beginNanosOpt: Option[Long],
+    endNanosOpt: Option[Long],
+    timeColumn: String
+  ): DataFrame = {
     var df = dataFrame
 
-    if (begin != null) {
-      df = df.filter(df(timeColumn) >= timeUnit.convert(TimeFormat.parseNano(begin), NANOSECONDS))
+    df = beginNanosOpt match {
+      case Some(nanos) => df.filter(df(timeColumn) >= nanos)
+      case None => df
     }
-    if (end != null) {
-      df = df.filter(df(timeColumn) < timeUnit.convert(TimeFormat.parseNano(end), NANOSECONDS))
+
+    df = endNanosOpt match {
+      case Some(nanos) => df.filter(df(timeColumn) < nanos)
+      case None => df
     }
 
     df
@@ -355,17 +380,57 @@ object TimeSeriesRDD {
   )(
     isSorted: Boolean,
     timeUnit: TimeUnit,
-    begin: String = null,
-    end: String = null,
-    columns: Seq[String] = null,
+    @Nullable begin: String = null,
+    @Nullable end: String = null,
+    @Nullable columns: Seq[String] = null,
     timeColumn: String = timeColumnName
   ): TimeSeriesRDD = {
+    fromParquet(
+      sc,
+      paths,
+      isSorted = isSorted,
+      beginNanos = Option(begin).map(TimeFormat.parse(_, timeUnit = timeUnit)),
+      endNanos = Option(end).map(TimeFormat.parse(_, timeUnit = timeUnit)),
+      columns = Option(columns),
+      timeUnit = timeUnit,
+      timeColumn = timeColumn
+    )
+  }
+
+  /**
+   * Read a Parquet file into a [[TimeSeriesRDD]] using optional nanoseconds for begin and end.
+   *
+   * Used by [[com.twosigma.flint.timeseries.io.read.ReadBuilder]].
+   *
+   * @param sc         The [[org.apache.spark.SparkContext]].
+   * @param paths      The paths of the parquet file.
+   * @param isSorted   flag specifies if the rows in the file have been sorted by their timestamps.
+   * @param beginNanos Optional. Inclusive nanoseconds.
+   * @param endNanos   Optional. Exclusive nanoseconds.
+   * @param columns    Optional. Column in the parquet file to read into [[TimeSeriesRDD]]. IMPORTANT: This is critical
+   *                   for performance. Reading small amounts of columns can easily increase performance by 10x
+   *                   comparing to reading all columns in the file.
+   * @param timeColumn Optional. Column in parquet file that specifies time.
+   * @return a [[TimeSeriesRDD]]
+   */
+  private[timeseries] def fromParquet(
+    sc: SparkContext,
+    paths: Seq[String],
+    isSorted: Boolean,
+    beginNanos: Option[Long],
+    endNanos: Option[Long],
+    columns: Option[Seq[String]],
+    timeUnit: TimeUnit,
+    timeColumn: String
+  ): TimeSeriesRDD = {
     val sqlContext = SQLContext.getOrCreate(sc)
-    var df = sqlContext.read.parquet(paths: _*)
-    if (columns != null) {
-      df = df.select(columns.head, columns.tail: _*)
-    }
-    fromDF(DFBetween(df, begin, end, timeUnit, timeColumn))(
+    val df = sqlContext.read.parquet(paths: _*)
+
+    val prunedDf = columns.map { columnNames =>
+      df.select(columnNames.map(col): _*)
+    }.getOrElse(df)
+
+    fromDF(DFBetween(prunedDf, beginNanos, endNanos, timeColumn))(
       isSorted = isSorted,
       timeUnit = timeUnit,
       timeColumn = timeColumn

@@ -16,10 +16,13 @@
 
 package com.twosigma.flint.timeseries.time
 
-import org.joda.time.format.{ DateTimeFormat, DateTimeFormatter }
+import java.util.concurrent.TimeUnit
+
+import org.joda.time.format.{ DateTimeFormat, DateTimeFormatter, ISODateTimeFormat }
 import org.joda.time.{ DateTime, DateTimeZone }
 
-import scala.util.{ Success, Try }
+import scala.concurrent.duration.TimeUnit
+import scala.util.Try
 
 object TimeFormat {
 
@@ -37,18 +40,20 @@ object TimeFormat {
    */
   @throws(classOf[IllegalArgumentException])
   protected[flint] def parseDateTime(text: String, timeZone: DateTimeZone = DateTimeZone.UTC): DateTime = {
-    val parsed = formatters.view.map {
-      case formatter => Try(formatter.withZone(timeZone).parseDateTime(text.trim)).toOption
-    }.filter(_.isDefined).headOption
-    require(parsed.isDefined, s"Can't parse the given text $text as date time.")
-    parsed.flatten.head
+    val parsedOption = formatters.view.flatMap { formatter =>
+      Try(formatter.withZone(timeZone).parseDateTime(text.trim)).toOption
+    }.headOption
+
+    parsedOption.getOrElse(
+      throw new IllegalArgumentException(s"Can't parse the given text $text as date time.")
+    )
   }
 
   /**
-   * Parses a date-time from the given text and returning the number of NANOSECONDS since the epoch,
+   * Parses a date-time from the given text and returning it in terms of `timeUnit` since the epoch,
    * 1970-01-01T00:00:00Z.
    * <p>
-   * It will try all possible known formatters with the given time zone (default UTC) as the default time Zone and
+   * It will try all possible known formatters with the given time zone (default: UTC) and
    * ISO chronology to parse, respectively. It will return the first parsable one.
    * <p>
    * If the text contains a time zone string then that will be taken into account. However, the underneath MILLISECONDS
@@ -57,8 +62,24 @@ object TimeFormat {
    * @param text the text to parse, not null
    * @return an parsed NANOSECONDS since the epoch 1970-01-01T00:00:00Z.
    */
+  protected[flint] def parse(
+    text: String,
+    timeZone: DateTimeZone = DateTimeZone.UTC,
+    timeUnit: TimeUnit = TimeUnit.NANOSECONDS
+  ): Long =
+    timeUnit.convert(parseDateTime(text, timeZone).getMillis, TimeUnit.MILLISECONDS)
+
+  /**
+   * Parses a date-time from the given text and returning the number of NANOSECONDS since the epoch,
+   * 1970-01-01T00:00:00Z.
+   *
+   * @see [[parse(String, DateTimeZone, TimeUnit)]] for parsing rules.
+   *
+   * @param text the text to parse, not null
+   * @return an parsed NANOSECONDS since the epoch 1970-01-01T00:00:00Z.
+   */
   protected[flint] def parseNano(text: String, timeZone: DateTimeZone = DateTimeZone.UTC): Long =
-    parseDateTime(text, timeZone).getMillis * 1000000
+    parse(text, timeZone, timeUnit = TimeUnit.NANOSECONDS)
 
   private val formatters: List[DateTimeFormatter] = List(
     // Double `HH` formatter
@@ -80,6 +101,9 @@ object TimeFormat {
     DateTimeFormat.forPattern("yyyyMMdd H:mm:ss.SSS"),
     DateTimeFormat.forPattern("yyyyMMdd H:mm:ss.SSS Z"),
     DateTimeFormat.forPattern("yyyy-MM-dd H:mm:ss.SSS"),
-    DateTimeFormat.forPattern("yyyy-MM-dd H:mm:ss.SSS Z")
+    DateTimeFormat.forPattern("yyyy-MM-dd H:mm:ss.SSS Z"),
+
+    // ISO DateTime
+    ISODateTimeFormat.dateTimeParser()
   )
 }
