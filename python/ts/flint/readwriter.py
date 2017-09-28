@@ -307,7 +307,7 @@ class TSDataFrameReader(object):
         :return: a new :class:`TimeSeriesDataFrame`
         :rtype: TimeSeriesDataFrame
         """
-        df = self._sqlContext.read.parquet(paths)
+        df = self._sqlContext.read.parquet(*paths)
         return self.dataframe(df)
 
     def _reconcile_reader_args(self, begin=None, end=None, timezone='UTC',
