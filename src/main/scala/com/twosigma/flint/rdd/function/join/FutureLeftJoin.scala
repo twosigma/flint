@@ -16,25 +16,15 @@
 
 package com.twosigma.flint.rdd.function.join
 
-import com.twosigma.flint.rdd.{ PeekableIterator, PartitionsIterator }
-import org.apache.spark.{ NarrowDependency, OneToOneDependency }
-
+import com.twosigma.flint.rdd.{ PartitionsIterator, PeekableIterator }
+import org.apache.spark.{ NarrowDependency, OneToOneDependency, TaskContext }
 import com.twosigma.flint.rdd.OrderedRDD
 
 import scala.collection.immutable.TreeMap
-import scala.collection.mutable
 import scala.reflect.ClassTag
-
 import java.util
 
 protected[flint] object FutureLeftJoin {
-
-  /**
-   * rightK passes leftK.
-   */
-  @inline
-  private def passes[K](leftK: K, rightK: K, strictForward: Boolean)(implicit ord: Ordering[K]) =
-    if (strictForward) ord.lt(leftK, rightK) else ord.lteq(leftK, rightK)
 
   def apply[K: ClassTag, SK, V, V2](
     leftRdd: OrderedRDD[K, V],
@@ -51,7 +41,7 @@ protected[flint] object FutureLeftJoin {
 
     val leftDep = new OneToOneDependency(leftRdd)
     val rightDep = new NarrowDependency(rightRdd) {
-      override def getParents(partitionId: Int) = indexToJoinSplits(partitionId)._2.map(_.index)
+      override def getParents(partitionId: Int): Seq[Int] = indexToJoinSplits(partitionId)._2.map(_.index)
     }
     // A map from left partition index to right partitions.
     val leftPartitions = indexToJoinSplits.map { case (idx, joinSplit) => (idx, joinSplit._2) }
@@ -75,6 +65,16 @@ protected[flint] object FutureLeftJoin {
       }
     )
   }
+
+  @inline
+  private def passes[K](leftK: K, rightK: K, strictForward: Boolean)(implicit ord: Ordering[K]): Boolean =
+    if (strictForward) ord.lt(leftK, rightK) else ord.lteq(leftK, rightK)
+
+  @inline
+  private def purge[K, V](q: util.Deque[(K, V)], k: K, strictForward: Boolean)(implicit ord: Ordering[K]) =
+    while (!q.isEmpty && !passes(k, q.peekFirst()._1, strictForward)) {
+      q.pollFirst()
+    }
 
   /**
    * The basic algorithm works as follows. For each SK, it creates a queue for it. The following
@@ -124,15 +124,14 @@ protected[flint] object FutureLeftJoin {
           queueForRightSk = new util.ArrayDeque[(K, V)]()
           foreSeen.put(sk, queueForRightSk)
         }
+        purge(queueForRightSk, leftK, strictForward)
         queueForRightSk.addLast((rightK, rightV))
         found = !queueForLeftSk.isEmpty && passes(leftK, queueForLeftSk.peekFirst()._1, strictForward)
       }
     }
 
     // This is outside the while loop because we still need to remove old data if rightIter is empty
-    while (!queueForLeftSk.isEmpty && !passes(leftK, queueForLeftSk.peekFirst()._1, strictForward)) {
-      queueForLeftSk.pollFirst()
-    }
+    purge(queueForLeftSk, leftK, strictForward)
     queueForLeftSk
   }
 }
