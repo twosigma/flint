@@ -17,10 +17,10 @@
 package com.twosigma.flint
 
 import java.util.Properties
-import org.apache.log4j.PropertyConfigurator
 
+import org.apache.log4j.PropertyConfigurator
 import org.apache.spark.{ SparkConf, SparkContext }
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{ SQLContext, SparkSession }
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.Suite
 
@@ -34,9 +34,13 @@ trait SharedSparkContext extends BeforeAndAfterAll {
 
   @transient private var _sqlContext: SQLContext = _
 
+  @transient private var _spark: SparkSession = _
+
   def sc: SparkContext = _sc
 
   def sqlContext: SQLContext = _sqlContext
+
+  def spark: SparkSession = _spark
 
   {
     // Set logging for our tests to WARN since tons of Spark statements that should be DEBUG are oddly listed as INFO.
@@ -63,14 +67,20 @@ trait SharedSparkContext extends BeforeAndAfterAll {
       "spark.executor.cores",
       Math.ceil(sys.runtime.availableProcessors() * 0.75).toInt
     )
-    _sc = new SparkContext(s"local[$cores]", "test", conf)
-    _sqlContext = SQLContext.getOrCreate(_sc)
+
+    _spark = SparkSession.builder().master(s"local[$cores]").appName("test").config(conf).getOrCreate()
+    _sqlContext = _spark.sqlContext
+    _sc = _spark.sparkContext
+
     super.beforeAll()
   }
 
   override def afterAll() {
-    LocalSparkContext.stop(_sc)
+    _spark.stop()
+    _spark = null
+    _sqlContext = null
     _sc = null
+
     super.afterAll()
   }
 

@@ -47,7 +47,7 @@ private[timeseries] object Schema {
 
   def rename(schema: StructType, fromTo: Seq[(String, String)]): StructType = {
     val newSchema = StructType(schema.map {
-      field => fromTo.toMap.get(field.name).fold(field)(StructField(_, field.dataType))
+      field => fromTo.toMap.get(field.name).fold(field)(StructField(_, field.dataType, field.nullable))
     })
     requireUniqueColumnNames(newSchema)
     newSchema

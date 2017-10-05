@@ -194,8 +194,10 @@ private[flint] object ArrowConverters {
     // Write a batch to byte stream, ensure the batch, allocator and writer are closed
     Utils.tryWithSafeFinally {
       val loader = new VectorLoader(root)
-      loader.load(batch)
-      writer.writeBatch() // writeBatch can throw IOException
+      if (batch.getLength > 0) {
+        loader.load(batch)
+        writer.writeBatch() // writeBatch can throw IOException
+      }
     } {
       batch.close()
       root.close()
@@ -276,6 +278,7 @@ private[flint] abstract class PrimitiveColumnWriter(val ordinal: Int)
     valueMutator.setValueCount(count)
     val fieldNode = new ArrowFieldNode(count, nullCount)
     val valueBuffers = valueVector.getBuffers(true)
+
     (fieldNode, valueBuffers)
   }
 }

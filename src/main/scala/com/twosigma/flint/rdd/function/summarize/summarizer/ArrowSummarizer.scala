@@ -17,7 +17,7 @@
 package com.twosigma.flint.rdd.function.summarize.summarizer
 
 import com.twosigma.flint.arrow.{ ArrowPayload, ColumnWriter }
-import org.apache.arrow.memory.{ BaseAllocator, RootAllocator }
+import org.apache.arrow.memory.{ BufferAllocator, RootAllocator }
 import org.apache.arrow.vector.schema.ArrowRecordBatch
 import org.apache.arrow.vector.stream.MessageSerializer
 import org.apache.spark.sql.catalyst.InternalRow
@@ -25,12 +25,39 @@ import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
 
+object ArrowUtils {
+  /**
+   * write data in column writers out to bytes in file format.
+   *
+   * column writers cannot be used after this call and their memory are freed.
+   *
+   */
+  private[flint] def columnWritersToBytes(
+    writers: Array[ColumnWriter],
+    schema: StructType,
+    allocator: BufferAllocator
+  ): Array[Byte] = {
+    val (fieldNodes, bufferArrays) = writers.map(_.finish()).unzip
+    val buffers = bufferArrays.flatten
+
+    val rowLength = if (fieldNodes.nonEmpty) fieldNodes.head.getLength else 0
+    val recordBatch = new ArrowRecordBatch(
+      rowLength,
+      fieldNodes.toList.asJava, buffers.toList.asJava
+    )
+    buffers.foreach(_.release())
+
+    val payload = ArrowPayload(recordBatch, schema, allocator)
+    payload.asPythonSerializable
+  }
+}
+
 /**
  * State is NOT serializable. This summarizer is not a distributed summarizer.
  */
 class ArrowSummarizerState(
   var initialized: Boolean,
-  var allocator: BaseAllocator,
+  var allocator: BufferAllocator,
   var vectorWriters: Array[ColumnWriter]
 )
 
@@ -93,19 +120,9 @@ case class ArrowSummarizer(schema: StructType)
   // This can only be called once
   override def render(u: ArrowSummarizerState): Array[Byte] = {
     if (u.initialized) {
-      val (fieldNodes, bufferArrays) = u.vectorWriters.map(_.finish()).unzip
-      val buffers = bufferArrays.flatten
-
-      val rowLength = if (fieldNodes.nonEmpty) fieldNodes.head.getLength else 0
-      val recordBatch = new ArrowRecordBatch(
-        rowLength,
-        fieldNodes.toList.asJava, buffers.toList.asJava
-      )
-      buffers.foreach(_.release())
-
-      val payload = ArrowPayload(recordBatch, schema, u.allocator)
+      val bytes = ArrowUtils.columnWritersToBytes(u.vectorWriters, schema, u.allocator)
       u.allocator.close()
-      payload.asPythonSerializable
+      bytes
     } else {
       Array.empty
     }

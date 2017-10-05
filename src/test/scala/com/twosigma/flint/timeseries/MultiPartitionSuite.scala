@@ -36,36 +36,7 @@ private[flint] sealed trait PartitionStrategy {
    * (3) ranges are ordered and non-overlapping
    */
   private def ensureValid(rdd: TimeSeriesRDD): TimeSeriesRDD = {
-    val timeIndex = rdd.schema.fieldIndex("time")
-    val indexToRange = rdd.orderedRdd.rangeSplits.map {
-      case RangeSplit(OrderedRDDPartition(index), range) => (index, range)
-    }.toMap
-
-    val ranges = rdd.orderedRdd.rangeSplits.map(_.range)
-
-    (ranges zip ranges.drop(1)).foreach{
-      case (left, right) =>
-        require(left.end.get <= right.begin, s"Invalid ranges: $left $right")
-    }
-
-    rdd.orderedRdd.mapPartitionsWithIndex{
-      case (index, rows) =>
-        val range = indexToRange(index)
-        var lastSeen = range.begin
-
-        var count = 0
-
-        for ((time, row) <- rows) {
-          require(row.getLong(timeIndex) == time)
-          require(time >= lastSeen, "timestamp is not ordered")
-          require(range.contains(time), "timestamp is not in range")
-          lastSeen = time
-          count += 1
-        }
-
-        Iterator(count)
-    }.sum()
-
+    rdd.validate()
     rdd
   }
 
@@ -298,11 +269,11 @@ private[flint] object PartitionStrategy {
   case object FillWithEmptyPartition extends PartitionStrategy {
     private def fillRangeGap(ranges: Array[RangeSplit[Long]]): Array[(CloseOpen[Long], Option[Int])] = {
       ((null +: ranges) zip (ranges :+ null)).flatMap {
-        case (null, RangeSplit(OrderedRDDPartition(index), right)) =>
+        case (null, RangeSplit(OrderedRDDPartition(_), right)) =>
           if (right.begin == Long.MinValue) {
             Iterator.empty
           } else {
-            Iterator((CloseOpen(Long.MinValue, Some(right.begin)), Some(index)))
+            Iterator((CloseOpen(Long.MinValue, Some(right.begin)), None))
           }
         case (RangeSplit(OrderedRDDPartition(index), left), null) =>
           if (left.end.isEmpty) {
@@ -333,6 +304,7 @@ private[flint] object PartitionStrategy {
         case (range, index) =>
           RangeSplit(OrderedRDDPartition(index), range)
       }
+
       val deps = new NarrowDependency(parentRdd) {
         override def getParents(partitionId: Int): Seq[Int] = {
           parentIndices(partitionId).map(Seq(_)).getOrElse(Seq.empty)
@@ -395,7 +367,7 @@ class MultiPartitionSuite extends TimeSeriesSuite with PropertyChecks {
       // info(s"PartitionStrategy: ${s1} ${s2}")
       // info(s"Range1: ${s1.partition(rdd1).partInfo.get.splits}")
       // info(s"Range2: ${s2.partition(rdd2).partInfo.get.splits}")
-      test(s1.repartitionEnsureValid(rdd1), s2.repartitionEnsureValid(rdd2))
+      test(s1.repartition(rdd1), s2.repartition(rdd2))
     }
   }
 
@@ -418,6 +390,8 @@ class MultiPartitionSuite extends TimeSeriesSuite with PropertyChecks {
   def withPartitionStrategyAndParams(
     input: () => TimeSeriesRDD
   )(
+    name: String
+  )(
     strategies: Seq[PartitionStrategy]
   )(
     params: Seq[Seq[Any]]
@@ -434,6 +408,35 @@ class MultiPartitionSuite extends TimeSeriesSuite with PropertyChecks {
           val baseline = fn(OnePartition.repartition(rdd), params)
           val result = fn(strategy.repartition(rdd), params)
           assertEquals(result, baseline)
+        }
+      }
+    }
+  }
+
+  def withPartitionStrategyAndParams(
+    input1: () => TimeSeriesRDD,
+    input2: () => TimeSeriesRDD
+  )(
+    name: String
+  )(
+    strategies1: Seq[PartitionStrategy],
+    strategies2: Seq[PartitionStrategy]
+  )(
+    params: Seq[Seq[Any]]
+  )(
+    test: (TimeSeriesRDD, TimeSeriesRDD, Seq[Any]) => Unit
+  ): Unit = {
+    val strategies1Table = Table("strategies", strategies1: _*)
+    val strategies2Table = Table("strategies", strategies2: _*)
+    val paramsTable = Table("params", params: _*)
+    forAll(paramsTable) { params =>
+      forAll(strategies1Table) { strategy1 =>
+        forAll(strategies2Table) { strategy2 =>
+          it should s"pass $name with strategy1 = $strategy1 and strategy2 = $strategy2 and param = $params" in {
+            val rdd1 = input1()
+            val rdd2 = input2()
+            test(strategy1.repartition(rdd1), strategy2.repartition(rdd2), params)
+          }
         }
       }
     }

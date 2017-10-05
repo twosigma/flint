@@ -29,6 +29,7 @@ class PartitionStrategySpec extends TimeSeriesSuite with TimeSeriesTestData {
     val ranges = getRanges(rdd)
     val expectedRanges = CloseOpen(testDataBegin, None) :: Nil
     assert(ranges == expectedRanges)
+    assertEquals(testData, rdd)
   }
 
   it should "OneTimestampTightBound" in {
@@ -37,6 +38,7 @@ class PartitionStrategySpec extends TimeSeriesSuite with TimeSeriesTestData {
     val ranges = getRanges(rdd)
     val expectedRanges = timestamps.map(t => CloseOpen(t, Some(t + 1))).toList
     assert(ranges == expectedRanges)
+    assertEquals(testData, rdd)
   }
 
   it should "MultiTimestampNormalized" in {
@@ -47,6 +49,7 @@ class PartitionStrategySpec extends TimeSeriesSuite with TimeSeriesTestData {
         CloseOpen(3000L, Some(4001L)) ::
         CloseOpen(5000L, Some(5001L)) :: Nil
     assert(ranges == expectedRanges)
+    assertEquals(testData, rdd)
   }
 
   it should "MultiTimeststampUnnormalized" in {
@@ -58,6 +61,7 @@ class PartitionStrategySpec extends TimeSeriesSuite with TimeSeriesTestData {
         CloseOpen(4000L, Some(5000L)) ::
         CloseOpen(5000L, None) :: Nil
     assert(ranges == expectedRanges)
+    assertEquals(testData, rdd)
   }
 
   it should "MultiTimestampNormalized :: ExtendBegin" in {
@@ -68,6 +72,7 @@ class PartitionStrategySpec extends TimeSeriesSuite with TimeSeriesTestData {
         CloseOpen(2001L, Some(4001L)) ::
         CloseOpen(4001L, Some(5001L)) :: Nil
     assert(ranges == expectedRanges)
+    assertEquals(testData, rdd)
   }
 
   it should "MultiTimestampNormalized :: ExtendEnd" in {
@@ -78,6 +83,7 @@ class PartitionStrategySpec extends TimeSeriesSuite with TimeSeriesTestData {
         CloseOpen(3000L, Some(5000L)) ::
         CloseOpen(5000L, None) :: Nil
     assert(ranges == expectedRanges)
+    assertEquals(testData, rdd)
   }
 
   it should "MultiTimestampNormalized :: ExtendHalfBeginHalfEnd" in {
@@ -88,6 +94,7 @@ class PartitionStrategySpec extends TimeSeriesSuite with TimeSeriesTestData {
         CloseOpen(2500L, Some(4500L)) ::
         CloseOpen(4500L, None) :: Nil
     assert(ranges == expectedRanges)
+    assertEquals(testData, rdd)
   }
 
   it should "MultiTimestampNormalized :: FillWithEmptyPartition" in {
@@ -102,6 +109,7 @@ class PartitionStrategySpec extends TimeSeriesSuite with TimeSeriesTestData {
         CloseOpen(5000L, Some(5001L)) ::
         CloseOpen(5001L, None) :: Nil
     assert(ranges == expectedRanges)
+    assertEquals(testData, rdd)
   }
 
 }

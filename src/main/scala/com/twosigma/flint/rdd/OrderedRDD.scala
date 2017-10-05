@@ -23,6 +23,7 @@ import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
 import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.OverlappableSummarizer
 import com.twosigma.flint.annotation.PythonApi
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.RowsSummarizer
+import com.twosigma.flint.rdd.function.window.WindowBatchSummarizer
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.{ RDD, ShuffledRDD }
 import org.apache.spark._
@@ -379,6 +380,16 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
     overlapWindow: K => (K, K)
   ): OrderedRDD[K, (V, V2)] =
     SummarizeWindows.applyOverlapped(self, window, summarizer, sk, overlapWindow)
+
+  def summarizeWindowsBatch[SK: ClassTag, U, V2: ClassTag](
+    window: K => (K, K),
+    summarizer: WindowBatchSummarizer[K, SK, V, U, V2],
+    sk: V => SK,
+    other: OrderedRDD[K, V],
+    otherSk: V => SK,
+    batchSize: Int
+  ): OrderedRDD[K, V2] =
+    SummarizeWindows.applyBatch(self, window, summarizer, sk, other, otherSk, batchSize)
 
   /**
    * Apply a [[Summarizer]] to all rows of an [[OrderedRDD]].

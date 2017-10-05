@@ -166,6 +166,6 @@ class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData w
 
     def gen(): TimeSeriesRDD = cycleData1
 
-    withPartitionStrategyAndParams(gen)(DEFAULT)(params)(addWindows)
+    withPartitionStrategyAndParams(gen)("addWindows")(DEFAULT)(params)(addWindows)
   }
 }

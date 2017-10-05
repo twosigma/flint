@@ -18,8 +18,10 @@ package com.twosigma.flint.timeseries
 
 import java.util.concurrent.TimeUnit
 
+import com.twosigma.flint.FlintConf
 import com.twosigma.flint.annotation.PythonApi
 import com.twosigma.flint.rdd._
+import com.twosigma.flint.rdd.function.window.{ ArrayWindowBatchSummarizer, ArrowWindowBatchSummarizer }
 import com.twosigma.flint.timeseries.row.{ InternalRowUtils, Schema }
 import com.twosigma.flint.timeseries.summarize.{ ColumnList, OverlappableSummarizer, OverlappableSummarizerFactory, SummarizerFactory }
 import com.twosigma.flint.timeseries.time.TimeFormat
@@ -28,7 +30,7 @@ import org.apache.spark.annotation.Experimental
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ Dependency, OneToOneDependency, SparkContext }
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ERow }
+import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, GenericRow, GenericRowWithSchema => ERow }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
@@ -1023,6 +1025,11 @@ trait TimeSeriesRDD extends Serializable {
     key: String
   ): TimeSeriesRDD = summarizeWindows(window, summarizer)
 
+  def summarizeWindowsBatch(
+    window: Window,
+    key: Seq[String] = Seq.empty
+  ): TimeSeriesRDD
+
   /**
    * Computes aggregate statistics of all rows.
    *
@@ -1449,6 +1456,41 @@ class TimeSeriesRDDImpl private[timeseries] (
     }
 
     val newRdd = summarizedRdd.mapValues { case (_, (row1, row2)) => concat(row1, row2) }
+    TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
+  }
+
+  def summarizeWindowsBatch(
+    window: Window,
+    key: Seq[String] = Seq.empty
+  ): TimeSeriesRDD = {
+    val batchSize = sparkSession.conf.get(
+      FlintConf.WINDOW_BATCH_MAXSIZE_CONF,
+      FlintConf.WINDOW_BATCH_MAXSIZE_DEFAULT
+    ).toInt
+
+    val (otherORdd, otherSchema, otherSk) = (this.orderedRdd, this.schema, this.safeGetAsAny(key))
+
+    val sk = this.safeGetAsAny(key)
+
+    val sum = new ArrowWindowBatchSummarizer(this.schema, otherSchema)
+
+    // TODO: Implement column pruning
+    val summarizedRdd = window match {
+      case w: TimeWindow =>
+        orderedRdd.summarizeWindowsBatch(w.of, sum, sk, otherORdd, otherSk, batchSize)
+    }
+
+    val (concat, newSchema) = InternalRowUtils.concat2(
+      StructType(Seq(StructField(timeColumnName, LongType))),
+      sum.schema
+    )
+
+    val newRdd = summarizedRdd.mapValues{
+      case (k, row) =>
+        val values: Array[Any] = Array(k)
+        concat(new GenericInternalRow(values), row)
+    }
+
     TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
   }
 
