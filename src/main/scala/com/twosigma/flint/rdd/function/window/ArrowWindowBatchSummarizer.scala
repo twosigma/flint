@@ -19,16 +19,17 @@ package com.twosigma.flint.rdd.function.window
 import java.io.ByteArrayOutputStream
 import java.nio.channels.Channels
 
-import com.twosigma.flint.arrow.{ ArrowConverters, ArrowPayload, ColumnWriter }
+import com.twosigma.flint.arrow.{ ArrowConverters, ArrowPayload, ArrowUtils, ArrowWriter }
 import org.apache.arrow.memory.{ BufferAllocator, RootAllocator }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import java.util
 
-import com.twosigma.flint.rdd.function.summarize.summarizer.ArrowUtils
 import org.apache.arrow.vector.{ NullableIntVector, VectorSchemaRoot }
 import org.apache.arrow.vector.file.ArrowFileWriter
+import org.apache.spark.{ SparkContext, TaskContext }
+
 import org.apache.spark.sql.catalyst.util.GenericArrayData
 
 import scala.collection.JavaConverters._
@@ -128,7 +129,6 @@ abstract class BaseWindowBatchSummarizer(val leftSchema: StructType, val rightSc
     u.rightRows = new util.ArrayList[InternalRow]()
 
     val allSks = new util.HashSet[Any](u.sks)
-
     val count = u.leftRows.size()
 
     var baseIndex = 0
@@ -169,10 +169,10 @@ private[flint] case class ArrayWindowBatchSummarizer(
 ) extends BaseWindowBatchSummarizer(leftSchema, rightSchema) {
   override val schema = StructType(
     Seq(
-      StructField("left", ArrayType(leftSchema)),
-      StructField("right", ArrayType(rightSchema)),
+      StructField("__window_leftBatch", ArrayType(leftSchema)),
+      StructField("__window_rightBatch", ArrayType(rightSchema)),
       StructField(
-        "index",
+        "__window_indices",
         ArrayType(StructType(Seq(StructField("begin", IntegerType), StructField("end", IntegerType))))
       )
     )
@@ -201,14 +201,15 @@ private[flint] case class ArrowWindowBatchSummarizer(
   override val leftSchema: StructType,
   override val rightSchema: StructType
 ) extends BaseWindowBatchSummarizer(leftSchema, rightSchema) {
+
   override val schema = StructType(
     Seq(
-      StructField("leftRows", ArrayType(leftSchema)),
-      StructField("left", BinaryType),
-      StructField("leftLength", IntegerType),
-      StructField("right", BinaryType),
-      StructField("rightLength", IntegerType),
-      StructField("index", BinaryType)
+      StructField("__window_leftRows", ArrayType(leftSchema)),
+      StructField("__window_leftBatch", BinaryType),
+      StructField("__window_leftLength", IntegerType),
+      StructField("__window_rightBatch", BinaryType),
+      StructField("__window_rightLength", IntegerType),
+      StructField("__window_indices", BinaryType)
     )
   )
 
@@ -217,30 +218,30 @@ private[flint] case class ArrowWindowBatchSummarizer(
     schema: StructType,
     allocator: BufferAllocator
   ): Array[Byte] = {
-    val numColumns = leftSchema.size
-    val numRows = rows.size()
-    val columnWriters = new Array[ColumnWriter](numColumns)
-    var j = 0
+    val allocator = new RootAllocator(Long.MaxValue)
+    val arrowSchema = ArrowUtils.toArrowSchema(schema)
+    val root = VectorSchemaRoot.create(arrowSchema, allocator)
+    val out = new ByteArrayOutputStream()
+    val writer = new ArrowFileWriter(root, null, Channels.newChannel(out))
+    val arrowWriter = ArrowWriter.create(root)
 
-    j = 0
-    while (j < numColumns) {
-      val writer = ColumnWriter(schema.fields(j).dataType, j, allocator)
-      writer.init()
-      columnWriters(j) = writer
-      j += 1
-    }
-
-    j = 0
-    while (j < numColumns) {
-      var i = 0
-      while (i < numRows) {
-        columnWriters(j).write(rows.get(i))
-        i += 1
+    try {
+      val rowIter = rows.iterator()
+      while (rowIter.hasNext) {
+        val row = rowIter.next()
+        arrowWriter.write(row)
       }
-      j += 1
+
+      arrowWriter.finish()
+      writer.writeBatch()
+
+    } finally {
+      writer.close()
+      root.close()
+      allocator.close()
     }
 
-    ArrowUtils.columnWritersToBytes(columnWriters, schema, allocator)
+    out.toByteArray
   }
 
   private def serializeIndices(
@@ -255,7 +256,7 @@ private[flint] case class ArrowWindowBatchSummarizer(
           StructField("end", IntegerType)
         )
       )
-    val arrowSchema = ArrowConverters.schemaToArrowSchema(schema)
+    val arrowSchema = ArrowUtils.toArrowSchema(schema)
     val rowCount = beginIndices.size()
 
     val root = VectorSchemaRoot.create(arrowSchema, allocator)

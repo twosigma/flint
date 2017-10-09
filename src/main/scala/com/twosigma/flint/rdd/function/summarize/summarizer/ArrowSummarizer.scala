@@ -16,8 +16,13 @@
 
 package com.twosigma.flint.rdd.function.summarize.summarizer
 
-import com.twosigma.flint.arrow.{ ArrowPayload, ColumnWriter }
+import java.io.ByteArrayOutputStream
+import java.nio.channels.Channels
+
+import com.twosigma.flint.arrow.{ ArrowFieldWriter, ArrowPayload, ArrowUtils, ArrowWriter }
 import org.apache.arrow.memory.{ BufferAllocator, RootAllocator }
+import org.apache.arrow.vector.VectorSchemaRoot
+import org.apache.arrow.vector.file.ArrowFileWriter
 import org.apache.arrow.vector.schema.ArrowRecordBatch
 import org.apache.arrow.vector.stream.MessageSerializer
 import org.apache.spark.sql.catalyst.InternalRow
@@ -25,40 +30,14 @@ import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
 
-object ArrowUtils {
-  /**
-   * write data in column writers out to bytes in file format.
-   *
-   * column writers cannot be used after this call and their memory are freed.
-   *
-   */
-  private[flint] def columnWritersToBytes(
-    writers: Array[ColumnWriter],
-    schema: StructType,
-    allocator: BufferAllocator
-  ): Array[Byte] = {
-    val (fieldNodes, bufferArrays) = writers.map(_.finish()).unzip
-    val buffers = bufferArrays.flatten
-
-    val rowLength = if (fieldNodes.nonEmpty) fieldNodes.head.getLength else 0
-    val recordBatch = new ArrowRecordBatch(
-      rowLength,
-      fieldNodes.toList.asJava, buffers.toList.asJava
-    )
-    buffers.foreach(_.release())
-
-    val payload = ArrowPayload(recordBatch, schema, allocator)
-    payload.asPythonSerializable
-  }
-}
-
 /**
  * State is NOT serializable. This summarizer is not a distributed summarizer.
  */
 class ArrowSummarizerState(
   var initialized: Boolean,
   var allocator: BufferAllocator,
-  var vectorWriters: Array[ColumnWriter]
+  var root: VectorSchemaRoot,
+  var arrowWriter: ArrowWriter
 )
 
 /**
@@ -78,24 +57,20 @@ case class ArrowSummarizer(schema: StructType)
 
   // This function will allocate memory from the BufferAllocator to initialize arrow vectors.
   override def zero(): ArrowSummarizerState = {
-    new ArrowSummarizerState(false, null, null)
+    new ArrowSummarizerState(false, null, null, null)
   }
 
   private def init(u: ArrowSummarizerState): Unit = {
     if (!u.initialized) {
-      var i = 0
-      val writers = new Array[ColumnWriter](size)
+      val arrowSchema = ArrowUtils.toArrowSchema(schema)
       val allocator = new RootAllocator(Int.MaxValue)
-      while (i < size) {
-        val writer = ColumnWriter(schema.fields(i).dataType, i, allocator)
-        writer.init()
-        writers(i) = writer
-        i += 1
-      }
+      val root = VectorSchemaRoot.create(arrowSchema, allocator)
+      val arrowWriter = ArrowWriter.create(root)
 
       u.initialized = true
       u.allocator = allocator
-      u.vectorWriters = writers
+      u.root = root
+      u.arrowWriter = arrowWriter
     }
   }
 
@@ -103,12 +78,7 @@ case class ArrowSummarizer(schema: StructType)
     if (!u.initialized) {
       init(u)
     }
-
-    var i = 0
-    while (i < size) {
-      u.vectorWriters(i).write(row)
-      i += 1
-    }
+    u.arrowWriter.write(row)
     u
   }
 
@@ -120,9 +90,17 @@ case class ArrowSummarizer(schema: StructType)
   // This can only be called once
   override def render(u: ArrowSummarizerState): Array[Byte] = {
     if (u.initialized) {
-      val bytes = ArrowUtils.columnWritersToBytes(u.vectorWriters, schema, u.allocator)
+      val out = new ByteArrayOutputStream()
+      val writer = new ArrowFileWriter(u.root, null, Channels.newChannel(out))
+
+      u.arrowWriter.finish()
+      writer.writeBatch()
+
+      writer.close()
+      u.root.close()
       u.allocator.close()
-      bytes
+
+      out.toByteArray
     } else {
       Array.empty
     }
@@ -130,9 +108,8 @@ case class ArrowSummarizer(schema: StructType)
 
   override def close(u: ArrowSummarizerState): Unit = {
     if (u.initialized) {
-      val (_, bufferArrays) = u.vectorWriters.map(_.finish()).unzip
-      val buffers = bufferArrays.flatten
-      buffers.foreach(_.release())
+      u.arrowWriter.reset()
+      u.root.close()
       u.allocator.close()
     }
   }

@@ -133,6 +133,7 @@ class SummarizeWindowsBatchSpec extends MultiPartitionSuite with TimeSeriesTestD
   ): Seq[Row] = {
     withBatchsize(batchSize) {
       val schema = StructType(left.schema.fields :+ StructField("sum", IntegerType))
+
       val window = if (windowSize < 0) {
         Windows.pastAbsoluteTime(s"${-windowSize}ns")
       } else {
@@ -144,15 +145,15 @@ class SummarizeWindowsBatchSpec extends MultiPartitionSuite with TimeSeriesTestD
       val summarizedTSRdd = left.summarizeWindowsBatch(window, sk)
 
       val result = summarizedTSRdd.collect().flatMap {
-        row =>
-          val originLeftRows = row.getAs[Seq[Row]]("leftRows")
-          val leftRows = fileFormatToRows(row.getAs[Array[Byte]]("left"), left.schema)
+        case row =>
+          val originLeftRows = row.getAs[Seq[Row]]("__window_leftRows")
+          val leftRows = fileFormatToRows(row.getAs[Array[Byte]]("__window_leftBatch"), left.schema)
 
           assert(originLeftRows == leftRows)
 
-          val rightRows = fileFormatToRows(row.getAs[Array[Byte]]("right"), right.schema)
+          val rightRows = fileFormatToRows(row.getAs[Array[Byte]]("__window_rightBatch"), right.schema)
           val indexRows = fileFormatToRows(
-            row.getAs[Array[Byte]]("index"),
+            row.getAs[Array[Byte]]("__window_indices"),
             StructType(Seq(StructField("begin", IntegerType), StructField("end", IntegerType)))
           )
 
