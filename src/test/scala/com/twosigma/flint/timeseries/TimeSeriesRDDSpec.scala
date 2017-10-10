@@ -22,6 +22,7 @@ import com.twosigma.flint.timeseries.row.Schema
 import org.scalatest.tagobjects.Slow
 import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 import com.twosigma.flint.timeseries
+import com.twosigma.flint.timeseries.TimeSeriesRDD.timeColumnName
 import com.twosigma.flint.timeseries.summarize.summarizer.LagSumSummarizerFactory
 import org.apache.hadoop.mapreduce.jobhistory.HistoryViewer.SummarizedJob
 import org.apache.spark.sql.functions.{ col, udf }
@@ -661,5 +662,34 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
       val finalRows = convertedTSRDD.collect()
       assert(rows.deep == finalRows.deep)
     }
+  }
+
+  it should "apply DataFrame transformations faithfully using partitionPreservingDataFrameTransform" in {
+    val dataframe = forecastTSRdd.toDF
+    val result = forecastTSRdd.withPartitionsPreserved { df =>
+      df.withColumn("forecastSquared", df.col("forecast") * df.col("forecast"))
+    }
+    val dfResult = dataframe.withColumn("forecastSquared", dataframe.col("forecast") * dataframe.col("forecast"))
+    assert(result.collect().deep == dfResult.collect().deep)
+  }
+
+  it should "give wrong results if the partitionPreservingDataFrameTransform doesn't actually preserve partitions" in {
+    val result = forecastTSRdd.withPartitionsPreserved { df =>
+      df.withColumn("time", df.col("time") * -1)
+    }
+    val ranges = result.orderedRdd.rangeSplits.map { _.range }
+    val badTimestamps = result.rdd.mapPartitionsWithIndex {
+      case (index, rows) =>
+        val range = ranges(index)
+        rows.flatMap { row =>
+          val timestamp = row.getAs[Long](timeColumnName)
+          if (!range.contains(timestamp)) {
+            Some(timestamp)
+          } else {
+            None
+          }
+        }
+    }.collect()
+    assert(badTimestamps.nonEmpty)
   }
 }
