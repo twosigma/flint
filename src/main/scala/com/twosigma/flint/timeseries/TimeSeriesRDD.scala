@@ -1149,21 +1149,21 @@ trait TimeSeriesRDD extends Serializable {
   def shift(window: ShiftTimeWindow): TimeSeriesRDD
 
   /**
-    * Apply a transformation on the underlying Spark DataFrame without altering partitioning info.
-    *
-    * This assumes the transformation truly does not alter the partition info, and does not check this fact.  Be careful when using
-    * this method, when you do, you are assuming responsibility for ensuring this fact.
-    *
-    * @example
-    * {{{
-    *   val tsrdd = ...
-    *   val tsrdd2 = tsrdd.withPartitionsPreserved { df =>
-    *     df.withColumn("id", F.explode(df("ids")))
-    *   }
-    * }}}
-    * @param xform A function transforming a [[DataFrame]] which does not change its partition information.
-    * @return a [[TimeSeriesRDD]] whose underlying [[DataFrame]] is the result of the transformation.
-    */
+   * Apply a transformation on the underlying Spark DataFrame without altering partitioning info.
+   *
+   * This assumes the transformation truly does not alter the partition info, and does not check this fact.  Be careful when using
+   * this method, when you do, you are assuming responsibility for ensuring this fact.
+   *
+   * @example
+   * {{{
+   *   val tsrdd = ...
+   *   val tsrdd2 = tsrdd.withPartitionsPreserved { df =>
+   *     df.withColumn("id", F.explode(df("ids")))
+   *   }
+   * }}}
+   * @param xform A function transforming a [[DataFrame]] which does not change its partition information.
+   * @return a [[TimeSeriesRDD]] whose underlying [[DataFrame]] is the result of the transformation.
+   */
   def withPartitionsPreserved(xform: DataFrame => DataFrame): TimeSeriesRDD
 }
 

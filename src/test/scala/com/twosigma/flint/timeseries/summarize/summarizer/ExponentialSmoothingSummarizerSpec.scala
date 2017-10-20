@@ -21,6 +21,7 @@ import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
+import org.scalactic.{ Equality, TolerantNumerics }
 
 class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
 
@@ -28,10 +29,11 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
 
   override val defaultResourceDir = "/timeseries/summarize/summarizer/exponentialsmoothingsummarizer"
 
-  private var timeSeriesRdd: TimeSeriesRDD = _
+  private var price1: TimeSeriesRDD = _
+  private var price2: TimeSeriesRDD = _
 
   private lazy val init = {
-    timeSeriesRdd = fromCSV(
+    price1 = fromCSV(
       "Price.csv",
       Schema(
         "id" -> IntegerType,
@@ -48,6 +50,11 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
         "expected_legacy_linear" -> DoubleType
       )
     )
+
+    price2 = fromCSV(
+      "window.csv",
+      dateFormat = "yyyyMMdd HH:mm:ss.SSS"
+    )
   }
 
   private def test(
@@ -56,7 +63,7 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
     exponentialSmoothingConvention: String
   ): Unit = {
     init
-    val results = timeSeriesRdd.addSummaryColumns(Summarizers.exponentialSmoothing(
+    val results = price1.addSummaryColumns(Summarizers.exponentialSmoothing(
       xColumn = "price",
       timestampsToPeriods = (a, b) => (b - a) / 100.0,
       alpha = 0.5,
@@ -78,7 +85,7 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
 
   "ExponentialSmoothingSummarizer" should "smooth correctly" in {
     init
-    val results = timeSeriesRdd.addSummaryColumns(Summarizers.exponentialSmoothing(
+    val results = price1.addSummaryColumns(Summarizers.exponentialSmoothing(
       xColumn = "price",
       timestampsToPeriods = (a, b) => (b - a) / 100.0
     ), Seq("id"))
@@ -91,7 +98,7 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
 
   it should "decay using half life correctly" in {
     init
-    val results = timeSeriesRdd.addSummaryColumns(Summarizers.emaHalfLife(
+    val results = price1.addSummaryColumns(Summarizers.emaHalfLife(
       xColumn = "price",
       halfLifeDuration = "100ns"
     ))
@@ -178,6 +185,36 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
         exponentialSmoothingType = est,
         exponentialSmoothingConvention = esc
       ))
+    }
+  }
+
+  it should "summarizeWindows correctly" in {
+    init
+    val window = Windows.pastAbsoluteTime("1 day")
+
+    for (
+      smoothingConversion <- Seq("core", "convolution", "legacy");
+      smoothingType <- Seq("previous", "current", "linear")
+    ) {
+      val summarizer1 = Summarizers.emaHalfLife(
+        "v",
+        "60 minutes",
+        exponentialSmoothingType = smoothingType,
+        exponentialSmoothingConvention = smoothingConversion
+      )
+      val result = price2.summarizeWindows(window, summarizer1)
+
+      result.collect().foreach {
+        row: Row =>
+          val result = row.getAs[Double]("v_ema")
+          val expected = row.getAs[Double](s"expected_${smoothingConversion}_$smoothingType")
+          if (result.isNaN || expected.isNaN) {
+            assert(result.isNaN)
+            assert(expected.isNaN)
+          } else {
+            assert(result === expected)
+          }
+      }
     }
   }
 }

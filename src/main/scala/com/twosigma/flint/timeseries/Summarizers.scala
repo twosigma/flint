@@ -627,7 +627,7 @@ object Summarizers {
       timeColumn,
       0.5,
       0,
-      (t1, t2) => (t2 - t1) / halfLifeDurationNanos,
+      (t1, t2) => (t2 - t1) / halfLifeDurationNanos.toDouble,
       ExponentialSmoothingType.withName(exponentialSmoothingType),
       ExponentialSmoothingConvention.withName(exponentialSmoothingConvention)
     )
