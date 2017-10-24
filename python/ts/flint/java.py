@@ -33,10 +33,11 @@ class Packages:
     def write(self):
         return utils.scala_package_object(utils.jvm(self.sc).com.twosigma.flint.timeseries.io.write)
 
-    @property
-    @functools.lru_cache()
-    def read(self):
-        return utils.scala_package_object(utils.jvm(self.sc).com.twosigma.flint.timeseries.io.read)
+    def new_reader(self):
+        try:
+            return utils.jvm(self.sc).com.twosigma.flint.timeseries.io.read.TSReadBuilder()
+        except TypeError:
+            return utils.jvm(self.sc).com.twosigma.flint.timeseries.io.read.ReadBuilder()
 
     @property
     @functools.lru_cache()

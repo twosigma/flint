@@ -44,8 +44,8 @@ class TSDataFrameReader(object):
         self._sc = self._flintContext._sc
         self._sqlContext = self._flintContext._sqlContext
         self._jpkg = java.Packages(self._sc)
-        self._builder = self._jpkg.read.builder(utils.jsc(self._sc))
-        self._parameters = self._builder.parameters()
+        self._reader = self._jpkg.new_reader()
+        self._parameters = self._reader.parameters()
 
     def option(self, key, value):
         """
@@ -81,7 +81,7 @@ class TSDataFrameReader(object):
             and not isinstance(value, str)):
             value = ','.join([str(v) for v in value])
 
-        self._builder.option(key, str(value))
+        self._reader.option(key, str(value))
         return self
 
     def options(self, **options):
@@ -156,7 +156,7 @@ class TSDataFrameReader(object):
         """
         begin_ns = _to_timestamp(begin, timezone).value if begin else None
         end_ns = _to_timestamp(end, timezone).value if end else None
-        self._builder.range(begin_ns, end_ns)
+        self._reader.range(begin_ns, end_ns)
         return self
 
     def pandas(self, df, schema=None, *,

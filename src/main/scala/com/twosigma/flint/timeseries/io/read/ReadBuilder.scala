@@ -33,9 +33,20 @@ import scala.concurrent.duration.Duration
  * to maintain the same API across both Scala and Python.
  */
 class ReadBuilder(
-  @transient protected val sc: SparkContext = SparkSession.builder().getOrCreate().sparkContext,
-  val parameters: ReadBuilder.ReadBuilderParameters = new ReadBuilder.ReadBuilderParameters()
+  @transient protected val sc: SparkContext,
+  val parameters: ReadBuilder.ReadBuilderParameters
 ) extends Serializable {
+
+  /**
+   * Explicitly defined primary constructor instead of default parameters for
+   * access from Python.
+   */
+  @PythonApi
+  def this() =
+    this(
+      SparkSession.builder().getOrCreate().sparkContext,
+      new ReadBuilder.ReadBuilderParameters()
+    )
 
   // This class is marked with the Serializable interface to ensure closures created
   // within the class pass the closure Serializable check within Spark.
