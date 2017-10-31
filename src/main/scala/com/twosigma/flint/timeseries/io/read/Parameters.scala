@@ -62,7 +62,7 @@ private[read] case class BeginEndRange(beginNanosOpt: Option[Long], endNanosOpt:
   private[read] def beginNanosOrNull: java.lang.Long = beginNanosOpt.map(Long.box).orNull
 
   @PythonApi
-  private[read] def endNanosOrNull: java.lang.Long = beginNanosOpt.map(Long.box).orNull
+  private[read] def endNanosOrNull: java.lang.Long = endNanosOpt.map(Long.box).orNull
 
   /**
    * Converts the begin date to an ISO string, or null.

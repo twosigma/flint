@@ -175,8 +175,31 @@ class ReadBuilderSpec extends FlatSpec with SharedSparkContext {
     val beginString = range.beginFlintString
     val endString = range.endFlintString
 
-    TimeFormat.parseDateTime(beginString).toString() === "2017-01-01T00:00:00+00:00"
-    TimeFormat.parseDateTime(endString).toString() === "2017-02-01T00:00:00+00:00"
+    assert(TimeFormat.parseDateTime(beginString).toString() === "2017-01-01T00:00:00.000Z")
+    assert(TimeFormat.parseDateTime(endString).toString() === "2017-02-01T00:00:00.000Z")
+  }
+
+  it should "return null for beginNanosOrNull when beginNanosOpt is None" in {
+    val range = BeginEndRange(None, Some(parseNano("20170201")))
+    assert(range.beginNanosOrNull === null)
+  }
+
+  it should "return null for endNanosOrNull when endNanosOpt is None" in {
+    val range = BeginEndRange(Some(parseNano("20170101")), None)
+    assert(range.endNanosOrNull === null)
+  }
+
+  it should "return beginNanos and endNanos when set" in {
+    val expectedBeginNanos = parseNano("20170101")
+    val expectedEndNanos = parseNano("20170201")
+    val reader = new ReadBuilder()
+      .range(expectedBeginNanos, expectedEndNanos)
+
+    assert(reader.parameters.range.beginNanosOrNull === expectedBeginNanos)
+    assert(reader.parameters.range.endNanosOrNull === expectedEndNanos)
+
+    assert(reader.parameters.range.beginNanos === expectedBeginNanos)
+    assert(reader.parameters.range.endNanos === expectedEndNanos)
   }
 
 }
