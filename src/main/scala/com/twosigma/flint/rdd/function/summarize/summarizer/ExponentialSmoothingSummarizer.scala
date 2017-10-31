@@ -17,9 +17,7 @@
 package com.twosigma.flint.rdd.function.summarize.summarizer
 
 import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingConvention
-import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingConvention.ExponentialSmoothingConvention
-import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingType
-import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingType.ExponentialSmoothingType
+import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingInterpolation
 
 case class SmoothingRow(time: Long, x: Double)
 
@@ -50,27 +48,27 @@ case class ExponentialSmoothingOutput(es: Double)
  * difference between the end of the left state and the end of the right state. Then, we also account for the periods
  * between the last left row and the first right row.
  *
- * @param alpha                           The proportion by which the average will decay over one period
- *                                        A period is a duration of time defined by the function provided for
- *                                        timestampsToPeriods. For instance, if the timestamps in the dataset are in
- *                                        nanoseconds, and the function provided in timestampsToPeriods is
- *                                        (t2 - t1) / nanosecondsInADay, then the summarizer will take the number of
- *                                        periods between rows to be the number of days elapsed between their
- *                                        timestamps.
- * @param primingPeriods                  Parameter used to find the initial decay parameter - taken to be the number
- *                                        of periods (defined above) elapsed before the first data point
- * @param timestampsToPeriods             Function that given two timestamps, returns how many periods should be
- *                                        considered to have passed between them
- * @param exponentialSmoothingType        Parameter used to determine the interpolation method for intervals between
- *                                        two rows
- * @param exponentialSmoothingConvention  Parameter used to determine the convolution convention.
+ * @param alpha                             The proportion by which the average will decay over one period
+ *                                          A period is a duration of time defined by the function provided for
+ *                                          timestampsToPeriods. For instance, if the timestamps in the dataset are in
+ *                                          nanoseconds, and the function provided in timestampsToPeriods is
+ *                                          (t2 - t1) / nanosecondsInADay, then the summarizer will take the number of
+ *                                          periods between rows to be the number of days elapsed between their
+ *                                          timestamps.
+ * @param primingPeriods                    Parameter used to find the initial decay parameter - taken to be the number
+ *                                          of periods (defined above) elapsed before the first data point
+ * @param timestampsToPeriods               Function that given two timestamps, returns how many periods should be
+ *                                          considered to have passed between them
+ * @param exponentialSmoothingInterpolation Parameter used to determine the interpolation method for intervals between
+ *                                          two rows
+ * @param exponentialSmoothingConvention    Parameter used to determine the convolution convention.
  */
 case class ExponentialSmoothingSummarizer(
   alpha: Double,
   primingPeriods: Double,
   timestampsToPeriods: (Long, Long) => Double,
-  exponentialSmoothingType: ExponentialSmoothingType,
-  exponentialSmoothingConvention: ExponentialSmoothingConvention
+  exponentialSmoothingInterpolation: ExponentialSmoothingInterpolation.Value,
+  exponentialSmoothingConvention: ExponentialSmoothingConvention.Value
 ) extends FlippableSummarizer[SmoothingRow, ExponentialSmoothingState, ExponentialSmoothingOutput] {
   private val logDecayPerPeriod = math.log(1.0 - alpha)
 
@@ -95,13 +93,13 @@ case class ExponentialSmoothingSummarizer(
     } else {
       val timeOverTimeConstant = periods * logDecayPerPeriod
       val decay = math.exp(timeOverTimeConstant)
-      exponentialSmoothingType match {
-        case ExponentialSmoothingType.PreviousPoint =>
+      exponentialSmoothingInterpolation match {
+        case ExponentialSmoothingInterpolation.PreviousPoint =>
           (1.0 - decay) * startVal
-        case ExponentialSmoothingType.LinearInterpolation =>
+        case ExponentialSmoothingInterpolation.LinearInterpolation =>
           val interpolateDecay = (decay - 1.0) / timeOverTimeConstant
           (interpolateDecay - decay) * startVal + (1.0 - interpolateDecay) * endVal
-        case ExponentialSmoothingType.CurrentPoint =>
+        case ExponentialSmoothingInterpolation.CurrentPoint =>
           (1.0 - decay) * endVal
       }
     }

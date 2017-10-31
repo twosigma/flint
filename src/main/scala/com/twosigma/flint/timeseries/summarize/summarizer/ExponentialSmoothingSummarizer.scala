@@ -16,9 +16,12 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.rdd.function.summarize.summarizer.{ ExponentialSmoothingOutput, ExponentialSmoothingState, SmoothingRow, ExponentialSmoothingSummarizer => ESSummarizer }
-import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingType.ExponentialSmoothingType
-import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingConvention.ExponentialSmoothingConvention
+import com.twosigma.flint.rdd.function.summarize.summarizer.{
+  ExponentialSmoothingOutput,
+  ExponentialSmoothingState,
+  SmoothingRow,
+  ExponentialSmoothingSummarizer => ESSummarizer
+}
 import com.twosigma.flint.timeseries.summarize._
 import org.apache.spark.sql.types._
 import com.twosigma.flint.timeseries.row.Schema
@@ -26,8 +29,8 @@ import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 
-object ExponentialSmoothingType extends Enumeration {
-  type ExponentialSmoothingType = Value
+object ExponentialSmoothingInterpolation extends Enumeration {
+  type ExponentialSmoothingInterpolation = Value
   val PreviousPoint = Value("previous")
   val LinearInterpolation = Value("linear")
   val CurrentPoint = Value("current")
@@ -46,8 +49,8 @@ case class ExponentialSmoothingSummarizerFactory(
   alpha: Double,
   primingPeriods: Double,
   timestampsToPeriods: (Long, Long) => Double,
-  exponentialSmoothingType: ExponentialSmoothingType,
-  exponentialSmoothingConvention: ExponentialSmoothingConvention
+  exponentialSmoothingInterpolation: ExponentialSmoothingInterpolation.Value,
+  exponentialSmoothingConvention: ExponentialSmoothingConvention.Value
 ) extends BaseSummarizerFactory(xColumn, timeColumn) {
   override def apply(inputSchema: StructType): ExponentialSmoothingSummarizer =
     ExponentialSmoothingSummarizer(
@@ -57,7 +60,7 @@ case class ExponentialSmoothingSummarizerFactory(
       alpha,
       primingPeriods,
       timestampsToPeriods,
-      exponentialSmoothingType,
+      exponentialSmoothingInterpolation,
       exponentialSmoothingConvention
     )
 }
@@ -69,14 +72,16 @@ case class ExponentialSmoothingSummarizer(
   alpha: Double,
   primingPeriods: Double,
   timestampsToPeriods: (Long, Long) => Double,
-  exponentialSmoothingType: ExponentialSmoothingType,
-  exponentialSmoothingConvention: ExponentialSmoothingConvention
-) extends FlippableSummarizer with FilterNullInput {
+  exponentialSmoothingType: ExponentialSmoothingInterpolation.Value,
+  exponentialSmoothingConvention: ExponentialSmoothingConvention.Value
+) extends FlippableSummarizer
+  with FilterNullInput {
   private val Sequence(Seq(xColumn, timeColumn)) = requiredColumns
   private val xColumnId = inputSchema.fieldIndex(xColumn)
   private val timeColumnId = inputSchema.fieldIndex(timeColumn)
 
-  private final val xExtractor = asDoubleExtractor(inputSchema(xColumnId).dataType, xColumnId)
+  private final val xExtractor =
+    asDoubleExtractor(inputSchema(xColumnId).dataType, xColumnId)
 
   override type T = SmoothingRow
   override type U = ExponentialSmoothingState
@@ -98,8 +103,10 @@ case class ExponentialSmoothingSummarizer(
   )
 
   override def fromV(o: ExponentialSmoothingOutput): GenericInternalRow = {
-    new GenericInternalRow(Array[Any](
-      o.es
-    ))
+    new GenericInternalRow(
+      Array[Any](
+        o.es
+      )
+    )
   }
 }

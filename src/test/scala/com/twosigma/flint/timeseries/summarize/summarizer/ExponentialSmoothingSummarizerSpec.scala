@@ -59,7 +59,7 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
 
   private def test(
     primingPeriods: Double,
-    exponentialSmoothingType: String,
+    exponentialSmoothingInterpolation: String,
     exponentialSmoothingConvention: String
   ): Unit = {
     init
@@ -68,13 +68,13 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
       timestampsToPeriods = (a, b) => (b - a) / 100.0,
       alpha = 0.5,
       primingPeriods = primingPeriods,
-      exponentialSmoothingType = exponentialSmoothingType,
-      exponentialSmoothingConvention = exponentialSmoothingConvention
+      interpolation = exponentialSmoothingInterpolation,
+      convention = exponentialSmoothingConvention
     ))
 
     results.rdd.collect().foreach{ row =>
       val predVal = row.getAs[Double]("price_ema")
-      val trueVal = row.getAs[Double](s"expected_${exponentialSmoothingConvention}_$exponentialSmoothingType")
+      val trueVal = row.getAs[Double](s"expected_${exponentialSmoothingConvention}_$exponentialSmoothingInterpolation")
       if (predVal.isNaN) {
         assert(trueVal.isNaN)
       } else {
@@ -175,15 +175,15 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
 
   it should "pass summarizer property test" in {
     val primingPeriods = Seq(0.0, 1.0)
-    val exponentialSmoothingTypes = Seq("current", "previous", "linear")
+    val exponentialSmoothingInterpolation = Seq("current", "previous", "linear")
     val exponentialSmoothingConventions = Seq("core", "convolution")
-    for (pp <- primingPeriods; est <- exponentialSmoothingTypes; esc <- exponentialSmoothingConventions) {
+    for (pp <- primingPeriods; esi <- exponentialSmoothingInterpolation; esc <- exponentialSmoothingConventions) {
       summarizerPropertyTest(AllProperties)(Summarizers.exponentialSmoothing(
         xColumn = "x1",
         timestampsToPeriods = (a, b) => (b - a) / 100.0,
         primingPeriods = pp,
-        exponentialSmoothingType = est,
-        exponentialSmoothingConvention = esc
+        interpolation = esi,
+        convention = esc
       ))
     }
   }
@@ -194,20 +194,20 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
 
     for (
       smoothingConversion <- Seq("core", "convolution", "legacy");
-      smoothingType <- Seq("previous", "current", "linear")
+      smoothingInterpolation <- Seq("previous", "current", "linear")
     ) {
       val summarizer1 = Summarizers.emaHalfLife(
         "v",
         "60 minutes",
-        exponentialSmoothingType = smoothingType,
-        exponentialSmoothingConvention = smoothingConversion
+        interpolation = smoothingInterpolation,
+        convention = smoothingConversion
       )
       val result = price2.summarizeWindows(window, summarizer1)
 
       result.collect().foreach {
         row: Row =>
           val result = row.getAs[Double]("v_ema")
-          val expected = row.getAs[Double](s"expected_${smoothingConversion}_$smoothingType")
+          val expected = row.getAs[Double](s"expected_${smoothingConversion}_$smoothingInterpolation")
           if (result.isNaN || expected.isNaN) {
             assert(result.isNaN)
             assert(expected.isNaN)

@@ -17,10 +17,7 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.annotation.PythonApi
-import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingConvention.ExponentialSmoothingConvention
-import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialSmoothingType.ExponentialSmoothingType
 import com.twosigma.flint.timeseries.summarize.{
-  LeftSubtractableOverlappableSummarizerFactory,
   OverlappableSummarizerFactory,
   SummarizerFactory
 }
@@ -449,10 +446,10 @@ object Summarizers {
    * first series.
    *
    * Calculates EMA as a convolution between the exponential function and the series. Since the series is discrete, it
-   * is necessary to interpolate values between rows by specifying the exponentialSmoothingType, which supports
-   * CurrentPoint, LinearInterpolation, and PreviousPoint interpolations.
+   * is necessary to interpolate values between rows by specifying the `interpolation`, which
+   * supports CurrentPoint, LinearInterpolation, and PreviousPoint interpolations.
    *
-   * More concretely, the primary EMA is caclulated as follows: suppose we have a time series
+   * More concretely, the primary EMA is calculated as follows: suppose we have a time series
    * X = ((x_1, t_1), (x_2, t_2), ..., (x_n, t_n)).
    *
    * For CurrentPoint:
@@ -498,38 +495,39 @@ object Summarizers {
    * The output schema is:
    *   - "<xColumn>_ema": [[DoubleType]], the exponential moving average of the rows.
    *
-   * @param xColumn                         Name of column containing series to be smoothed
-   * @param timeColumn                      Name of column containing the timestamp
-   * @param alpha                           The proportion by which the average will decay over one period
-   *                                        A period is a duration of time defined by the function provided for
-   *                                        timestampsToPeriods. For instance, if the timestamps in the dataset are in
-   *                                        nanoseconds, and the function provided in timestampsToPeriods is
-   *                                        (t2 - t1) / nanosecondsInADay, then the summarizer will take the number of
-   *                                        periods between rows to be the number of days elapsed between their
-   *                                        timestamps. Default is 0.05.
-   * @param primingPeriods                  Parameter used to find the initial decay parameter - taken to be the number
-   *                                        of periods (defined above) elapsed before the first data point. If the
-   *                                        convention "legacy" is specified, this value is ignored. Default is 1.
-   * @param timestampsToPeriods             Function that given two timestamps, returns how many periods should be
-   *                                        considered to have passed between them. Default is 1 day, given timestamps
-   *                                        in nanoseconds.
-   * @param exponentialSmoothingType        Parameter used to determine the interpolation method for intervals between
-   *                                        two rows. The options are "previous", "linear", and "current". Default is
-   *                                        "current".
-   * @param exponentialSmoothingConvention  Parameter used to determine the convolution convention. The options are
-   *                                        "convolution", "core", and "legacy". Default is "core".
+   * @param xColumn             Name of column containing series to be smoothed
+   * @param alpha               The proportion by which the average will decay over one period
+   *                            A period is a duration of time defined by the function provided for
+   *                            timestampsToPeriods. For instance, if the timestamps in the dataset are
+   *                            in nanoseconds, and the function provided in timestampsToPeriods is
+   *                            (t2 - t1) / nanosecondsInADay, then the summarizer will take the number
+   *                            of periods between rows to be the number of days elapsed between their
+   *                            timestamps. Default is 0.05.
+   * @param timeColumn          Name of column containing the timestamp
+   * @param primingPeriods      Parameter used to find the initial decay parameter - taken to be the
+   *                            number of periods (defined above) elapsed before the first data point.
+   *                            If the convention "legacy" is specified, this value is ignored.
+   *                            Default is 1.
+   * @param timestampsToPeriods Function that given two timestamps, returns how many periods should be
+   *                            considered to have passed between them. Default is 1 day,
+   *                            given timestamps in nanoseconds.
+   * @param interpolation       Parameter used to determine the interpolation method for intervals
+   *                            between two rows. The options are "previous", "linear", and "current".
+   *                            Default is "current".
+   * @param convention          Parameter used to determine the convolution convention. The options are
+   *                            "convolution", "core", and "legacy". Default is "core".
    * @return a [[SummarizerFactory]] which provides a summarizer to calculate the exponentially smoothed
    *         series
    */
   def exponentialSmoothing(
     xColumn: String,
-    timeColumn: String = TimeSeriesRDD.timeColumnName,
     alpha: Double = 0.05,
+    timeColumn: String = TimeSeriesRDD.timeColumnName,
     primingPeriods: Double = 1.0,
     timestampsToPeriods: (Long, Long) => Double = (t1: Long, t2: Long) =>
       (t2 - t1) / (24 * 60 * 60 * 1e9),
-    exponentialSmoothingType: String = "current",
-    exponentialSmoothingConvention: String = "core"
+    interpolation: String = "current",
+    convention: String = "core"
   ): SummarizerFactory =
     ExponentialSmoothingSummarizerFactory(
       xColumn,
@@ -537,8 +535,8 @@ object Summarizers {
       alpha,
       primingPeriods,
       timestampsToPeriods,
-      ExponentialSmoothingType.withName(exponentialSmoothingType),
-      ExponentialSmoothingConvention.withName(exponentialSmoothingConvention)
+      ExponentialSmoothingInterpolation.withName(interpolation),
+      ExponentialSmoothingConvention.withName(convention)
     )
 
   /**
@@ -579,8 +577,8 @@ object Summarizers {
    * See doc/ema.md for details on different EMA implementations.
    *
    * @param xColumn           Name of column containing series to compute the EMA
-   * @param timeColumn        Name of column containing the timestamp
    * @param alpha             Parameter setting the decay rate of the average. The default is 0.05.
+   * @param timeColumn        Name of column containing the timestamp
    * @param durationPerPeriod Duration per period. The option could be "constant" or any string that specifies duration
    *                          like "1d", "1h", "15m" etc. If it is "constant", it will assume that the number of periods
    *                          between rows is constant (c = 1); otherwise, it will use the duration to calculate
@@ -594,8 +592,8 @@ object Summarizers {
    */
   def ewma(
     xColumn: String,
-    timeColumn: String = TimeSeriesRDD.timeColumnName,
     alpha: Double = 0.05,
+    timeColumn: String = TimeSeriesRDD.timeColumnName,
     durationPerPeriod: String = "1d",
     convention: String = "legacy"
   ): SummarizerFactory = {
@@ -626,22 +624,22 @@ object Summarizers {
    * The output schema is:
    *   - "<xColumn>_ema": [[DoubleType]], the exponential moving average of the rows.
    *
-   * @param xColumn                        Name of column containing series to compute the EMA
-   * @param timeColumn                     Name of column containing the timestamp
-   * @param halfLifeDuration               String that represents the half life duration.
-   * @param exponentialSmoothingType       Parameter used to determine the interpolation method for intervals between
-   *                                       two rows. The options are "previous", "linear", and "current". Default is
-   *                                       "previous".
-   * @param exponentialSmoothingConvention Parameter used to determine the convolution convention. The options are
-   *                                       "convolution", "core", and "legacy". Default is "legacy".
+   * @param xColumn          Name of column containing series to compute the EMA
+   * @param timeColumn       Name of column containing the timestamp
+   * @param halfLifeDuration String that represents the half life duration.
+   * @param interpolation    Parameter used to determine the interpolation method for intervals between
+   *                         two rows. The options are "previous", "linear", and "current". Default is
+   *                         "previous".
+   * @param convention       Parameter used to determine the convolution convention. The options are
+   *                         "convolution", "core", and "legacy". Default is "legacy".
    * @return a [[SummarizerFactory]] which provides a summarizer to calculate the exponential moving average
    */
   def emaHalfLife(
     xColumn: String,
     halfLifeDuration: String,
     timeColumn: String = TimeSeriesRDD.timeColumnName,
-    exponentialSmoothingType: String = "previous",
-    exponentialSmoothingConvention: String = "legacy"
+    interpolation: String = "previous",
+    convention: String = "legacy"
   ): SummarizerFactory = {
     val halfLifeDurationNanos = Duration(halfLifeDuration).toNanos
 
@@ -653,8 +651,8 @@ object Summarizers {
       0.5,
       0,
       (t1, t2) => (t2 - t1) / halfLifeDurationNanos.toDouble,
-      ExponentialSmoothingType.withName(exponentialSmoothingType),
-      ExponentialSmoothingConvention.withName(exponentialSmoothingConvention)
+      ExponentialSmoothingInterpolation.withName(interpolation),
+      ExponentialSmoothingConvention.withName(convention)
     )
   }
 
