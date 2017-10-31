@@ -132,8 +132,8 @@ object Summarizers {
    * The output schema is:
    *  - "<xColumn>_<yColumn>_covariance": [[DoubleType]], the covariance of `xColumn` and `yColumn`
    *
-   * @param xColumn      A column to compute covariance
-   * @param yColumn      The other column to compute covariance
+   * @param xColumn A column to compute covariance
+   * @param yColumn The other column to compute covariance
    * @return a [[SummarizerFactory]] which could provide a summarizer to calculate the covariance.
    */
   def covariance(xColumn: String, yColumn: String): SummarizerFactory =
@@ -546,50 +546,75 @@ object Summarizers {
    * an EMA for the series (x_1, x_2, ...) as well as the series (1.0, 1.0, ...). The only difference is
    * that this series does not have an initial zero-valued term injected before each series.
    *
-   * The weight is defined as follows for the i-th value:
+   * The weighted i-th value is simply:
    * <pre><code>decay(t<sub>i</sub>, t<sub>n</sub>) x<sub>i</sub></code>
    * </pre>
    * where <pre><code>decay(t<sub>i</sub>, t<sub>n</sub>)</code></pre>
    * is the decay between the timestamps jointly specified by timestampsToPeriods and alpha, i.e.
-   * <pre><code>decay(t<sub>i</sub>, t<sub>n</sub>) = exp(timestampsToPeriods(t<sub>i</sub>, t<sub>n</sub>) * ln(1 - alpha)) </code>
+   * <pre>
+   * <code>
+   * decay(t<sub>i</sub>, t<sub>n</sub>) = exp(timestampsToPeriods(t<sub>i</sub>, t<sub>n</sub>) * ln(1 - alpha))
+   * </code>
    * </pre>
    * If constantPeriod is true, then decay is defined as follows:
    * <pre><code>decay(t<sub>i</sub>, t<sub>n</sub>) = exp((n - i) * ln(1 - alpha)) </code>
    * </pre>
    *
-   * The primary EMA keeps track of the sum of the weighted values, whereas the auxiliary EMA keeps track of the sum of
+   * The primary EMA keeps track of the sum of the weighted series, whereas the auxiliary EMA keeps track of the sum of
    * the weights.
    *
-   * Finally, we take
-   * <pre><code>(EMA (X))<sub>i</sub> = (EMA<sub>p</sub> (X))<sub>i</sub> / (EMA<sub>a</sub> (X))<sub>i</sub> </code>
+   * Finally, if the convention is "core", we will take
+   * <pre>
+   * <code>
+   * (EMA (X))<sub>i</sub> = (EMA<sub>p</sub> (X))<sub>i</sub> / (EMA<sub>a</sub> (X))<sub>i</sub>
+   * </code>
+   * </pre>
+   * However, if the convention is "legacy", we will simply return
+   * <pre>
+   * <code>
+   * (EMA (X))<sub>i</sub> = (EMA<sub>p</sub> (X))<sub>i</sub>
+   * </code>
    * </pre>
    *
    * See doc/ema.md for details on different EMA implementations.
    *
-   * @param xColumn              Name of column containing series to compute the EMA
-   * @param timeColumn           Name of column containing the timestamp
-   * @param alpha                Parameter setting the decay rate of the average
-   * @param timestampsToPeriods  Function that given two timestamps, returns how many periods should be considered to
-   *                             have passed between them
-   * @param constantPeriods      Whether to assume that the number of periods between rows is constant (c = 1), or use
-   *                             timestampsToPeriods to calculate it.
+   * @param xColumn           Name of column containing series to compute the EMA
+   * @param timeColumn        Name of column containing the timestamp
+   * @param alpha             Parameter setting the decay rate of the average. The default is 0.05.
+   * @param durationPerPeriod Duration per period. The option could be "constant" or any string that specifies duration
+   *                          like "1d", "1h", "15m" etc. If it is "constant", it will assume that the number of periods
+   *                          between rows is constant (c = 1); otherwise, it will use the duration to calculate
+   *                          how many periods should be considered to have passed between any two given timestamps.
+   *                          The default is "1d".
+   * @param convention        Parameter used to determine the convolution convention. The options are "core"
+   *                          and "legacy", If it is "core", the primary exponential weighted moving average
+   *                          will be further divided by its auxiliary; if it is "legacy", it will return
+   *                          the primary exponential weighted moving average. The default is "legacy"
    * @return a [[SummarizerFactory]] which provides a summarizer to calculate the exponential moving average
    */
   def ewma(
     xColumn: String,
     timeColumn: String = TimeSeriesRDD.timeColumnName,
     alpha: Double = 0.05,
-    timestampsToPeriods: (Long, Long) => Double = (t1: Long, t2: Long) =>
-      (t2 - t1) / (24 * 60 * 60 * 1e9),
-    constantPeriods: Boolean = false
-  ): SummarizerFactory =
+    durationPerPeriod: String = "1d",
+    convention: String = "legacy"
+  ): SummarizerFactory = {
+    val constantPeriods = durationPerPeriod.equalsIgnoreCase("constant")
+    val durationPerPeriodNanos = if (constantPeriods) {
+      1.0
+    } else {
+      Duration(durationPerPeriod).toNanos.toDouble
+    }
+
     ExponentialWeightedMovingAverageSummarizerFactory(
       xColumn,
       timeColumn,
       alpha,
-      timestampsToPeriods,
-      constantPeriods
+      (t1: Long, t2: Long) => (t2 - t1) / durationPerPeriodNanos,
+      constantPeriods,
+      ExponentialWeightedMovingAverageConvention.withName(convention)
     )
+  }
 
   /**
    * Calculates the exponential moving average given a specified half life. Supports the same default behaviors as the
@@ -601,14 +626,14 @@ object Summarizers {
    * The output schema is:
    *   - "<xColumn>_ema": [[DoubleType]], the exponential moving average of the rows.
    *
-   * @param xColumn                         Name of column containing series to compute the EMA
-   * @param timeColumn                      Name of column containing the timestamp
-   * @param halfLifeDuration                String that represents the half life duration.
-   * @param exponentialSmoothingType        Parameter used to determine the interpolation method for intervals between
-   *                                        two rows. The options are "previous", "linear", and "current". Default is
-   *                                        "previous".
-   * @param exponentialSmoothingConvention  Parameter used to determine the convolution convention. The options are
-   *                                        "convolution", "core", and "legacy". Default is "legacy".
+   * @param xColumn                        Name of column containing series to compute the EMA
+   * @param timeColumn                     Name of column containing the timestamp
+   * @param halfLifeDuration               String that represents the half life duration.
+   * @param exponentialSmoothingType       Parameter used to determine the interpolation method for intervals between
+   *                                       two rows. The options are "previous", "linear", and "current". Default is
+   *                                       "previous".
+   * @param exponentialSmoothingConvention Parameter used to determine the convolution convention. The options are
+   *                                       "convolution", "core", and "legacy". Default is "legacy".
    * @return a [[SummarizerFactory]] which provides a summarizer to calculate the exponential moving average
    */
   def emaHalfLife(

@@ -16,6 +16,8 @@
 
 package com.twosigma.flint.rdd.function.summarize.summarizer.subtractable
 
+import com.twosigma.flint.timeseries.summarize.summarizer.ExponentialWeightedMovingAverageConvention
+
 case class EWMARow(time: Long, x: Double)
 
 /**
@@ -33,32 +35,37 @@ case class ExponentialWeightedMovingAverageState(
 case class ExponentialWeightedMovingAverageOutput(ewma: Double)
 
 /**
- * @param alpha                The proportion by which the average will decay over one period
- *                             A period is a duration of time defined by the function provided for timestampsToPeriods.
- *                             For instance, if the timestamps in the dataset are in nanoseconds, and the function
- *                             provided in timestampsToPeriods is (t2 - t1)/nanosecondsInADay, then the summarizer will
- *                             take the number of periods between rows to be the number of days elapsed between their
- *                             timestamps.
- * @param timestampsToPeriods  Function that given two timestamps, returns how many periods should be considered to
- *                             have passed between them
- * @param constantPeriods      Whether to assume that the number of periods between rows is constant (c = 1), or use
- *                             timestampsToPeriods to calculate it.
+ * @param alpha               The proportion by which the average will decay over one period
+ *                            A period is a duration of time defined by the function provided for timestampsToPeriods.
+ *                            For instance, if the timestamps in the dataset are in nanoseconds, and the function
+ *                            provided in timestampsToPeriods is (t2 - t1)/nanosecondsInADay, then the summarizer will
+ *                            take the number of periods between rows to be the number of days elapsed between their
+ *                            timestamps.
+ * @param timestampsToPeriods Function that given two timestamps, returns how many periods should be considered to
+ *                            have passed between them
+ * @param constantPeriods     Whether to assume that the number of periods between rows is a constant (c = 1), or use
+ *                            timestampsToPeriods to calculate it.
+ * @param convention          Parameter used to determine the convention. If it is "core", the result
+ *                            primary exponential weighted moving average will be further divided by its auxiliary;
+ *                            if it is "legacy", it will return the primary exponential weighted moving average.
  */
 class ExponentialWeightedMovingAverageSummarizer(
   alpha: Double,
   timestampsToPeriods: (Long, Long) => Double,
-  constantPeriods: Boolean
+  constantPeriods: Boolean,
+  convention: ExponentialWeightedMovingAverageConvention.Value
 ) extends LeftSubtractableSummarizer[EWMARow, ExponentialWeightedMovingAverageState, ExponentialWeightedMovingAverageOutput] {
   private val logDecayPerPeriod = math.log(1.0 - alpha)
 
   def getDecay(periods: Double): Double = math.exp(periods * logDecayPerPeriod)
 
-  override def zero(): ExponentialWeightedMovingAverageState = ExponentialWeightedMovingAverageState(
-    primaryESValue = 0.0,
-    auxiliaryESValue = 0.0,
-    time = 0L,
-    count = 0L
-  )
+  override def zero(): ExponentialWeightedMovingAverageState =
+    ExponentialWeightedMovingAverageState(
+      primaryESValue = 0.0,
+      auxiliaryESValue = 0.0,
+      time = 0L,
+      count = 0L
+    )
 
   override def merge(
     u1: ExponentialWeightedMovingAverageState,
@@ -88,7 +95,16 @@ class ExponentialWeightedMovingAverageSummarizer(
 
   override def render(u: ExponentialWeightedMovingAverageState): ExponentialWeightedMovingAverageOutput = {
     if (u.count > 0L) {
-      ExponentialWeightedMovingAverageOutput(u.primaryESValue / u.auxiliaryESValue)
+      convention match {
+        case ExponentialWeightedMovingAverageConvention.Core =>
+          ExponentialWeightedMovingAverageOutput(
+            u.primaryESValue / u.auxiliaryESValue
+          )
+        case ExponentialWeightedMovingAverageConvention.Legacy =>
+          ExponentialWeightedMovingAverageOutput(u.primaryESValue)
+        case _ =>
+          throw new IllegalArgumentException(s"Not supported convention $convention")
+      }
     } else {
       ExponentialWeightedMovingAverageOutput(Double.NaN)
     }

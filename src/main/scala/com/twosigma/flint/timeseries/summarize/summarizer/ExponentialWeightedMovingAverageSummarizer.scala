@@ -18,7 +18,12 @@ package com.twosigma.flint.timeseries.summarize.summarizer
 
 import com.twosigma.flint.timeseries.summarize._
 import org.apache.spark.sql.types._
-import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ EWMARow, ExponentialWeightedMovingAverageOutput, ExponentialWeightedMovingAverageState, ExponentialWeightedMovingAverageSummarizer => EWMASummarizer }
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{
+  EWMARow,
+  ExponentialWeightedMovingAverageOutput,
+  ExponentialWeightedMovingAverageState,
+  ExponentialWeightedMovingAverageSummarizer => EWMASummarizer
+}
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
 import org.apache.spark.sql.catalyst.InternalRow
@@ -32,21 +37,31 @@ object ExponentialWeightedMovingAverageSummarizer {
   )
 }
 
+object ExponentialWeightedMovingAverageConvention extends Enumeration {
+  type ExponentialWeightedMovingAverageConvention = Value
+  val Core = Value("core")
+  val Legacy = Value("legacy")
+}
+
 case class ExponentialWeightedMovingAverageSummarizerFactory(
   xColumn: String,
   timeColumn: String,
   alpha: Double,
   timestampsToPeriods: (Long, Long) => Double,
-  constantPeriods: Boolean
+  constantPeriods: Boolean,
+  exponentialWeightedMovingAverageConvention: ExponentialWeightedMovingAverageConvention.Value
 ) extends BaseSummarizerFactory(xColumn, timeColumn) {
-  override def apply(inputSchema: StructType): ExponentialWeightedMovingAverageSummarizer =
+  override def apply(
+    inputSchema: StructType
+  ): ExponentialWeightedMovingAverageSummarizer =
     ExponentialWeightedMovingAverageSummarizer(
       inputSchema,
       prefixOpt,
       requiredColumns,
       alpha,
       timestampsToPeriods,
-      constantPeriods
+      constantPeriods,
+      exponentialWeightedMovingAverageConvention
     )
 }
 
@@ -56,30 +71,42 @@ case class ExponentialWeightedMovingAverageSummarizer(
   override val requiredColumns: ColumnList,
   alpha: Double,
   timestampsToPeriods: (Long, Long) => Double,
-  constantPeriods: Boolean
-) extends LeftSubtractableSummarizer with FilterNullInput {
+  constantPeriods: Boolean,
+  exponentialWeightedMovingAverageConvention: ExponentialWeightedMovingAverageConvention.Value
+) extends LeftSubtractableSummarizer
+  with FilterNullInput {
   private val Sequence(Seq(xColumn, timeColumn)) = requiredColumns
   private val xColumnId = inputSchema.fieldIndex(xColumn)
   private val timeColumnId = inputSchema.fieldIndex(timeColumn)
 
-  private final val xExtractor = asDoubleExtractor(inputSchema(xColumnId).dataType, xColumnId)
+  private final val xExtractor =
+    asDoubleExtractor(inputSchema(xColumnId).dataType, xColumnId)
 
   override type T = EWMARow
   override type U = ExponentialWeightedMovingAverageState
   override type V = ExponentialWeightedMovingAverageOutput
 
-  override val summarizer = new EWMASummarizer(alpha, timestampsToPeriods, constantPeriods)
+  override val summarizer = new EWMASummarizer(
+    alpha,
+    timestampsToPeriods,
+    constantPeriods,
+    exponentialWeightedMovingAverageConvention
+  )
 
   override def toT(r: InternalRow): EWMARow = EWMARow(
     time = r.getLong(timeColumnId),
     x = xExtractor(r)
   )
 
-  override val schema = ExponentialWeightedMovingAverageSummarizer.outputSchema
+  override val schema: StructType = ExponentialWeightedMovingAverageSummarizer.outputSchema
 
-  override def fromV(o: ExponentialWeightedMovingAverageOutput): GenericInternalRow = {
-    new GenericInternalRow(Array[Any](
-      o.ewma
-    ))
+  override def fromV(
+    o: ExponentialWeightedMovingAverageOutput
+  ): GenericInternalRow = {
+    new GenericInternalRow(
+      Array[Any](
+        o.ewma
+      )
+    )
   }
 }
