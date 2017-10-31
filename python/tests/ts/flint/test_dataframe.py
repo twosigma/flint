@@ -795,6 +795,130 @@ def test_summarizeWindows(flintContext, tests_utils, windows, summarizers, vol):
     tests_utils.assert_same(new_pdf3, expected_pdf3)
 
 
+def test_summarizeWindows_udf(flintContext, tests_utils, windows, vol):
+    from ts.flint import udf
+    from collections import OrderedDict
+    from pyspark.sql.types import DoubleType, LongType
+
+    df = flintContext.read.pandas(make_pdf([
+        (1000, 3, 10.0),
+        (1000, 7, 20.0),
+        (1050, 3, 30.0),
+        (1050, 7, 40.0),
+        (1100, 3, 50.0),
+        (1150, 3, 60.0),
+        (1150, 7, 70.0),
+        (1200, 3, 80.0),
+        (1200, 7, 90.0),
+        (1250, 7, 100.0),
+    ], ['time', 'id', 'v']))
+
+    result1 = df.summarizeWindows(
+        windows.past_absolute_time('99ns'),
+        OrderedDict([
+            ('mean', udf(lambda time, window: window.mean(), DoubleType())(df['time'], vol['volume']))
+        ]),
+        key="id",
+        other=vol).toPandas()
+    expected1 = make_pdf([
+        (1000, 3, 10.0, 200.0),
+        (1000, 7, 20.0, 100.0),
+        (1050, 3, 30.0, 250.0),
+        (1050, 7, 40.0, 250.0),
+        (1100, 3, 50.0, 400.0),
+        (1150, 3, 60.0, 600.0),
+        (1150, 7, 70.0, 700.0),
+        (1200, 3, 80.0, 800.0),
+        (1200, 7, 90.0, 900.0),
+        (1250, 7, 100.0, 1100.0),
+    ], ['time', 'id', 'v', 'mean'])
+    tests_utils.assert_same(result1, expected1)
+
+    result2 = df.summarizeWindows(
+        windows.past_absolute_time('99ns'),
+        OrderedDict([
+            ('mean', udf(lambda window: window.mean(), DoubleType())(vol['volume']))
+        ]),
+        key='id',
+        other=vol).toPandas()
+    expected2 = expected1
+    tests_utils.assert_same(result2, expected2)
+
+    result3 = df.summarizeWindows(
+        windows.past_absolute_time('99ns'),
+        OrderedDict([
+            ('mean', udf(lambda window: window.mean(), DoubleType())(vol['volume'])),
+            ('count', udf(lambda time, window: len(window), LongType())(df['time'], vol['volume']))
+        ]),
+        key='id',
+        other=vol).toPandas()
+    expected3 = make_pdf([
+        (1000, 3, 10.0, 200.0, 1),
+        (1000, 7, 20.0, 100.0, 1),
+        (1050, 3, 30.0, 250.0, 2),
+        (1050, 7, 40.0, 250.0, 2),
+        (1100, 3, 50.0, 400.0, 2),
+        (1150, 3, 60.0, 600.0, 2),
+        (1150, 7, 70.0, 700.0, 2),
+        (1200, 3, 80.0, 800.0, 2),
+        (1200, 7, 90.0, 900.0, 2),
+        (1250, 7, 100.0, 1100.0, 2),
+    ], ['time', 'id', 'v', 'mean', 'count'])
+    tests_utils.assert_same(result3, expected3)
+
+    result4 = df.summarizeWindows(
+        windows.past_absolute_time('99ns'),
+        OrderedDict([
+            ('mean',
+             udf(lambda time, window: (window.time - time).mean() + window.volume.mean(),
+                 DoubleType())(df['time'], vol[['time', 'volume']])),
+        ]),
+        key='id',
+        other=vol).toPandas()
+    expected4 = make_pdf([
+        (1000, 3, 10.0, 200.0),
+        (1000, 7, 20.0, 100.0),
+        (1050, 3, 30.0, 225.0),
+        (1050, 7, 40.0, 225.0),
+        (1100, 3, 50.0, 375.0),
+        (1150, 3, 60.0, 575.0),
+        (1150, 7, 70.0, 675.0),
+        (1200, 3, 80.0, 775.0),
+        (1200, 7, 90.0, 875.0),
+        (1250, 7, 100.0, 1075.0),
+    ], ['time', 'id', 'v', 'mean'])
+    tests_utils.assert_same(result4, expected4)
+
+
+    @udf(DoubleType())
+    def foo5(row, window):
+        return (window.time - row.time).mean() + window.volume.mean()
+
+    result5 = df.summarizeWindows(
+        windows.past_absolute_time('99ns'),
+        OrderedDict([
+            ('mean', foo5(df[['time', 'v']], vol[['time', 'volume']])),
+        ]),
+        key='id',
+        other=vol).toPandas()
+    expected5 = expected4
+    tests_utils.assert_same(result5, expected5)
+
+    @udf((DoubleType(), LongType()))
+    def mean_and_count(v):
+        return (v.mean(), len(v))
+
+    result6 = df.summarizeWindows(
+        windows.past_absolute_time('99ns'),
+        OrderedDict([
+            [('mean', 'count'), mean_and_count(vol['volume'])]
+        ]),
+        key='id',
+        other=vol).toPandas()
+    expected6 = expected3
+    tests_utils.assert_same(result6, expected6)
+
+
 @pytest.mark.net
 def test_summarizeWindows_trading_time(flintContext, tests_utils, windows, summarizers):
 

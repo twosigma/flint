@@ -146,7 +146,7 @@ class SummarizeWindowsBatchSpec extends MultiPartitionSuite with TimeSeriesTestD
 
       val result = summarizedTSRdd.collect().flatMap {
         case row =>
-          val originLeftRows = row.getAs[Seq[Row]]("__window_leftRows")
+          val originLeftRows = row.getAs[Seq[Row]]("__window_baseRows")
           val leftRows = fileFormatToRows(row.getAs[Array[Byte]]("__window_leftBatch"), left.schema)
 
           assert(originLeftRows == leftRows)

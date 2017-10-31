@@ -204,7 +204,7 @@ private[flint] case class ArrowWindowBatchSummarizer(
 
   override val schema = StructType(
     Seq(
-      StructField("__window_leftRows", ArrayType(leftSchema)),
+      StructField("__window_baseRows", ArrayType(leftSchema)),
       StructField("__window_leftBatch", BinaryType),
       StructField("__window_leftLength", IntegerType),
       StructField("__window_rightBatch", BinaryType),

@@ -14,7 +14,7 @@
 #  limitations under the License.
 #
 
-import collections.abc
+import collections
 import functools
 import itertools
 import inspect
@@ -22,10 +22,12 @@ import json
 import types
 import uuid
 
+import numpy as np
 import pandas as pd
 import pyspark
 import pyspark.sql
 import pyspark.sql.types as pyspark_types
+from pyspark.sql.types import StructType, StructField
 import pyspark.sql.functions as F
 
 from . import java
@@ -36,6 +38,8 @@ from . import udf
 from . import utils
 from .error import FlintError
 from .readwriter import TSDataFrameWriter
+from .serializer import arrowfile_to_dataframe, dataframe_to_arrowfile
+from .udf import _unwrap_data_types
 from .windows import WindowsFactoryBase
 
 
@@ -264,7 +268,8 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
     @staticmethod
     def _from_tsrdd(tsrdd, sql_ctx):
-        """Returns a :class:`TimeSeriesDataFrame` from a Scala ``TimeSeriesRDD``
+        """Returns a :class:`TimeSeriesDataFrame` from a Scala ``TimeSeriesRDD``.
+           This is a zero-copy conversion.
 
         :param tsrdd: :class:`py4j.java_gateway.JavaObject` (com.twosigma.flint.timeseries.TimeSeriesRDD)
         :param sql_ctx: pyspark.sql.SQLContext
@@ -330,7 +335,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         :rtype: :class:`TimeSeriesDataFrame`
         :raises ValueError: if there are columns with udfs or bindings that are not supported
         """
-        assert isinstance(columns, collections.abc.Mapping), "columns must be a mapping (e.g., dict)"
+        assert isinstance(columns, collections.Mapping), "columns must be a mapping (e.g., dict)"
 
         # Split the columns into Python UDFs and JVM CycleColumn bindings
         udfs = {
@@ -631,9 +636,9 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
             >>> df.summarizeCycles([summarizers.mean('v'), summarizers.stddev('v')])
 
-        Use user defined functions (UDF):
+        Use user-defined functions (UDFs):
 
-            >>> from ts.flint import udf
+            >>> from ts.flint.functions import udf
             >>> @udf(DoubleType())
             ... def mean(v):
             ...     return v.mean()
@@ -655,7 +660,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             ...     ('std', std(df['v'])),
             ... ]))
 
-        Return multiple data from a single udf as tuple
+        Return multiple columns from a single udf as a tuple
 
             >>> @udf((DoubleType(), DoubleType()))
             >>> def mean_and_std(v):
@@ -697,7 +702,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         """
 
-        if isinstance(summarizer, collections.abc.Mapping):
+        if isinstance(summarizer, collections.Mapping):
             import pyarrow as pa
 
             columns = summarizer
@@ -761,6 +766,22 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             tsrdd = self.timeSeriesRDD.summarizeCycles(composed_summarizer._jsummarizer(self._sc), scala_key)
             return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
+
+    def _summarizeWindowsBatch(self, window, key=None):
+        jwindow = window._jwindow(self._sc)
+        scala_key = utils.list_to_seq(self._sc, key)
+        tsrdd = self.timeSeriesRDD.summarizeWindowsBatch(jwindow, scala_key)
+        return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
+
+    def _concatArrowAndExplode(self, base_rows_col, schema_cols, data_cols):
+        assert self._tsrdd_part_info is not None
+        tsrdd = self.timeSeriesRDD.concatArrowAndExplode(
+            base_rows_col,
+            utils.list_to_seq(self._sc, schema_cols),
+            utils.list_to_seq(self._sc, data_cols))
+        return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
+
+
     def summarizeIntervals(self, clock, summarizer, key=None, beginInclusive=True):
         """
         Computes aggregate statistics of rows within the same interval.
@@ -796,21 +817,134 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
     def summarizeWindows(self, window, summarizer, key=None):
         """
-        Computes aggregate statistics of rows in windows.
+        Computes aggregate statistics of rows in windows using a
+        window spec and a summarizer spec.
 
-        Example:
+        A window spec can be created using one the functions in
+        :mod:`.windows`.
+
+        A summarizer spec can be either:
+
+        1. A summarizer or a list of summarizers. Available
+           summarizers can be found in :mod:`.summarizers`.
+
+        2. A map from column names to columnar udf objects. A columnar
+           udf object is defined by :meth:`ts.flint.functions.udf`
+           with a python function, a return type and a list of input
+           columns. Each map entry can be one of the following:
+
+           1. str -> udf
+
+              This will add a single column. The python function must
+              return a single scalar value, which will be the value
+              for the new column. The ``returnType`` argument of the
+              udf object must be a single
+              :class:`~pyspark.sql.types.DataType`.
+
+           2. tuple(str) -> udf
+
+              This will add multiple columns. The python function must
+              return a tuple of scalar values. The ``returnType``
+              argument of the udf object must be a tuple of
+              :class:`~pyspark.sql.types.DataType`. The cardinality of
+              the column names, return data types and return values
+              must match.
+
+        Built-in summarizer examples:
+
+           Use built-in summarizers
 
            >>> # calculates rolling weighted mean of return for each id
-           >>> result = (df.summarizeWindows(windows.past_absolute_time("365days"),
-           ...                               summarizers.weighted_mean("return", "volume"),
-           ...                               key="id"))
+           >>> result = df.summarizeWindows(
+           ...     windows.past_absolute_time("7days"),
+           ...     summarizers.weighted_mean("return", "volume"),
+           ...     key="id"
+           ... )
+
+        User-defined function examples:
+
+           Use user-defined functions
+
+           >>> from ts.flint.functions import udf
+           >>>
+           >>> # v is a pandas.Series of double
+           >>> @udf(DoubleType())
+           ... def mean(v):
+           ...     return v.mean()
+           >>>
+           >>> # v is a pandas.Series of double
+           >>> @udf(DoubleType())
+           ... def std(v):
+           ...     return v.std()
+           >>>
+           >>> df.summarizeWindows(
+           ...     windows.past_absolute_time('7days'),
+           ...     {
+           ...       'mean': mean(df['v']),
+           ...       'std': std(df['v'])
+           ...     },
+           ...     key='id'
+           ... )
+
+           Use an OrderedDict to specify output column order
+
+           >>> # v is a pandas.Series of double
+           >>> from ts.flint.functions import udf
+           >>> @udf(DoubleType())
+           ... def mean(v):
+           ...     return v.mean()
+           >>>
+           >>> # v is a pandas.Series of double
+           >>> @udf(DoubleType())
+           ... def std(v):
+           ...     return v.std()
+           >>>
+           >>> udfs = OrderedDict([
+           ...     ('mean', mean(df['v'])),
+           ...     ('std', std(df['v']))
+           ... ])
+           >>>
+           >>> df.summarizeWindows(
+           ...     windows.past_absolute_time('7days'),
+           ...     udfs,
+           ...     key='id'
+           ... )
+
+           Return multiple columns from a single UDF
+
+           >>> # v is a pandas.Series of double
+           >>> @udf((DoubleType(), DoubleType()))
+           >>> def mean_and_std(v):
+           ...     return v.mean(), v.std()
+           >>>
+           >>> df.summarizeWindows(
+           ...     windows.past_absolute_time('7days'),
+           ...     {
+           ...       ('mean', 'std'): mean_and_std(df['v'])
+           ...     },
+           ...     key='id'
+           ... )
+
+           Use multiple input columns
+
+           >>> from ts.flint.functions import udf
+           >>> # window is a pandas.DataFrame that has two columns - v and w
+           >>> @udf(DoubleType())
+           ... def weighted_mean(window):
+           ...     return np.average(window.v, weights=window.w)
+           >>>
+           >>> df.summarizeWindows(
+           ...    windows.past_absolute_time('7days'),
+           ...    {
+           ...      'weighted_mean': weighted_mean(df[['v', 'w']])
+           ...    },
+           ...    key='id'
+           ... )
 
         :param window: A window that specifies which rows to add to
             the new column. Lists of windows can be found in
             :mod:`.windows`.
-        :param summarizer: A summarizer or a list of summarizers that
-            will calculate results for the new columns. Available
-            summarizers can be found in :mod:`.summarizers`.
+        :param summarizer: A summarizer spec
         :param key: Optional. One or multiple column names to use as
             the grouping key.
         :type key: str, list of str
@@ -818,6 +952,12 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         :rtype: :class:`TimeSeriesDataFrame`
         """
 
+        if isinstance(summarizer, collections.Mapping):
+            return self._summarizeWindows_udf(window, summarizer, key)
+        else:
+            return self._summarizeWindows_builtin(window, summarizer, key)
+
+    def _summarizeWindows_builtin(self, window, summarizer, key=None):
         scala_key = utils.list_to_seq(self._sc, key)
         composed_summarizer = summarizers.compose(self._sc, summarizer)
 
@@ -827,6 +967,154 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             scala_key)
 
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
+
+
+    def _summarizeWindows_udf(self, window, columns, key):
+        """Summarize windows using a udf.
+
+           This functions consists of three steps:
+
+           1. summarizeWindowsBatch
+              This step breaks the left table and right table into multiple batches
+              and compute indices for each left row.
+
+           2. withColumn with PySpark UDF to compute each batch
+              This is done on PySpark side. Once we have each batch in arrow format, we can now
+              send the bytes to python worker using regular PySpark UDF, compute rolling windows
+              in python using precomputed indices, and return the result in arrow format.
+
+           3. concatArrowAndExplode
+              The final step concat new columns to the original rows, and explode each batch back
+              to multiple rows.
+
+           See TimeSeriesRDD.scala for details.
+        """
+
+        base_rows_col_name = '__window_baseRows'
+        left_batch_col_name = '__window_leftBatch'
+        right_batch_col_name = '__window_rightBatch'
+        index_col_name = '__window_indices'
+        is_placeholder_col_name = '__window_is_placeholder'
+
+        for col in columns.values():
+            if len(col.column_indices) > 2:
+                raise ValueError("Received more than 2 args to the udf. "
+                                 "Use either udf(df[[col]]) or udf(df[[col]], df2[[col2]]).")
+
+            for index in col.column_indices:
+                if index is None:
+                    raise ValueError(
+                        'Column passed to the udf function must be a column in the DataFrame, '
+                        'i.e, df[col] or df[[col]]. Other types of Column are not supported.')
+
+        windowed = self._summarizeWindowsBatch(window, key)
+
+        # This is a hack to get around the issue where pyspark batches rows in groups of 100 for python udf.
+        # As a result it significantly increases memory usage.
+        # https://github.com/apache/spark/blob/master/sql/core/src/main/scala/org/apache/spark/sql/execution
+        # /python/BatchEvalPythonExec.scala#L68
+
+        # The workaround is to insert 99 empty rows for every batch.
+        is_placeholder = F.array(F.lit(False), *(F.lit(True) for i in range(0, 99)))
+
+        windowed = (windowed
+                     .select('time', base_rows_col_name, left_batch_col_name, right_batch_col_name, index_col_name)
+                     .withColumn(is_placeholder_col_name , is_placeholder)
+                     .withColumn(is_placeholder_col_name , F.explode(F.col(is_placeholder_col_name))))
+
+        for column in [base_rows_col_name, left_batch_col_name, right_batch_col_name, index_col_name]:
+            windowed = windowed.withColumn(column, F.when(windowed[is_placeholder_col_name], None).otherwise(windowed[column]))
+
+        schema_col_names = []
+        data_col_names = []
+
+        for i, (col_name, udf_column) in enumerate(columns.items()):
+            fn, col_t = udf._fn_and_type(udf_column)
+            column_indices = udf_column.column_indices
+
+            if isinstance(col_name, str):
+                col_name = (col_name,)
+                col_t = (col_t,)
+            elif isinstance(col_name, collections.Sequence):
+                col_t = _unwrap_data_types(col_t)
+            else:
+                raise ValueError('Column names must be either a string'
+                                 'or a sequence of strings. {}'.format(col_name))
+
+            schema_col_name = '__schema_{}'.format(i)
+            data_col_name = '__data_{}'.format(i)
+
+            schema_col_names.append(schema_col_name)
+            data_col_names.append(data_col_name)
+
+            def _fn(left_batch, right_batch, indices):
+                import pyarrow as pa
+
+                if indices:
+                    # left_table and right_table can be either a pd.Series or pd.DataFrame
+                    # depending on the column indices
+                    if len(column_indices) == 1:
+                        left_column_index = None
+                        left_table = None
+                        right_column_index = column_indices[0]
+                        right_table = arrowfile_to_dataframe(right_batch)[right_column_index]
+                    elif len(column_indices) == 2:
+                        left_column_index = column_indices[0]
+                        left_table = arrowfile_to_dataframe(left_batch)[left_column_index]
+                        right_column_index = column_indices[1]
+                        right_table = arrowfile_to_dataframe(right_batch)[right_column_index]
+                    else:
+                        raise ValueError('Too many column indices: {}'.format(column_indices))
+
+                    indices_df = arrowfile_to_dataframe(indices)
+
+                    data = []
+
+                    if left_table is not None:
+                        assert len(left_table) == len(indices_df)
+                        if isinstance(left_column_index, str):
+                            for (i, begin, end) in indices_df.itertuples():
+                                left = left_table[i]
+                                right = right_table.take(np.arange(begin,end))
+                                data.append(fn(left, right))
+                        else:
+                            for (i, left) in enumerate(left_table.itertuples(index=False)):
+                                begin = indices_df.iloc[i,0]
+                                end = indices_df.iloc[i,1]
+                                right = right_table.take(np.arange(begin,end))
+                                data.append(fn(left, right))
+                    else:
+                        for (begin, end) in indices_df.itertuples(index=False):
+                            right = right_table.take(np.arange(begin,end))
+                            data.append(fn(right))
+
+                    df = pd.DataFrame(data, columns=col_name)
+
+                    return dataframe_to_arrowfile(df)
+                else:
+                    return None
+
+            # Create a column that has the schema of the returned arrow batch
+            # but no data. This is a hack around not having the arrow batch schema
+            # in query planning phase.
+            col_schema = StructType([StructField(name, t) for (name, t) in zip(col_name, col_t)])
+
+            windowed = windowed.withColumn(
+                schema_col_name,
+                F.udf(lambda : None,col_schema)())
+
+            windowed = windowed.withColumn(
+                data_col_name,
+                F.udf(_fn,pyspark_types.BinaryType())(
+                    windowed[left_batch_col_name],
+                    windowed[right_batch_col_name],
+                    windowed[index_col_name]))
+
+        windowed = windowed.filter(windowed[base_rows_col_name].isNotNull())
+
+        result = windowed._concatArrowAndExplode(base_rows_col_name, schema_col_names, data_col_names)
+
+        return result
 
     def summarize(self, summarizer, key=None):
         """

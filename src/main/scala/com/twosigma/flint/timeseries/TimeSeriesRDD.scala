@@ -27,11 +27,12 @@ import com.twosigma.flint.timeseries.row.{ InternalRowUtils, Schema }
 import com.twosigma.flint.timeseries.summarize.{ ColumnList, OverlappableSummarizer, OverlappableSummarizerFactory, SummarizerFactory }
 import com.twosigma.flint.timeseries.time.TimeFormat
 import com.twosigma.flint.timeseries.window.{ ShiftTimeWindow, TimeWindow, Window }
+import org.apache.arrow.memory.RootAllocator
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{ Dependency, OneToOneDependency, SparkContext }
+import org.apache.spark.{ Dependency, OneToOneDependency, SparkContext, TaskContext }
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, GenericRow, GenericRowWithSchema => ERow }
+import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, GenericRow, UnsafeProjection, UnsafeRow, GenericRowWithSchema => ERow }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
@@ -1090,9 +1091,15 @@ trait TimeSeriesRDD extends Serializable {
     key: String
   ): TimeSeriesRDD = summarizeWindows(window, summarizer)
 
-  def summarizeWindowsBatch(
+  private[flint] def summarizeWindowsBatch(
     window: Window,
     key: Seq[String] = Seq.empty
+  ): TimeSeriesRDD
+
+  private[flint] def concatArrowAndExplode(
+    baseRowsColumnName: String,
+    schemaColumNames: Seq[String],
+    dataColumnNames: Seq[String]
   ): TimeSeriesRDD
 
   /**
@@ -1216,8 +1223,8 @@ trait TimeSeriesRDD extends Serializable {
   /**
    * Apply a transformation on the underlying Spark DataFrame without altering partitioning info.
    *
-   * This assumes the transformation truly does not alter the partition info, and does not check this fact.  Be careful when using
-   * this method, when you do, you are assuming responsibility for ensuring this fact.
+   * This assumes the transformation truly does not alter the partition info, and does not check this fact.
+   * Be careful when using this method, when you do, you are assuming responsibility for ensuring this fact.
    *
    * @example
    * {{{
@@ -1542,7 +1549,52 @@ class TimeSeriesRDDImpl private[timeseries] (
     TimeSeriesRDD.fromInternalOrderedRDD(newRdd, newSchema)
   }
 
-  def summarizeWindowsBatch(
+  /**
+   * Summarize window batches.
+   *
+   * `summarizeWindows` with python udf consists of three steps:
+   *  1. [[summarizeWindowsBatch]]
+   *  This step breaks the left table and right table into multiple batches and computes indices for each left row.
+   *
+   *  2. withColumn with PySpark UDF to compute each batch
+   *  This is done on PySpark side. Once we have each batch in arrow format, we can now send the bytes
+   *  to python worker using regular PySpark UDF, compute rolling windows in python using precomputed indices, and
+   *  return the result in arrow format.
+   *  See dataframe.py/summarizeWindows
+   *
+   *  3. [[concatArrowAndExplode()]]
+   *  The final step concatenates new columns to the original rows, and explodes each batch back to multiple rows.
+   *
+   * This function is used for the first step of `summarizeWindows` with python udf.
+   *
+   * This function divides each left table partition into multiple batches, and for each batch,
+   * produces one nested row.
+   *
+   * The schema of the nested row is defined in [[ArrowWindowBatchSummarizer]] and it contains
+   * the original left rows (used for concatenation later), left and right batches (Arrow record batches
+   * to be passed to Python worker for udf evaluation) and the indices (also Arrow record batches, used
+   * for defining windows for each row in the left)
+   *
+   * Each nested row is also prepended with a timestamp. the timestamp is the first timestamp in the left rows.
+   * Because each nested row represents a batch of rows, the timestamp is merely a place holder and isn't used
+   * for anything real.
+   *
+   * Finally, the partition ranges of the output [[TimeSeriesRDD]] is the same as the left table. This is important
+   * because summarizeWindows doesn't change row order or partitioning. We maintain this invariance throughout
+   * different steps of summarizeWindows with python udf.
+   *
+   * To give an concrete example, here is how output looks like:
+   *
+   * +----+--------------------+--------------------+---------------------+---------------------+
+   * |time|   __window_baseRows|  __window_leftBatch| __window_rightBatch | __window_indices    |
+   * +----+--------------------+--------------------+--------------------+--------------------+--
+   * |1000|[[1000,1,100], ...]]|[41 52 52 4F 57 3...||[41 52 52 4F 57 3...||[41 52 52 4F 57 3...|
+   * |2500|[[2500,1,4], ...]]  |[41 52 52 4F 57 3...||[41 52 52 4F 57 3...||[41 52 52 4F 57 3...|
+   * +----+--------------------+--------------------+---------------------+---------------------+
+   *
+   * @see [[concatArrowAndExplode()]]
+   */
+  private[flint] override def summarizeWindowsBatch(
     window: Window,
     key: Seq[String] = Seq.empty
   ): TimeSeriesRDD = {
@@ -1704,5 +1756,76 @@ class TimeSeriesRDDImpl private[timeseries] (
   override def withPartitionsPreserved(xform: DataFrame => DataFrame): TimeSeriesRDD = {
     val newDataFrame = xform(dataStore.dataFrame)
     new TimeSeriesRDDImpl(TimeSeriesStore(newDataFrame, dataStore.partInfo))
+  }
+
+  /**
+   * This function is used as the final step of summarizeWindows and addColumnsForCycle for python udf.
+   *
+   * Given a nested [[TimeSeriesRDD]] contains one base column of Array[InternalRow] and one or more
+   * Arrow record batch columns (in deserialized bytes form),
+   * this function will concat the Arrow record batches with to the rows and then explode the results.
+   *
+   * Example:
+   *
+   * Input:
+   * Row((Row(1000, 1), Row(1000, 2), Row(1050, 1)), ArrowBatchRecord(10, 20, 30))
+   * Row((Row(1100, 1), Row(1150, 1)), ArrowBatchRecord(30, 40))
+   *
+   * Output:
+   * Row(1000, 1, 10)
+   * Row(1000, 2, 20)
+   * Row(1050, 1, 30)
+   * Row(1100, 1, 30)
+   * Row(1150, 1, 40)
+   *
+   * For each input row, the number of elements in the base column and Arrow columns must match.
+   *
+   * @see [[summarizeWindowsBatch()]]
+   */
+  private[flint] override def concatArrowAndExplode(
+    baseRowsColumnName: String,
+    schemaColumNames: Seq[String],
+    dataColumnNames: Seq[String]
+  ): TimeSeriesRDD = {
+
+    val baseRowSchema = schema(baseRowsColumnName).dataType match {
+      case ArrayType(s: StructType, _) => s
+      case _ => throw new IllegalArgumentException(
+        s"Cannot parse schema for base rows. Schema: ${schema(baseRowsColumnName)}"
+      )
+    }
+    val timeColumnIndex = schema.fieldIndex(timeColumnName)
+
+    val schemas = schemaColumNames.map(schema(_).dataType.asInstanceOf[StructType])
+    val newSchema = StructType(baseRowSchema.fields ++ schemas.flatMap(_.fields))
+
+    val baseRowsColumnIndex = schema.fieldIndex(baseRowsColumnName)
+    val arrowColumnIndices = dataColumnNames.map(schema.fieldIndex)
+
+    val newOrdd = orderedRdd.mapPartitionsWithIndexOrdered {
+      case (_, rows) =>
+        val allocator = new RootAllocator(Long.MaxValue)
+        TaskContext.get().addTaskCompletionListener { _ =>
+          allocator.close()
+        }
+
+        rows.flatMap {
+          case (_, row) =>
+            val baseRowsArrayData = row.getArray(baseRowsColumnIndex)
+            val arrowColumns = arrowColumnIndices.map(row.getBinary)
+
+            InternalRowUtils.concatArrowColumns(
+              allocator,
+              baseRowsArrayData,
+              baseRowSchema,
+              arrowColumns,
+              timeColumnIndex,
+              baseRowSchema.length,
+              newSchema.length - baseRowSchema.length
+            )
+        }
+    }
+
+    TimeSeriesRDD.fromInternalOrderedRDD(newOrdd, newSchema)
   }
 }

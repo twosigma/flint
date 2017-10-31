@@ -46,10 +46,10 @@ def _numpy_to_python(v):
     else:
         return v
 
-def _tuple_to_struct(returnType):
+def _wrap_data_types(returnType):
     '''
-    Convert (dataType, dataType) to StructType([StructField('_0',
-    dataType), StructField('_1', dataType)]) to make it a valid
+    Wrap (dataType, dataType) to StructType([StructField('_0',
+    dataType0), StructField('_1', dataType1)]) to make it a valid
     pyspark returnType.
     '''
     if isinstance(returnType, tuple):
@@ -57,3 +57,12 @@ def _tuple_to_struct(returnType):
         return ret
     else:
         return returnType
+
+def _unwrap_data_types(returnType):
+    '''
+    Unwrap StructType([StructField('_0', dataType0), StructField('_1', dataType1)])
+    to [dataType0, dataType1]
+    :param returnType:
+    :return:
+    '''
+    return [f.dataType for f in returnType.fields]

@@ -22,7 +22,7 @@ from pyspark import SparkContext
 from pyspark.sql.functions import UserDefinedFunction
 from pyspark.sql.types import StringType, DataType
 
-from .udf import _tuple_to_struct
+from .udf import _wrap_data_types
 
 __all__ = ['udf']
 
@@ -160,8 +160,8 @@ def udf(f=None, returnType=StringType()):
         # If DataType has been passed as a positional argument
         # for decorator use it as a returnType
         return_type = f or returnType
-        return_type = _tuple_to_struct(return_type)
+        return_type = _wrap_data_types(return_type)
         return functools.partial(_udf, returnType=return_type)
     else:
-        return_type = _tuple_to_struct(returnType)
+        return_type = _wrap_data_types(returnType)
         return _udf(f=f, returnType=return_type)

@@ -16,10 +16,16 @@
 
 package com.twosigma.flint.timeseries.row
 
+import org.apache.arrow.memory.BufferAllocator
+import org.apache.arrow.vector.file.ArrowFileReader
+import org.apache.arrow.vector.util.ByteArrayReadableSeekableByteChannel
 import org.apache.spark.sql.CatalystTypeConvertersWrapper
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
-import org.apache.spark.sql.types.{ ByteType, DataType, DoubleType, FloatType, IntegerType, LongType, NumericType, ShortType, StructField, StructType }
+import org.apache.spark.sql.catalyst.util.ArrayData
+import org.apache.spark.sql.types._
+
+import collection.JavaConverters._
 
 /**
  * A set of functions to manipulate Catalyst InternalRow objects.
@@ -271,5 +277,62 @@ private[timeseries] object InternalRowUtils {
       seqIndex += 1
     }
     InternalRow.fromSeq(array)
+  }
+
+  def concatArrowColumns(
+    allocator: BufferAllocator,
+    baseRows: ArrayData,
+    baseRowSchema: StructType,
+    arrowBatches: Seq[Array[Byte]],
+    timeColumnIndex: Int,
+    numBaseRowColumns: Int,
+    numArrowColumns: Int
+  ): Array[(Long, InternalRow)] = {
+
+    val totalColumns = numBaseRowColumns + numArrowColumns
+    val baseRowDataTypes = baseRowSchema.fields.map(_.dataType)
+
+    val newRowsWithTime = new Array[(Long, InternalRow)](baseRows.numElements())
+
+    val arrowVectors = arrowBatches.flatMap { bytes =>
+      val inputChannel = new ByteArrayReadableSeekableByteChannel(bytes)
+      val reader = new ArrowFileReader(inputChannel, allocator)
+      val root = reader.getVectorSchemaRoot
+      require(
+        reader.getRecordBlocks.size() == 1,
+        s"Expected number of batches is 1, but is ${reader.getRecordBlocks.size()}"
+      )
+      reader.loadNextBatch()
+      root.getFieldVectors.asScala
+    }.toArray
+
+    val arrowAccessors = arrowVectors.map(_.getAccessor)
+
+    // i is row index, j is column index
+    var i = 0
+    while (i < baseRows.numElements) {
+      val data = new Array[Any](totalColumns)
+      val baseRow = baseRows.getStruct(i, numBaseRowColumns)
+      var j = 0
+
+      while (j < numBaseRowColumns) {
+        data(j) = baseRow.get(j, baseRowDataTypes(j))
+        j += 1
+      }
+
+      while (j < totalColumns) {
+        data(j) = arrowAccessors(j - numBaseRowColumns).getObject(i)
+        j += 1
+      }
+
+      val newRow = new GenericInternalRow(data)
+      // Because this is appending, the time column index in base row is the same as in new row
+      newRowsWithTime(i) = (newRow.getLong(timeColumnIndex), newRow)
+      i += 1
+    }
+
+    arrowVectors.foreach(_.close())
+
+    newRowsWithTime
   }
 }
