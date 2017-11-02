@@ -15,6 +15,7 @@ requirements:
   run:
     - pandas
     - python
+    - pyarrow
 
 test:
   imports:

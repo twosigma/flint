@@ -33,6 +33,7 @@ setup(
         'coverage',
         'numpy',
         'pandas',
+        'pyarrow',
     ],
     test_suite='tests',
     version=versioneer.get_version(),
