@@ -25,6 +25,7 @@ import uuid
 import numpy as np
 import pandas as pd
 import pyspark
+from pyspark import traceback_utils
 import pyspark.sql
 import pyspark.sql.types as pyspark_types
 from pyspark.sql.types import StructType, StructField
@@ -142,8 +143,9 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         if not self._lazy_tsrdd:
             if not self._tsrdd_part_info:
                 # This will scan ranges
-                self._lazy_tsrdd = self._jpkg.TimeSeriesRDD.fromDF(
-                    self._jdf, self._is_sorted, self._junit, self._time_column)
+                with traceback_utils.SCCallSiteSync(self._sc) as css:
+                    self._lazy_tsrdd = self._jpkg.TimeSeriesRDD.fromDF(
+                        self._jdf, self._is_sorted, self._junit, self._time_column)
             else:
                 # TODO: Ideally we should use fromDFWithPartInfo, but
                 # fromDFWithPartInfo doesn't take unit and time column
@@ -593,7 +595,8 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         :rtype: :class:`TimeSeriesDataFrame`
         """
         scala_key = utils.list_to_seq(self._sc, key)
-        tsrdd = self.timeSeriesRDD.groupByInterval(clock.timeSeriesRDD, scala_key, begin_inclusive)
+        with traceback_utils.SCCallSiteSync(self._sc) as css:
+            tsrdd = self.timeSeriesRDD.groupByInterval(clock.timeSeriesRDD, scala_key, begin_inclusive)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def summarizeCycles(self, summarizer, key=None):
@@ -808,11 +811,12 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         """
         scala_key = utils.list_to_seq(self._sc, key)
         composed_summarizer = summarizers.compose(self._sc, summarizer)
-        tsrdd = self.timeSeriesRDD.summarizeIntervals(
-            clock.timeSeriesRDD,
-            composed_summarizer._jsummarizer(self._sc),
-            scala_key,
-            beginInclusive)
+        with traceback_utils.SCCallSiteSync(self._sc) as css:
+            tsrdd = self.timeSeriesRDD.summarizeIntervals(
+                clock.timeSeriesRDD,
+                composed_summarizer._jsummarizer(self._sc),
+                scala_key,
+                beginInclusive)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def summarizeWindows(self, window, summarizer, key=None):
@@ -1135,7 +1139,8 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         scala_key = utils.list_to_seq(self._sc, key)
         composed_summarizer = summarizers.compose(self._sc, summarizer)
-        tsrdd = self.timeSeriesRDD.summarize(composed_summarizer._jsummarizer(self._sc), scala_key)
+        with traceback_utils.SCCallSiteSync(self._sc) as css:
+            tsrdd = self.timeSeriesRDD.summarize(composed_summarizer._jsummarizer(self._sc), scala_key)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def addSummaryColumns(self, summarizer, key=None):
@@ -1156,7 +1161,8 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         """
         scala_key = utils.list_to_seq(self._sc, key)
         composed_summarizer = summarizers.compose(self._sc, summarizer)
-        tsrdd = self.timeSeriesRDD.addSummaryColumns(composed_summarizer._jsummarizer(self._sc), scala_key)
+        with traceback_utils.SCCallSiteSync(self._sc) as css:
+            tsrdd = self.timeSeriesRDD.addSummaryColumns(composed_summarizer._jsummarizer(self._sc), scala_key)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def addWindows(self, window, key=None):

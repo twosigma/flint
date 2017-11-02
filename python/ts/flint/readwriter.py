@@ -16,6 +16,7 @@
 import collections.abc
 
 import pandas as pd
+from pyspark import traceback_utils
 from pyspark.sql import DataFrame
 from pyspark.sql.readwriter import DataFrameReader, DataFrameWriter
 
