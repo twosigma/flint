@@ -697,6 +697,24 @@ def test_udf(flintContext, tests_utils, vol):
     tests_utils.assert_same(result2, expected_pdf1)
 
 
+def test_groupByInterval(flintContext, tests_utils, vol):
+    clock = flintContext.read.pandas(make_pdf([
+        (1000,),
+        (1100,),
+        (1200,),
+        (1300,),
+    ], ["time"]))
+
+    expected_pdf1 = make_pdf([
+        (1100, [(1000, 7, 100,), (1000, 3, 200,), (1050, 3, 300,), (1050, 7, 400,)]),
+        (1200, [(1100, 3, 500,), (1100, 7, 600,), (1150, 3, 700,), (1150, 7, 800,)]),
+        (1300, [(1200, 3, 900,), (1200, 7, 1000,), (1250, 3, 1100,), (1250, 7, 1200,)])
+    ], ["time", "rows"])
+
+    new_pdf1 = vol.groupByInterval(clock).toPandas()
+    tests_utils.assert_same(new_pdf1, expected_pdf1)
+
+
 def test_summarizeIntervals(flintContext, tests_utils, summarizers, vol):
     clock = flintContext.read.pandas(make_pdf([
         (1000,),
@@ -707,20 +725,20 @@ def test_summarizeIntervals(flintContext, tests_utils, summarizers, vol):
 
     new_pdf1 = vol.summarizeIntervals(clock, summarizers.sum("volume")).toPandas()
     expected_pdf1 = make_pdf([
-        (1000, 1000.0),
-        (1100, 2600.0),
-        (1200, 4200.0),
+        (1100, 1000.0),
+        (1200, 2600.0),
+        (1300, 4200.0),
     ], ["time", "volume_sum"])
     tests_utils.assert_same(new_pdf1, expected_pdf1)
 
     new_pdf2 = vol.summarizeIntervals(clock, summarizers.sum("volume"), key="id").toPandas()
     expected_pdf2 = make_pdf([
-        (1000, 7, 500.0),
-        (1000, 3, 500.0),
-        (1100, 3, 1200.0),
-        (1100, 7, 1400.0),
-        (1200, 3, 2000.0),
-        (1200, 7, 2200.0),
+        (1100, 7, 500.0),
+        (1100, 3, 500.0),
+        (1200, 3, 1200.0),
+        (1200, 7, 1400.0),
+        (1300, 3, 2000.0),
+        (1300, 7, 2200.0),
     ], ["time", "id", "volume_sum"])
 
     tests_utils.assert_same(new_pdf2, expected_pdf2)

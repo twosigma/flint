@@ -105,8 +105,9 @@ class SummarizeNullSpec extends TimeSeriesSuite with TimeSeriesTestData {
     })
 
     val result = emptyInterval.summarizeIntervals(clock, Summarizers.count("forecast"))
+
     assert(
-      result.keepRows{ r: Row => r.getAs[Long]("time") == 1000L }.first().getAs[Long]("forecast_count") == 0
+      result.keepRows{ r: Row => r.getAs[Long]("time") == 1100L }.first().getAs[Long]("forecast_count") == 0
     )
   }
 

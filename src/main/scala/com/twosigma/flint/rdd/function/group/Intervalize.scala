@@ -30,31 +30,6 @@ object Intervalize {
 
   private val logger = Logger()
 
-  /**
-   * Round a given key to one of boundaries defined by the clock.
-   *
-   * @param k            The key expected to round.
-   * @param clock        A sequence of sorted keys where two sequential keys are treated as an interval.
-   * @param roundToBegin A flag to determine how to treat keys that fall exactly on the clock intervals.
-   *                     If it is true, keys that are at the exact beginning of an interval will be included and
-   *                     keys that fall on the exact end will be excluded, as represented by the interval [begin, end).
-   *                     Otherwise, it is (begin, end].
-   */
-  private[function] def round[K: Ordering](
-    k: K,
-    clock: Array[K],
-    roundToBegin: Boolean
-  ): Option[K] = {
-    clock.search(k) match {
-      case Found(idx) => Some(clock(idx))
-      case InsertionPoint(idx) => if (roundToBegin) {
-        if (idx > 0) Some(clock(idx - 1)) else None
-      } else {
-        if (idx < clock.size) Some(clock(idx)) else None
-      }
-    }
-  }
-
   private def broadcastClock[K: ClassTag](sparkContext: SparkContext, clock: Array[K]): Broadcast[Array[K]] = {
     val INTERVALS_PER_YEAR = 365 * 24 * 12
     val NUMBER_OF_YEAR = 20
@@ -68,23 +43,55 @@ object Intervalize {
     sparkContext.broadcast(clock)
   }
 
+  def roundFn[K: Ordering](inclusion: String, rounding: String): (K, Array[K]) => Option[K] =
+    (inclusion, rounding) match {
+      case ("begin", "begin") =>
+        (k: K, clock: Array[K]) =>
+          clock.search(k) match {
+            case Found(idx) => if (idx < clock.length - 1) Some(clock(idx)) else None
+            case InsertionPoint(idx) => if (idx > 0 && idx < clock.length) Some(clock(idx - 1)) else None
+          }
+      case ("begin", "end") =>
+        (k: K, clock: Array[K]) =>
+          clock.search(k) match {
+            case Found(idx) => if (idx < clock.length - 1) Some(clock(idx + 1)) else None
+            case InsertionPoint(idx) => if (idx > 0 && idx < clock.length) Some(clock(idx)) else None
+          }
+      case ("end", "begin") =>
+        (k: K, clock: Array[K]) =>
+          clock.search(k) match {
+            case Found(idx) => if (idx > 0) Some(clock(idx - 1)) else None
+            case InsertionPoint(idx) => if (idx > 0 && idx < clock.length) Some(clock(idx - 1)) else None
+          }
+      case ("end", "end") =>
+        (k: K, clock: Array[K]) =>
+          clock.search(k) match {
+            case Found(idx) => if (idx > 0) Some(clock(idx)) else None
+            case InsertionPoint(idx) => if (idx > 0 && idx < clock.length) Some(clock(idx)) else None
+          }
+      case _ => sys.error(s"Unrecognized args. Inclusion: $inclusion rounding: $rounding")
+    }
+
   /**
    * Intervalize an [[OrderedRDD]] by mapping its keys to the begin or the end of an interval where
    * they fall into. Intervals are defined by the provided `clock`.
    *
    * @param rdd            The [[OrderedRDD]] expected to intervalize.
    * @param clock          A sequence of sorted keys where two sequential keys are treated as an interval.
-   * @param beginInclusive A flag to determine how to treat keys that fall exactly on the clock intervals.
-   *                       If it is true, keys that are at the exact beginning of an interval will be included and keys
-   *                       that fall on the exact end will be excluded, as represented by the interval [begin, end).
-   *                       Otherwise, it is (begin, end].
+   * @param inclusion      "begin" or "end". If begin, intervals are [begin, end). Otherwise, (begin, end]
+   * @param rounding       "begin" or "end". If begin, rows are rounded to the begin of each interval,
+   *                        otherwise, end.
    * @return an [[OrderedRDD]] whose keys are intervalized and the original keys are kept in the values as (K, V)s.
    */
   def intervalize[K: ClassTag, V](
     rdd: OrderedRDD[K, V],
     clock: Array[K],
-    beginInclusive: Boolean
+    inclusion: String,
+    rounding: String
   )(implicit ord: Ordering[K]): OrderedRDD[K, (K, V)] = {
+    require(Seq("begin", "end").contains(inclusion), "inclusion must be \"begin\" or \"end\"")
+    require(Seq("begin", "end").contains(rounding), "rounding must be \"begin\" or \"end\"")
+
     // ensure ordering
     var i = 0
     while (i < clock.size - 1) {
@@ -119,8 +126,13 @@ object Intervalize {
 
       val trimmedClock = clock.slice(from, until)
       val broadcast = broadcastClock(rdd.sparkContext, trimmedClock)
+
+      // Lift switching on (inclusion, rounding) out of the cell level to improve performance.
+      val round = roundFn[K](inclusion, rounding)
+
+      // TODO: This should be rewritten to be an O(n) algorithms instead of O(nlog(n))
       val intervalized = rdd.map {
-        case (k, v) => (round(k, broadcast.value, beginInclusive), (k, v))
+        case (k, v) => (round(k, broadcast.value), (k, v))
       }.filter(_._1.isDefined).map {
         case (k, v) => (k.get, v)
       }
@@ -128,68 +140,5 @@ object Intervalize {
       // Normalize the above rdd such that rows with the same keys won't spread across multiple partitions.
       Conversion.fromSortedRDD(intervalized)
     }
-  }
-
-  /**
-   * Intervalize an [[OrderedRDD]] by mapping its keys to the begin or the end of an interval where
-   * they fall into. The intervals are defined by `clock`.
-   *
-   * @param rdd            The [[OrderedRDD]] expected to intervalize.
-   * @param clock          A [[OrderedRDD]] of sorted keys where two sequential keys are treated as an interval.
-   * @param beginInclusive A flag to determine how to treat keys that fall exactly on the clock intervals.
-   *                       If it is true, keys that are at the exact beginning of an interval will be included and keys
-   *                       that fall on the exact end will be excluded, as represented by the interval [begin, end).
-   *                       Otherwise, it is (begin, end].
-   * @return an [[OrderedRDD]] whose keys are intervalized and the original keys are kept in the
-   *         values as (K, V)s.
-   */
-  def intervalize[K: Ordering: ClassTag, SK, V, V1](
-    rdd: OrderedRDD[K, V],
-    clock: OrderedRDD[K, V1],
-    beginInclusive: Boolean
-  ): OrderedRDD[K, (K, V)] = {
-    // TODO: This algorithm doesn't deal with empty partitions correctly.
-    sys.error("This algorithm is broken, don't use this. " +
-      "If you see this message, please contact spark-ts-support@twosigma.com")
-
-    val rddSplits = rdd.rangeSplits
-    val clockSplits = clock.rangeSplits
-    require(RangeSplit.isSortedByRange(clockSplits))
-
-    val rddPartToClockParts = rddSplits.map { split =>
-      val clockParts = RangeSplit.getIntersectingSplits(split.range, clockSplits).map(_.partition)
-      val extraPart = if (beginInclusive) {
-        val pos = clockParts.map(_.index).min
-        if (pos > 0) Some(clockSplits(pos - 1).partition) else None
-      } else {
-        val pos = clockParts.map(_.index).max
-        if (pos < clockSplits.length - 1) Some(clockSplits(pos + 1).partition) else None
-      }
-      (split.partition.index, extraPart.fold(clockParts)(clockParts.+:(_)).sortBy(_.index))
-    }.toMap
-
-    val rddDep = new OneToOneDependency(rdd)
-    val clockDep = new NarrowDependency(clock) {
-      override def getParents(partitionId: Int) = rddPartToClockParts(partitionId).map(_.index)
-    }
-
-    val sc = rdd.sparkContext
-
-    val intervalizedRDD = new RDD[(K, (K, V))](sc, Seq(rddDep, clockDep)) {
-      override def compute(part: Partition, context: TaskContext): Iterator[(K, (K, V))] = {
-        val parts = rddPartToClockParts(part.index)
-        // TODO: we should use rdd.mapPartitions to make it much more efficient.
-        val littleClock = PartitionsIterator(clock, parts, context).toArray.map(_._1)
-        rdd.iterator(part, context).map {
-          case (k, v) => (round(k, littleClock, beginInclusive), (k, v))
-        }.filter(_._1.isDefined).map {
-          case (k, v) => (k.get, v)
-        }
-      }
-
-      override protected def getPartitions: Array[Partition] = rdd.partitions
-    }
-    // Normalize the above rdd such that rows with the same keys won't spread across multiple partitions.
-    Conversion.fromSortedRDD(intervalizedRDD)
   }
 }

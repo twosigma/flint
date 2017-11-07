@@ -568,7 +568,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         tsrdd = self.timeSeriesRDD.groupByCycle(scala_key)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
-    def groupByInterval(self, clock, key=None, begin_inclusive=True):
+    def groupByInterval(self, clock, key=None, inclusion='begin', rounding='end'):
         """
         Groups rows within the intervals specified by a clock
         dataframe. For each adjacent pair of rows in the clock
@@ -587,16 +587,29 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         :type clock: :class:`TimeSeriesDataFrame`
         :param key: Optional. One or multiple column names to use as the grouping key
         :type key: str, list of str
-        :param begin_inclusive: Optional. Default True. If True, timestamp of output dataframe will
-                                be the beginning timestamp of an interval, otherwise, timestamp of
-                                the output dataframe will be the ending timestamp of an interval.
-        :type begin_inclusive: bool
+        :param inclusion: Defines the shape of the intervals, i.e, whether intervals are
+                          [begin, end) or (begin, end].
+                          "begin" causes rows that are at the exact beginning of an interval to be
+                          included and rows that fall on the exact end to be excluded, as
+                          represented by the interval [begin, end). "end" causes rows that are at
+                          the exact beginning of an interval to be excluded and rows that fall on
+                          the exact end to be included, as represented by the interval (begin, end].
+                          Defaults to "begin".
+        :type inclusion: str
+        :param rounding: Determines how timestamps of input rows are rounded to timestamps of
+                         intervals.
+                         "begin" causes the input rows to be rounded to the beginning timestamp of
+                         an interval. "end" causes the input rows to be rounded to the ending
+                         timestamp of an interval.
+                         Defaults to "end".
+        :type rounding: str
         :returns: a new dataframe with list of rows of the same interval
         :rtype: :class:`TimeSeriesDataFrame`
         """
         scala_key = utils.list_to_seq(self._sc, key)
         with traceback_utils.SCCallSiteSync(self._sc) as css:
-            tsrdd = self.timeSeriesRDD.groupByInterval(clock.timeSeriesRDD, scala_key, begin_inclusive)
+            tsrdd = self.timeSeriesRDD.groupByInterval(clock.timeSeriesRDD, scala_key,
+                                                       inclusion, rounding)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def summarizeCycles(self, summarizer, key=None):
@@ -784,8 +797,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             utils.list_to_seq(self._sc, data_cols))
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
-
-    def summarizeIntervals(self, clock, summarizer, key=None, beginInclusive=True):
+    def summarizeIntervals(self, clock, summarizer, key=None, inclusion='begin', rounding='end'):
         """
         Computes aggregate statistics of rows within the same interval.
 
@@ -802,21 +814,34 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             summarizers can be found in :mod:`.summarizers`.
         :param key: Optional. One or multiple column names to use as the grouping key
         :type key: str, list of str
-        :param begin_inclusive: Optional. Default True. If True, timestamp of output dataframe will
-                                be the beginning timestamp of an interval, otherwise, timestamp of
-                                the output dataframe will be the ending timestamp of an interval.
-        :type begin_inclusive: bool
+        :param inclusion: Defines the shape of the intervals, i.e, whether intervals are
+                          [begin, end) or (begin, end].
+                          "begin" causes rows that are at the exact beginning of an interval to be
+                          included and rows that fall on the exact end to be excluded, as
+                          represented by the interval [begin, end). "end" causes rows that are at
+                          the exact beginning of an interval to be excluded and rows that fall on
+                          the exact end to be included, as represented by the interval (begin, end].
+                          Defaults to "begin".
+        :type inclusion: str
+        :param rounding: Determines how timestamps of input rows are rounded to timestamps of
+                         intervals. "begin" causes the input rows to be rounded to the beginning
+                         timestamp of an interval. "end" causes the input rows to be rounded to the
+                         ending timestamp of an interval. Defaults to "end".
+        :type rounding:  str
         :returns: a new dataframe with summarization columns
         :rtype: :class:`TimeSeriesDataFrame`
         """
         scala_key = utils.list_to_seq(self._sc, key)
         composed_summarizer = summarizers.compose(self._sc, summarizer)
+
         with traceback_utils.SCCallSiteSync(self._sc) as css:
             tsrdd = self.timeSeriesRDD.summarizeIntervals(
                 clock.timeSeriesRDD,
                 composed_summarizer._jsummarizer(self._sc),
                 scala_key,
-                beginInclusive)
+                inclusion,
+                rounding)
+
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def summarizeWindows(self, window, summarizer, key=None):

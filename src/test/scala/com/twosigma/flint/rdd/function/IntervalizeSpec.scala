@@ -43,9 +43,55 @@ class IntervalizeSpec extends FlatSpec with SharedSparkContext {
     (1035L, (1, 0.17))
   )
 
-  val expectedEndInclusive = List(
+  val expectedBeginBegin = List(
     (1000, (1000, (1, 0.01))),
     (1000, (1000, (2, 0.02))),
+    (1000, (1005, (1, 0.03))),
+    (1000, (1005, (2, 0.04))),
+    (1010, (1010, (1, 0.05))),
+    (1010, (1010, (2, 0.06))),
+    (1010, (1015, (1, 0.07))),
+    (1010, (1015, (2, 0.08))),
+    // ---------------------
+    (1020, (1020, (2, 0.11))),
+    (1020, (1020, (1, 0.12))),
+    (1020, (1025, (2, 0.13))),
+    (1020, (1025, (1, 0.14)))
+  )
+
+  val expectedBeginEnd = List(
+    (1010, (1000, (1, 0.01))),
+    (1010, (1000, (2, 0.02))),
+    (1010, (1005, (1, 0.03))),
+    (1010, (1005, (2, 0.04))),
+    (1020, (1010, (1, 0.05))),
+    (1020, (1010, (2, 0.06))),
+    (1020, (1015, (1, 0.07))),
+    (1020, (1015, (2, 0.08))),
+    // ---------------------
+    (1030, (1020, (2, 0.11))),
+    (1030, (1020, (1, 0.12))),
+    (1030, (1025, (2, 0.13))),
+    (1030, (1025, (1, 0.14)))
+  )
+
+  val expectedEndBegin = List(
+    (1000, (1005, (1, 0.03))),
+    (1000, (1005, (2, 0.04))),
+    (1000, (1010, (1, 0.05))),
+    (1000, (1010, (2, 0.06))),
+    (1010, (1015, (1, 0.07))),
+    (1010, (1015, (2, 0.08))),
+    // ---------------------
+    (1010, (1020, (2, 0.11))),
+    (1010, (1020, (1, 0.12))),
+    (1020, (1025, (2, 0.13))),
+    (1020, (1025, (1, 0.14))),
+    (1020, (1030, (2, 0.15))),
+    (1020, (1030, (1, 0.16)))
+  )
+
+  val expectedEndEnd = List(
     (1010, (1005, (1, 0.03))),
     (1010, (1005, (2, 0.04))),
     (1010, (1010, (1, 0.05))),
@@ -74,27 +120,55 @@ class IntervalizeSpec extends FlatSpec with SharedSparkContext {
 
   "Intervalize" should "round correctly" in {
     val clock = Array(2, 4, 6)
-    assert(round(0, clock, true).isEmpty)
-    assert(round(2, clock, true) == Some(2))
-    assert(round(3, clock, true) == Some(2))
-    assert(round(6, clock, true) == Some(6))
-    assert(round(7, clock, true) == Some(6))
 
-    assert(round(0, clock, false) == Some(2))
-    assert(round(2, clock, false) == Some(2))
-    assert(round(3, clock, false) == Some(4))
-    assert(round(6, clock, false) == Some(6))
-    assert(round(7, clock, false).isEmpty)
+    val roundBeginBegin = roundFn[Int]("begin", "begin")
+    assert(roundBeginBegin(0, clock).isEmpty)
+    assert(roundBeginBegin(2, clock) == Some(2))
+    assert(roundBeginBegin(3, clock) == Some(2))
+    assert(roundBeginBegin(4, clock) == Some(4))
+    assert(roundBeginBegin(5, clock) == Some(4))
+    assert(roundBeginBegin(6, clock).isEmpty)
+    assert(roundBeginBegin(7, clock).isEmpty)
+
+    val roundBeginEnd = roundFn[Int]("begin", "end")
+    assert(roundBeginEnd(0, clock).isEmpty)
+    assert(roundBeginEnd(2, clock) == Some(4))
+    assert(roundBeginEnd(3, clock) == Some(4))
+    assert(roundBeginEnd(4, clock) == Some(6))
+    assert(roundBeginEnd(5, clock) == Some(6))
+    assert(roundBeginEnd(6, clock).isEmpty)
+    assert(roundBeginEnd(7, clock).isEmpty)
+
+    val roundEndBegin = roundFn[Int]("end", "begin")
+    assert(roundEndBegin(0, clock).isEmpty)
+    assert(roundEndBegin(2, clock).isEmpty)
+    assert(roundEndBegin(3, clock) == Some(2))
+    assert(roundEndBegin(4, clock) == Some(2))
+    assert(roundEndBegin(5, clock) == Some(4))
+    assert(roundEndBegin(6, clock) == Some(4))
+    assert(roundEndBegin(7, clock).isEmpty)
+
+    val roundEndEnd = roundFn[Int]("end", "end")
+    assert(roundEndEnd(0, clock).isEmpty)
+    assert(roundEndEnd(2, clock).isEmpty)
+    assert(roundEndEnd(3, clock) == Some(4))
+    assert(roundEndEnd(4, clock) == Some(4))
+    assert(roundEndEnd(5, clock) == Some(6))
+    assert(roundEndEnd(6, clock) == Some(6))
+    assert(roundEndEnd(7, clock).isEmpty)
   }
 
-  it should "intervalize OrderedRDD using array clock with beginInclusive = false correctly" in {
-    val intervalized = intervalize(orderedRDD, clock, false)
-    assert(intervalized.collect().toList == expectedEndInclusive)
-  }
+  it should "intervalize OrderedRDD using array clock with (begin, begin) correctly" in {
+    var intervalized = intervalize(orderedRDD, clock, "begin", "begin")
+    assert(intervalized.collect().toList == expectedBeginBegin)
 
-  it should "intervalize OrderedRDD using OrderedRDD clock correctly" ignore {
-    val intervalized = intervalize(orderedRDD, clockRDD, false)
-    assert(intervalized.collect().toList == expectedEndInclusive)
-  }
+    intervalized = intervalize(orderedRDD, clock, "begin", "end")
+    assert(intervalized.collect().toList == expectedBeginEnd)
 
+    intervalized = intervalize(orderedRDD, clock, "end", "begin")
+    assert(intervalized.collect().toList == expectedEndBegin)
+
+    intervalized = intervalize(orderedRDD, clock, "end", "end")
+    assert(intervalized.collect().toList == expectedEndEnd)
+  }
 }

@@ -818,8 +818,17 @@ trait TimeSeriesRDD extends Serializable {
    *                       timestamps define an interval.
    * @param key            If non-empty, rows within an interval should be further partitioned into sub-groups
    *                       specified by 'key' in addition to row time.
-   * @param beginInclusive For rows within an interval, it will round the timestamps of rows to the begin of the
-   *                       interval by default.
+   * @param inclusion      Defines the shape of the intervals, i.e, whether intervals are [begin, end) or (begin, end].
+   *                       "begin" causes rows that are at the exact beginning of an interval to be included and
+   *                       rows that fall on the exact end to be excluded, as represented by the interval [begin, end).
+   *                       "end" causes rows that are at the exact beginning of an interval to be excluded and rows that
+   *                       fall on the exact end to be included, as represented by the interval (begin, end].
+   *                       Defaults to "begin".
+   * @param rounding       Determines how timestamps of input rows are rounded to timestamps of intervals.
+   *                       "begin" causes the input rows to be rounded to the beginning timestamp of
+   *                       an interval. "end" causes the input rows to be rounded to the ending timestamp of an
+   *                       interval. Defaults to "end".
+   *
    * @return a [[TimeSeriesRDD]].
    * @example
    * {{{
@@ -843,14 +852,16 @@ trait TimeSeriesRDD extends Serializable {
    * val results = priceTSRdd.groupByInterval(clockTSRdd)
    * // time  rows
    * // ----------------------------------
-   * // 1000L [[1000L, 1.0], [1500L, 2.0]]
-   * // 2000L [[2000L, 3.0], [2500L, 4.0]]
+   * // 2000L [[1000L, 1.0], [1500L, 2.0]]
+   * // 3000L [[2000L, 3.0], [2500L, 4.0]]
    * }}}
    */
-  def groupByInterval(clock: TimeSeriesRDD, key: Seq[String] = Seq.empty, beginInclusive: Boolean = true): TimeSeriesRDD
-
-  private[flint] def groupByInterval(clock: TimeSeriesRDD, key: String, beginInclusive: Boolean): TimeSeriesRDD =
-    groupByInterval(clock, Option(key).toSeq, beginInclusive)
+  def groupByInterval(
+    clock: TimeSeriesRDD,
+    key: Seq[String] = Seq.empty,
+    inclusion: String = "begin",
+    rounding: String = "end"
+  ): TimeSeriesRDD
 
   /**
    * For each row, adds a new column `window` whose value is a list of rows within the specified window.
@@ -1035,8 +1046,16 @@ trait TimeSeriesRDD extends Serializable {
    * @param summarizer     A summarizer expected to perform aggregation. See [[Summarizers]] for supported summarizers.
    * @param key            Columns that could be used as the grouping key and aggregations will be performed per
    *                       key per cycle level if specified.
-   * @param beginInclusive For rows within an interval, it will round the timestamps of rows to the begin of the
-   *                       interval by default.
+   * @param inclusion      Defines the shape of the intervals, i.e, whether intervals are [begin, end) or (begin, end].
+   *                       "begin" causes rows that are at the exact beginning of an interval to be included and
+   *                       rows that fall on the exact end to be excluded, as represented by the interval [begin, end).
+   *                       "end" causes rows that are at the exact beginning of an interval to be excluded and rows that
+   *                       fall on the exact end to be included, as represented by the interval (begin, end].
+   *                       Defaults to "begin".
+   * @param rounding       Determines how timestamps of input rows are rounded to timestamps of intervals.
+   *                       "begin" causes the input rows to be rounded to the beginning timestamp of
+   *                       an interval. "end" causes the input rows to be rounded to the ending timestamp of an
+   *                       interval. Defaults to "end".
    * @return a [[TimeSeriesRDD]] with summarized column.
    * @example
    * {{{
@@ -1049,15 +1068,9 @@ trait TimeSeriesRDD extends Serializable {
     clock: TimeSeriesRDD,
     summarizer: SummarizerFactory,
     key: Seq[String] = Seq.empty,
-    beginInclusive: Boolean = true
+    inclusion: String = "begin",
+    rounding: String = "end"
   ): TimeSeriesRDD
-
-  private[flint] def summarizeIntervals(
-    clock: TimeSeriesRDD,
-    summarizer: SummarizerFactory,
-    key: String,
-    beginInclusive: Boolean
-  ): TimeSeriesRDD = summarizeIntervals(clock, summarizer, Option(key).toSeq, beginInclusive)
 
   /**
    * For each row, computes aggregate statistics of rows within its window.
@@ -1398,11 +1411,25 @@ class TimeSeriesRDDImpl private[timeseries] (
 
   def groupByCycle(key: Seq[String] = Seq.empty): TimeSeriesRDD = summarizeCycles(Summarizers.rows("rows"), key)
 
+  // For python compatibility. Do not use this.
+  @PythonApi(until = "0.4.0")
+  private[flint] def groupByInterval(
+    clock: TimeSeriesRDD,
+    key: Seq[String],
+    beginInclusive: Boolean
+  ): TimeSeriesRDD =
+    if (beginInclusive) {
+      groupByInterval(clock, key, "begin", "begin")
+    } else {
+      groupByInterval(clock, key, "end", "end")
+    }
+
   def groupByInterval(
     clock: TimeSeriesRDD,
     key: Seq[String] = Seq.empty,
-    beginInclusive: Boolean = true
-  ): TimeSeriesRDD = summarizeIntervals(clock, Summarizers.rows("rows"), key, beginInclusive)
+    inclusion: String = "begin",
+    rounding: String = "end"
+  ): TimeSeriesRDD = summarizeIntervals(clock, Summarizers.rows("rows"), key, inclusion, rounding)
 
   def addWindows(
     window: Window,
@@ -1500,16 +1527,35 @@ class TimeSeriesRDDImpl private[timeseries] (
     )
   }
 
+  // For python compatibility. Do not use this.
+  @PythonApi(until = "0.4.0")
+  private[flint] def summarizeIntervals(
+    clock: TimeSeriesRDD,
+    summarizer: SummarizerFactory,
+    key: Seq[String],
+    beginInclusive: Boolean
+  ): TimeSeriesRDD = {
+    if (beginInclusive) {
+      summarizeIntervals(clock, summarizer, key, "begin", "begin")
+    } else {
+      summarizeIntervals(clock, summarizer, key, "end", "end")
+    }
+  }
+
   def summarizeIntervals(
     clock: TimeSeriesRDD,
     summarizer: SummarizerFactory,
     key: Seq[String] = Seq.empty,
-    beginInclusive: Boolean = true
+    inclusion: String = "begin",
+    rounding: String = "end"
   ): TimeSeriesRDD = {
+    require(Seq("begin", "end").contains(inclusion), "inclusion must be \"begin\" or \"end\"")
+    require(Seq("begin", "end").contains(rounding), "rounding must be \"begin\" or \"end\"")
+
     val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns, key)
     val sum = summarizer(pruned.schema)
     val clockLocal = clock.toDF.select("time").as[(Long)].collect()
-    val intervalized = pruned.orderedRdd.intervalize(clockLocal, beginInclusive).mapValues {
+    val intervalized = pruned.orderedRdd.intervalize(clockLocal, inclusion, rounding).mapValues {
       case (_, v) => v._2
     }
 

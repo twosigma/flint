@@ -542,30 +542,11 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
    * where they fall into. The intervals are defined by the given intervalizer.
    *
    * @param intervalizer   A sequence of sorted keys where two sequential keys are treated as an interval.
-   * @param beginInclusive A flag to determine how to treat keys that fall exactly on the
-   *                       ticks. If it is true, keys that are at the exact beginning of an interval will be
-   *                       included and keys that fall on the exact end will be excluded, as represented by
-   *                       the interval [begin, end). Otherwise, it is (begin, end].
    * @return An [[OrderedRDD]] whose keys are intervalized and the original keys are kept in the
    *         values as (K, V)s.
    */
-  def intervalize(intervalizer: Array[K], beginInclusive: Boolean): OrderedRDD[K, (K, V)] =
-    Intervalize.intervalize(self, intervalizer, beginInclusive)
-
-  /**
-   * Intervalize an this [[OrderedRDD]] by mapping its keys to the begin or the end of an interval
-   * where they fall into. The intervals are defined by the given intervalizer.
-   *
-   * @param intervalizer   An [[org.apache.spark.rdd.RDD RDD]] of sorted keys where two sequential keys are
-   *                       treated as an interval.
-   * @param beginInclusive A flag to determine how to treat keys that fall exactly on the
-   *                       ticks. If it is true, keys that are at the exact beginning of an interval will be
-   *                       included and keys that fall on the exact end will be excluded, as represented by
-   *                       the interval [begin, end). Otherwise, it is (begin, end].
-   * @return an [[OrderedRDD]] whose keys are intervalized and the original keys are kept in the values as (K, V)s.
-   */
-  def intervalize[V1](intervalizer: OrderedRDD[K, V1], beginInclusive: Boolean): OrderedRDD[K, (K, V)] =
-    Intervalize.intervalize(self, intervalizer, beginInclusive)
+  def intervalize(intervalizer: Array[K], inclusion: String, rounding: String): OrderedRDD[K, (K, V)] =
+    Intervalize.intervalize(self, intervalizer, inclusion, rounding)
 
   /**
    * See doc [[com.twosigma.flint.rdd.function.summarize.Summarizations.apply]] for more information.
