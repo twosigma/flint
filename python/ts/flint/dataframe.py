@@ -288,127 +288,256 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
     def addColumnsForCycle(self, columns, *, key=None):
         """
-        Adds columns by aggregating rows with the same timestamp (and
-        optionally, key), and applying a function to each such set of
-        rows.  The added column's values are the return values of that
-        function.
+        Adds columns to each cycle by computing over data in the cycle.
 
-        The columns are specified as a ``dict``. The key of the dict is the
-        column name specified as a ``str``, and the value is either:
+        The columns are specified as a column spec, which is a ``dict``.
+        Each entry can be either:
 
-        (1) a UDF defined as a pair of :class:`pyspark.sql.types.DataType` and
-        a function that takes a ``list`` of rows and return a ``dict`` from row to
-        computed value; or
-        (2) a ::class:`RankerFactory` constructed from one of the built-in
-        functions. See :mod:`rankers` for the built-in functions.
+        1. column name to UDF column. A UDF column is defined by
+           :meth:`ts.flint.functions.udf` with a python function,
+           a return type and a list of input columns. The map entry can
+           be one of the following:
+
+           1. str -> udf
+
+              This will add a single column. The input args to the python
+              function are ``pandas.Series`` or ``pandas.DataFrame``. The
+              return value of the function must be ``pandas.Series``. The
+              returned ``pandas.Series`` must have the same length as inputs.
+              The ``returnType`` argument of the udf object must be a single
+              :class:`~pyspark.sql.types.DataType` describing the type of
+              the added column.
+
+           2. tuple(str) -> udf
+
+              This will add multiple columns. The input args to the python
+              function are ``pandas.Series`` or ``pandas.DataFrame``. The
+              return value of the function must be ``pandas.Series``. The
+              returned `pandas.Series` must have the same length as inputs.
+              The ``returnType`` argument of the udf object must be a single
+              :class:`~pyspark.sql.types.DataType` describing the types of
+              the added columns.
+
+              The cardinality of the column names, return data types and
+              returned ``pandas.Series`` must match, i.e, if you are adding
+              two columns, then the column names must be a tuple of two
+              strings, the return type must be two data types, and the python
+              must return a tuple of two ``pandas.Series``.
+
+        2. column name to a built-in function. See :mod:`rankers` for the
+           built-in functions.
+
+        3. (deprecated) a legacy UDF defined as a pair of
+           :class:`pyspark.sql.types.DataType` and a function that takes a
+           ``list`` of rows and return a ``dict`` from row to
+           computed value;
+
+        User-defined function examples:
+
+            Use user-defined functions
+
+            >>> from ts.flint.functions import udf
+            >>>
+            >>> # v is a pandas.Series of double
+            >>> @udf(DoubleType())
+            ... def pct_rank(v):
+            ...    return v.rank(pct=True)
+            >>>
+            >>> df.addColumnsForCycle({
+            ...     'rank': pct_rank(df.v)
+            ... })
+
+            Add multiple-columns
+
+            >>> from ts.flint.functions import udf
+            >>>
+            >>> # v is a pandas.Series of double
+            >>> @udf((DoubleType(), DoubleType()))
+            ... def ranks(v):
+            ...    return v.rank(), v.rank(pct=True)
+            >>>
+            >>> df.addColumnsForCycle({
+            ...     ('rank', 'rank_pct'): ranks(df.v)
+            ... })
 
         Example usage with a built-in function:
 
             >>> from ts.flint import rankers
-            >>> active_price.addColumnsForCycle({
-            ...     "rank": rankers.percentile("volume"))
+            >>> df.addColumnsForCycle({
+            ...     "rank": rankers.percentile("v"))
             ... })
 
-        Example usage with a UDF:
-
-            >>> from pyspark.sql.types import DoubleType
-            ...
-            >>> def volumeZScore(rows):
-            ...     size = len(rows)
-            ...     if size <= 1:
-            ...         return {row:0 for row in rows}
-            ...     mean = sum(row.volume for row in rows) / size
-            ...     stddev = math.sqrt(sum((row.closePrice - mean)**2 for row in rows) / (size - 1))
-            ...     return {row:(row.closePrice - mean)/stddev for row in rows}
-            ...
-            >>> active_price.addColumnsForCycle({
-            ...    'volumeZScore': (DoubleType(), volumeZScore)
-            ... })
-
-        :param columns: a ``dict`` mapping each column name to either:
-            (1) a pair of :class:`pyspark.sql.types.DataType` and the function to
-            compute that column, i.e. ``(pyspark.sql.types.DataType, callable)``, or
-            (2) a built-in function.
-            See examples above.
+        :param columns: a column spec
         :type columns: collections.Mapping
         :param key: Optional. One or multiple column names to use as the grouping key
         :type key: str, list of str
         :returns: a new dataframe with the columns added
         :rtype: :class:`TimeSeriesDataFrame`
-        :raises ValueError: if there are columns with udfs or bindings that are not supported
         """
         assert isinstance(columns, collections.Mapping), "columns must be a mapping (e.g., dict)"
 
-        # Split the columns into Python UDFs and JVM CycleColumn bindings
-        udfs = {
-            target_column: udf
-            for target_column, udf in columns.items()
-            if (isinstance(udf, tuple) or isinstance(udf, list)) and
-            isinstance(udf[0], pyspark_types.DataType) and
-            callable(udf[1])
-        }
+        legacy_udfs = collections.OrderedDict()
+        udfs = collections.OrderedDict()
+        builtin_functions = collections.OrderedDict()
 
-        builtin_bindings = {
-            target_column: udf
-            for target_column, udf in columns.items()
-            if isinstance(udf, rankers.RankFactory)
-        }
-
-        if len(udfs) + len(builtin_bindings) < len(columns):
-            unsupported_columns = {
-                key
-                for key in columns
-                if key not in udfs and key not in builtin_bindings
-            }
-            raise ValueError(
-                "Unsupported column specification: {}. "
-                "Column values must be either a tuple of (pyspark.sqltypes.DataType, callable) or "
-                "an instance of rankers.RankFactory.".format(unsupported_columns)
-            )
+        for col_name, col_obj in columns.items():
+            if isinstance(col_obj, collections.Sequence):
+                if (isinstance(col_obj[0], pyspark_types.DataType) and
+                    callable(col_obj[1])):
+                    legacy_udfs[col_name] = col_obj
+                else:
+                    raise ValueError("Invalid udf spec. Legacy udf column spec should a tuple of "
+                                     "(pyspark.sqltypes.DataType, callable). Key: {} Value: {}"
+                                     .format(col_name, col_obj))
+            # ts.flint.udf object
+            elif hasattr(col_obj, 'func'):
+                udfs[col_name] = col_obj
+            elif isinstance(col_obj, rankers.RankFactory):
+                builtin_functions[col_name] = col_obj
+            else:
+                raise ValueError("Invalid column spec. Key: {} Value: {}"
+                                 .format(col_name, col_obj))
 
         tsdf = self
-        if builtin_bindings:
-            tsdf = TimeSeriesDataFrame._addColumnsForCycle_builtin(tsdf, builtin_bindings, key)
+        if builtin_functions:
+            tsdf = tsdf._addColumnsForCycle_builtin(builtin_functions, key)
 
         if udfs:
-            tsdf = TimeSeriesDataFrame._addColumnsForCycle_udfs(tsdf, udfs, key)
+            tsdf = tsdf._addColumnsForCycle_udf(udfs, key)
 
-        new_columns = list(self.columns) + list(columns.keys())
-        if tsdf.columns != new_columns:
-            # Reorder to maintain order specified in `columns`
-            tsdf = tsdf.select(*new_columns)
+        if legacy_udfs:
+            tsdf = tsdf._addColumnsForCycle_legacy_udf(legacy_udfs, key)
+
+        new_columns = []
+        for col_name in columns.keys():
+            if isinstance(col_name, str):
+                new_columns.append(col_name)
+            elif isinstance(col_name, collections.Sequence):
+                new_columns.extend(col_name)
+            else:
+                raise ValueError("Invalid column names {}".format(col_name))
+
+        final_columns = self.columns + new_columns
+        # Reorder to maintain order specified in `columns`
+        tsdf = tsdf.select(*final_columns)
 
         return tsdf
 
-    @staticmethod
-    def _addColumnsForCycle_builtin(tsdf, builtin_bindings, key):
+    def _addColumnsForCycle_builtin(self, builtin_bindings, key):
         """
         Add columns using built-in ``CycleColumn`` bindings.
         :param builtin_bindings: A `dict` containing target columns as keys and
             :class:`rankers.RankFactory` as values.
         """
 
-        scala_key = utils.list_to_seq(tsdf._sc, key)
+        scala_key = utils.list_to_seq(self._sc, key)
         scala_bindings = utils.list_to_seq(
-            tsdf._sc,
-            [rf(tsdf._sc, target_column) for target_column, rf in builtin_bindings.items()]
+            self._sc,
+            [rf(self._sc, target_column) for target_column, rf in builtin_bindings.items()]
         )
-        tsrdd = tsdf.timeSeriesRDD.addColumnsForCycle(scala_bindings, scala_key)
-        return TimeSeriesDataFrame._from_tsrdd(tsrdd, tsdf.sql_ctx)
+        tsrdd = self.timeSeriesRDD.addColumnsForCycle(scala_bindings, scala_key)
+        return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
-    @staticmethod
-    def _addColumnsForCycle_udfs(tsdf, udfs, key):
+    def _addColumnsForCycle_udf(self, columns, key):
         """
-        Add columns using Python-defined UDFs.
+        Add columns using user-defined functions.
+
+        """
+        import pandas as pd
+
+        base_rows_col_name = self._jpkg.ArrowSummarizer.baseRowsColumnName()
+        arrow_batch_col_name = self._jpkg.ArrowSummarizer.arrowBatchColumnName()
+
+        udf._check_invalid_udfs(columns.values())
+        required_col_names = udf._required_column_names(columns.values())
+        grouped = self.summarizeCycles(
+            summarizers.arrow(required_col_names, include_base_rows=True),
+            key=key)
+
+        schema_col_names = []
+        data_col_names = []
+
+        for i, (col_name, udf_column) in enumerate(columns.items()):
+            fn, col_t = udf._fn_and_type(udf_column)
+            column_indices = udf_column.column_indices
+
+            if isinstance(col_name, str):
+                col_name = (col_name,)
+                col_t = (col_t,)
+            elif isinstance(col_name, collections.Sequence):
+                col_t = _unwrap_data_types(col_t)
+            else:
+                raise ValueError('Column names must be either a string'
+                 'or a sequence of strings. {}'.format(col_name))
+
+            schema_col_name = '__schema_{}'.format(i)
+            data_col_name = '__data_{}'.format(i)
+            schema_col_names.append(schema_col_name)
+            data_col_names.append(data_col_name)
+
+            def _fn(arrow_bytes):
+                pdf = arrowfile_to_dataframe(arrow_bytes)
+                inputs = [pdf[index] for index in column_indices]
+                result = fn(*inputs)
+
+                if len(col_name) == 1:
+                    if isinstance(result, pd.core.series.Series):
+                        if len(result) == len(inputs[0]):
+                            result_df = pd.concat((result,), axis=1, keys=col_name)
+                        else:
+                            raise ValueError('Invalid return value for column {}. '
+                                             'Expected length of the returned series is {} but is'
+                                             ' {}'.format(col_name, len(inputs[0]), len(result)))
+                    else:
+                        raise ValueError('Invalid return value for column {}. '
+                                         'Return value of the user-defined function should be '
+                                         'Series but is {}'.format(col_name, type(result)))
+                else:
+                    if isinstance(result, collections.Sequence):
+                        if len(result) == len(col_name):
+                            result_df = pd.concat(result, axis=1, keys=col_name)
+                            if len(result_df) != len(inputs[0]):
+                                raise ValueError('Invalid return value for column {}. '
+                                                 'Expected length of the returned series is {} but is'
+                                                 ' {}'.format(col_name, len(inputs[0]), len(result_df)))
+                        else:
+                            raise ValueError('Invalud return value for column {}. '
+                                             'Expected a sequence of {} Series but received a sequence'
+                                             'of {}'.format(col_name, len(col_name), len(result)))
+                    else:
+                        raise ValueError('Invalid return value for column {}. '
+                                         'Return value of the user-defined function should be '
+                                         'sequence of pd.Series but is '
+                                         '{}'.format(col_name, type(result)))
+
+                return dataframe_to_arrowfile(result_df)
+
+            # Create a column that has the schema of the returned arrow batch
+            # but no data. This is a hack around not having the arrow batch schema
+            # in query planning phase.
+            col_schema = StructType([StructField(name, t) for (name, t) in zip(col_name, col_t)])
+
+            grouped = grouped.withColumn(schema_col_name, F.udf(lambda : None, col_schema)())
+            grouped = grouped.withColumn(data_col_name, F.udf(_fn, pyspark_types.BinaryType())(
+                grouped[arrow_batch_col_name]
+            ))
+
+        result = grouped._concatArrowAndExplode(base_rows_col_name, schema_col_names, data_col_names)
+
+        return result
+
+    def _addColumnsForCycle_legacy_udf(self, udfs, key):
+        """
+        Add columns using legacy user-defined functions.
         :param udfs: A `dict` containing target columns as keys and a tuple as the value,
             where the tuple is (1) a Pyspark DataType and, (2) a function that takes
             a list of rows and returns a dict of row to value.
         """
 
         # Need to make a new StructType to prevent from modifying the original schema object
-        schema = pyspark_types.StructType.fromJson(tsdf.schema.jsonValue())
+        schema = pyspark_types.StructType.fromJson(self.schema.jsonValue())
 
-        tsdf = tsdf.groupByCycle(key)
+        grouped = self.groupByCycle(key)
 
         # Don't pickle the whole schema, just the names for the lambda
         schema_names = list(schema.names)
@@ -429,14 +558,14 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         for column, (datatype, fn) in udfs.items():
             schema.add(column, data_type=datatype)
 
-        rdd = tsdf.rdd.flatMap(flatmap_fn())
-        df = tsdf.sql_ctx.createDataFrame(rdd, schema)
+        rdd = grouped.rdd.flatMap(flatmap_fn())
+        df = self.sql_ctx.createDataFrame(rdd, schema)
 
         return TimeSeriesDataFrame(df,
                                    df.sql_ctx,
-                                   time_column=tsdf._time_column,
-                                   unit=tsdf._junit,
-                                   tsrdd_part_info=tsdf._tsrdd_part_info)
+                                   time_column=self._time_column,
+                                   unit=self._junit,
+                                   tsrdd_part_info=self._tsrdd_part_info)
 
     def merge(self, other):
         """
@@ -642,7 +771,10 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
               argument of the udf object must be a tuple of
               :class:`~pyspark.sql.types.DataType`. The cardinality of
               the column names, return data types and return values
-              must match.
+              must match, i.e, if you are adding
+              two columns, then the column names must be a tuple of two
+              strings, the return type must be two data types, and the python
+              must return a tuple of two scalar values.
 
         Examples:
 
@@ -719,68 +851,72 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         """
 
         if isinstance(summarizer, collections.Mapping):
-            import pyarrow as pa
-
-            columns = summarizer
-
-            # Check if illegal columns exists
-            for col in columns.values():
-                for index in col.column_indices:
-                    if index is None:
-                        raise ValueError(
-                            'Column passed to the udf function must be a column in the DataFrame, '
-                            'i.e, df[col]. Other types of Column are not supported.')
-
-            arrow_column_prefix = "__tmp_" + str(uuid.uuid4())[:8]
-            required_col_names = list(set(itertools.chain(
-                *[udf._children_column_names(col) for col in columns.values()])))
-            grouped = self.summarizeCycles(
-                summarizers.arrow(required_col_names).prefix(arrow_column_prefix),
-                key=key)
-
-            # (1) Turns row in each cycle into an arrow file format
-            # (2) For each udf, we apply the function and put the
-            #     result in a new column. If the udf returns multiple
-            #     values, we put the values in a struct first and later
-            #     explode it into multiple columns.
-
-            arrow_column_name = "{}_arrow_bytes".format(arrow_column_prefix)
-            for col_name, udf_column in columns.items():
-                children_names = udf._children_column_names(udf_column)
-                fn, t = udf._fn_and_type(udf_column)
-                column_indices = udf_column.column_indices
-
-                def _fn(arrow_bytes):
-                    reader = pa.RecordBatchFileReader(pa.BufferReader(arrow_bytes))
-                    assert reader.num_record_batches == 1, (
-                        'Cannot read more than one record batch')
-                    rb = reader.get_batch(0)
-                    pdf = rb.to_pandas()
-                    inputs = [pdf[index] for index in column_indices]
-                    ret = fn(*inputs)
-                    return udf._numpy_to_python(ret)
-
-                if isinstance(col_name, tuple):
-                    tmp_struct_col_name = "__tmp_" + str(uuid.uuid4())[:8]
-                    grouped = grouped.withColumn(
-                        tmp_struct_col_name,
-                        F.udf(_fn, t)(grouped[arrow_column_name]))
-                    for i in range(len(col_name)):
-                        grouped = grouped.withColumn(
-                            col_name[i],
-                            grouped[tmp_struct_col_name]['_{}'.format(i)])
-                    grouped = grouped.drop(tmp_struct_col_name)
-                else:
-                    grouped = grouped.withColumn(
-                        col_name,
-                        F.udf(_fn, t)(grouped[arrow_column_name]))
-
-            return grouped.drop(arrow_column_name)
+            return self._summarizeCycles_udf(summarizer, key)
         else:
-            scala_key = utils.list_to_seq(self._sc, key)
-            composed_summarizer = summarizers.compose(self._sc, summarizer)
-            tsrdd = self.timeSeriesRDD.summarizeCycles(composed_summarizer._jsummarizer(self._sc), scala_key)
-            return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
+            return self._summarizeCycles_builtin(summarizer, key)
+
+    def _summarizeCycles_udf(self, columns, key):
+        """Summarize cycles using a udf.
+
+        This function consist of two steps:
+
+        1. summarizeCycles using arrow summarizer
+           This step summarize data for each cycle into an Arrow batch
+
+        2. withColumn with PySpark UDF to compute each batch
+           This is done on PySpark side. Once we have each cycle in arrow
+           format, we can now send the bytes to python worker using regular
+           PySpark UDF, compute the result, and return the result in regular
+           PySpark format.
+        """
+        arrow_batch_col_name = self._jpkg.ArrowSummarizer.arrowBatchColumnName()
+
+        # Check if illegal columns exists
+        udf._check_invalid_udfs(columns.values())
+        required_col_names = udf._required_column_names(columns.values())
+        grouped = self._summarizeCycles_builtin(
+            summarizers.arrow(required_col_names, include_base_rows=False),
+            key=key)
+
+        # (1) Turns row in each cycle into an arrow file format
+        # (2) For each udf, we apply the function and put the
+        #     result in a new column. If the udf returns multiple
+        #     values, we put the values in a struct first and later
+        #     explode it into multiple columns.
+        for i, (col_name, udf_column) in enumerate(columns.items()):
+            fn, t = udf._fn_and_type(udf_column)
+            column_indices = udf_column.column_indices
+
+            def _fn(arrow_bytes):
+                pdf = arrowfile_to_dataframe(arrow_bytes)
+                inputs = [pdf[index] for index in column_indices]
+                ret = fn(*inputs)
+                return udf._numpy_to_python(ret)
+
+            if isinstance(col_name, tuple):
+                struct_col_name = "__struct_{}".format(i)
+                grouped = grouped.withColumn(
+                    struct_col_name,
+                    F.udf(_fn, t)(grouped[arrow_batch_col_name]))
+
+                for i in range(len(col_name)):
+                    grouped = grouped.withColumn(
+                        col_name[i],
+                        grouped[struct_col_name]['_{}'.format(i)])
+
+                grouped = grouped.drop(struct_col_name)
+            else:
+                grouped = grouped.withColumn(
+                    col_name,
+                    F.udf(_fn, t)(grouped[arrow_batch_col_name]))
+
+        return grouped.drop(arrow_batch_col_name)
+
+    def _summarizeCycles_builtin(self, summarizer, key):
+        scala_key = utils.list_to_seq(self._sc, key)
+        composed_summarizer = summarizers.compose(self._sc, summarizer)
+        tsrdd = self.timeSeriesRDD.summarizeCycles(composed_summarizer._jsummarizer(self._sc), scala_key)
+        return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
 
     def _summarizeWindowsBatch(self, window, key=None):
@@ -857,8 +993,8 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         1. A summarizer or a list of summarizers. Available
            summarizers can be found in :mod:`.summarizers`.
 
-        2. A map from column names to columnar udf objects. A columnar
-           udf object is defined by :meth:`ts.flint.functions.udf`
+        2. A map from column names to UDF columns. A UDF column
+           is defined by :meth:`ts.flint.functions.udf`
            with a python function, a return type and a list of input
            columns. Each map entry can be one of the following:
 
@@ -877,7 +1013,11 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
               argument of the udf object must be a tuple of
               :class:`~pyspark.sql.types.DataType`. The cardinality of
               the column names, return data types and return values
-              must match.
+              must match, i.e, if you are adding two columns, then the
+              column names must be a tuple of two strings, the return
+              type must be
+              two data types, and the python must return a tuple of two
+              `pandas.Series`.
 
         Built-in summarizer examples:
 
@@ -997,14 +1137,13 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
-
     def _summarizeWindows_udf(self, window, columns, key):
-        """Summarize windows using a udf.
+        """Summarize windows using UDFs.
 
-           This functions consists of three steps:
+           This function consists of three steps:
 
            1. summarizeWindowsBatch
-              This step breaks the left table and right table into multiple batches
+              This step breaks the left table and right table into multiple Arrow batches
               and compute indices for each left row.
 
            2. withColumn with PySpark UDF to compute each batch
@@ -1019,10 +1158,10 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
            See TimeSeriesRDD.scala for details.
         """
 
-        base_rows_col_name = '__window_baseRows'
-        left_batch_col_name = '__window_leftBatch'
-        right_batch_col_name = '__window_rightBatch'
-        index_col_name = '__window_indices'
+        base_rows_col_name = self._jpkg.ArrowWindowBatchSummarizer.baseRowsColumnName()
+        left_batch_col_name = self._jpkg.ArrowWindowBatchSummarizer.leftBatchColumnName()
+        right_batch_col_name = self._jpkg.ArrowWindowBatchSummarizer.rightBatchColumnName()
+        indices_col_name = self._jpkg.ArrowWindowBatchSummarizer.indicesColumnName()
         is_placeholder_col_name = '__window_is_placeholder'
 
         for col in columns.values():
@@ -1047,11 +1186,11 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         is_placeholder = F.array(F.lit(False), *(F.lit(True) for i in range(0, 99)))
 
         windowed = (windowed
-                     .select('time', base_rows_col_name, left_batch_col_name, right_batch_col_name, index_col_name)
+                     .select('time', base_rows_col_name, left_batch_col_name, right_batch_col_name, indices_col_name)
                      .withColumn(is_placeholder_col_name , is_placeholder)
                      .withColumn(is_placeholder_col_name , F.explode(F.col(is_placeholder_col_name))))
 
-        for column in [base_rows_col_name, left_batch_col_name, right_batch_col_name, index_col_name]:
+        for column in [base_rows_col_name, left_batch_col_name, right_batch_col_name, indices_col_name]:
             windowed = windowed.withColumn(column, F.when(windowed[is_placeholder_col_name], None).otherwise(windowed[column]))
 
         schema_col_names = []
@@ -1104,17 +1243,17 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                         if isinstance(left_column_index, str):
                             for (i, begin, end) in indices_df.itertuples():
                                 left = left_table[i]
-                                right = right_table.take(np.arange(begin,end))
+                                right = right_table.take(np.arange(begin, end))
                                 data.append(fn(left, right))
                         else:
                             for (i, left) in enumerate(left_table.itertuples(index=False)):
                                 begin = indices_df.iloc[i,0]
                                 end = indices_df.iloc[i,1]
-                                right = right_table.take(np.arange(begin,end))
+                                right = right_table.take(np.arange(begin, end))
                                 data.append(fn(left, right))
                     else:
                         for (begin, end) in indices_df.itertuples(index=False):
-                            right = right_table.take(np.arange(begin,end))
+                            right = right_table.take(np.arange(begin, end))
                             data.append(fn(right))
 
                     df = pd.DataFrame(data, columns=col_name)
@@ -1137,7 +1276,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                 F.udf(_fn,pyspark_types.BinaryType())(
                     windowed[left_batch_col_name],
                     windowed[right_batch_col_name],
-                    windowed[index_col_name]))
+                    windowed[indices_col_name]))
 
         windowed = windowed.filter(windowed[base_rows_col_name].isNotNull())
 

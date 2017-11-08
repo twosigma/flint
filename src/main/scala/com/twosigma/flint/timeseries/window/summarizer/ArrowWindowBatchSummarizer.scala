@@ -14,23 +14,21 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.rdd.function.window
+package com.twosigma.flint.timeseries.window.summarizer
 
 import java.io.ByteArrayOutputStream
 import java.nio.channels.Channels
-
-import com.twosigma.flint.arrow.{ ArrowConverters, ArrowPayload, ArrowUtils, ArrowWriter }
-import org.apache.arrow.memory.{ BufferAllocator, RootAllocator }
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.types._
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import java.util
 
-import org.apache.arrow.vector.{ NullableIntVector, VectorSchemaRoot }
+import com.twosigma.flint.arrow.{ ArrowUtils, ArrowWriter }
+import com.twosigma.flint.rdd.function.window.summarizer.WindowBatchSummarizer
+import org.apache.arrow.memory.{ BufferAllocator, RootAllocator }
 import org.apache.arrow.vector.file.ArrowFileWriter
-import org.apache.spark.{ SparkContext, TaskContext }
-
+import org.apache.arrow.vector.{ NullableIntVector, VectorSchemaRoot }
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.util.GenericArrayData
+import org.apache.spark.sql.types._
 
 import scala.collection.JavaConverters._
 
@@ -50,7 +48,7 @@ import scala.collection.JavaConverters._
  *                            of each SK. Updated during window calculation.
  * @param currentEndIndices Similar to [[currentEndIndices]]
  */
-case class WindowBatchSummarizerState(
+private[flint] case class WindowBatchSummarizerState(
   val leftRows: util.ArrayList[InternalRow],
   var rightRows: util.ArrayList[InternalRow],
   val rightRowsMap: util.LinkedHashMap[Any, util.ArrayList[InternalRow]],
@@ -74,7 +72,7 @@ case class WindowBatchSummarizerState(
   }
 }
 
-abstract class BaseWindowBatchSummarizer(val leftSchema: StructType, val rightSchema: StructType)
+private[flint] abstract class BaseWindowBatchSummarizer(val leftSchema: StructType, val rightSchema: StructType)
   extends WindowBatchSummarizer[Long, Any, InternalRow, WindowBatchSummarizerState, InternalRow] {
 
   private def initSk(u: WindowBatchSummarizerState, sk: Any): util.ArrayList[InternalRow] = {
@@ -197,19 +195,33 @@ private[flint] case class ArrayWindowBatchSummarizer(
   }
 }
 
+object ArrowWindowBatchSummarizer {
+  val baseRowsColumnName = "__window_baseRows"
+  val leftBatchColumnName = "__window_leftBatch"
+  val leftLengthColumnName = "__window_leftLength"
+  val rightBatchColumnName = "__window_rightBatch"
+  val rightLengthColumnName = "__window_rightLength"
+  val indicesColumnName = "__window_indices"
+
+  val beginIndexColumnName = "begin"
+  val endIndexColumnName = "end"
+}
+
 private[flint] case class ArrowWindowBatchSummarizer(
   override val leftSchema: StructType,
   override val rightSchema: StructType
 ) extends BaseWindowBatchSummarizer(leftSchema, rightSchema) {
 
+  import ArrowWindowBatchSummarizer._
+
   override val schema = StructType(
     Seq(
-      StructField("__window_baseRows", ArrayType(leftSchema)),
-      StructField("__window_leftBatch", BinaryType),
-      StructField("__window_leftLength", IntegerType),
-      StructField("__window_rightBatch", BinaryType),
-      StructField("__window_rightLength", IntegerType),
-      StructField("__window_indices", BinaryType)
+      StructField(baseRowsColumnName, ArrayType(leftSchema)),
+      StructField(leftBatchColumnName, BinaryType),
+      StructField(leftLengthColumnName, IntegerType),
+      StructField(rightBatchColumnName, BinaryType),
+      StructField(rightLengthColumnName, IntegerType),
+      StructField(indicesColumnName, BinaryType)
     )
   )
 
@@ -252,8 +264,8 @@ private[flint] case class ArrowWindowBatchSummarizer(
     val schema =
       StructType(
         Seq(
-          StructField("begin", IntegerType),
-          StructField("end", IntegerType)
+          StructField(beginIndexColumnName, IntegerType),
+          StructField(endIndexColumnName, IntegerType)
         )
       )
     val arrowSchema = ArrowUtils.toArrowSchema(schema)

@@ -18,6 +18,7 @@ package com.twosigma.flint.rdd.function.summarize.summarizer
 
 import java.io.ByteArrayOutputStream
 import java.nio.channels.Channels
+import java.util
 
 import com.twosigma.flint.arrow.{ ArrowFieldWriter, ArrowPayload, ArrowUtils, ArrowWriter }
 import org.apache.arrow.memory.{ BufferAllocator, RootAllocator }
@@ -26,6 +27,8 @@ import org.apache.arrow.vector.file.ArrowFileWriter
 import org.apache.arrow.vector.schema.ArrowRecordBatch
 import org.apache.arrow.vector.stream.MessageSerializer
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.util.GenericArrayData
 import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
@@ -35,10 +38,19 @@ import scala.collection.JavaConverters._
  */
 class ArrowSummarizerState(
   var initialized: Boolean,
+  var baseRows: util.ArrayList[InternalRow],
   var allocator: BufferAllocator,
   var root: VectorSchemaRoot,
   var arrowWriter: ArrowWriter
 )
+
+/**
+ * If includeBaseRows, baseRows is an array of internal rows that contains all
+ * rows added to the summarizer. Otherwise it's empty array.
+ *
+ * arrowBatch is an arrow batch record in file format.
+ */
+case class ArrowSummarizerResult(baseRows: Array[Any], arrowBatch: Array[Byte])
 
 /**
  * Summarize rows in Arrow File Format.
@@ -48,16 +60,16 @@ class ArrowSummarizerState(
  * (1) It is not distributed, i.e., doesn't support merge operation
  * (2) It holds resources (offheap memory) and need to be manually freed, see close()
  *
- * This summarizer is only meant to be used in local mode, such as in summarizeCycles and summarizeWindows
+ * This summarizer is only meant to be used in local mode, such as in summarizeCycles and summarizeWindows.
  */
-case class ArrowSummarizer(schema: StructType)
-  extends Summarizer[InternalRow, ArrowSummarizerState, Array[Byte]] {
+case class ArrowSummarizer(schema: StructType, includeBaseRows: Boolean)
+  extends Summarizer[InternalRow, ArrowSummarizerState, ArrowSummarizerResult] {
   private[this] val size = schema.size
   require(size > 0, "Cannot create summarizer with no input columns")
 
   // This function will allocate memory from the BufferAllocator to initialize arrow vectors.
   override def zero(): ArrowSummarizerState = {
-    new ArrowSummarizerState(false, null, null, null)
+    new ArrowSummarizerState(false, null, null, null, null)
   }
 
   private def init(u: ArrowSummarizerState): Unit = {
@@ -68,6 +80,7 @@ case class ArrowSummarizer(schema: StructType)
       val arrowWriter = ArrowWriter.create(root)
 
       u.initialized = true
+      u.baseRows = new util.ArrayList[InternalRow]()
       u.allocator = allocator
       u.root = root
       u.arrowWriter = arrowWriter
@@ -77,6 +90,10 @@ case class ArrowSummarizer(schema: StructType)
   override def add(u: ArrowSummarizerState, row: InternalRow): ArrowSummarizerState = {
     if (!u.initialized) {
       init(u)
+    }
+
+    if (includeBaseRows) {
+      u.baseRows.add(row)
     }
     u.arrowWriter.write(row)
     u
@@ -88,7 +105,7 @@ case class ArrowSummarizer(schema: StructType)
   ): ArrowSummarizerState = throw new UnsupportedOperationException()
 
   // This can only be called once
-  override def render(u: ArrowSummarizerState): Array[Byte] = {
+  override def render(u: ArrowSummarizerState): ArrowSummarizerResult = {
     if (u.initialized) {
       val out = new ByteArrayOutputStream()
       val writer = new ArrowFileWriter(u.root, null, Channels.newChannel(out))
@@ -100,9 +117,10 @@ case class ArrowSummarizer(schema: StructType)
       u.root.close()
       u.allocator.close()
 
-      out.toByteArray
+      val rows = u.baseRows.toArray.asInstanceOf[Array[Any]]
+      ArrowSummarizerResult(rows, out.toByteArray)
     } else {
-      Array.empty
+      ArrowSummarizerResult(Array.empty, Array.empty)
     }
   }
 

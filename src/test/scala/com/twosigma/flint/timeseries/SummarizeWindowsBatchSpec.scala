@@ -16,7 +16,6 @@
 
 package com.twosigma.flint.timeseries
 
-import com.twosigma.flint.rdd.function.window.{ ArrowWindowBatchSummarizer, WindowBatchSummarizer }
 import com.twosigma.flint.timeseries.PartitionStrategy.{ FillWithEmptyPartition, MultiTimestampNormalized, OnePartition, Origin }
 import com.twosigma.flint.timeseries.row.Schema
 import org.apache.arrow.memory.RootAllocator
@@ -33,6 +32,7 @@ import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.FlintConf
+import com.twosigma.flint.rdd.function.window.summarizer.WindowBatchSummarizer
 
 class SummarizeWindowsBatchSpec extends MultiPartitionSuite with TimeSeriesTestData with PropertyChecks {
 
@@ -58,6 +58,8 @@ class SummarizeWindowsBatchSpec extends MultiPartitionSuite with TimeSeriesTestD
       }
     }
   }
+
+  import com.twosigma.flint.timeseries.window.summarizer.ArrowWindowBatchSummarizer._
 
   def computeExpected(
     left: TimeSeriesRDD,
@@ -146,15 +148,18 @@ class SummarizeWindowsBatchSpec extends MultiPartitionSuite with TimeSeriesTestD
 
       val result = summarizedTSRdd.collect().flatMap {
         case row =>
-          val originLeftRows = row.getAs[Seq[Row]]("__window_baseRows")
-          val leftRows = fileFormatToRows(row.getAs[Array[Byte]]("__window_leftBatch"), left.schema)
+          val originLeftRows = row.getAs[Seq[Row]](baseRowsColumnName)
+          val leftRows = fileFormatToRows(row.getAs[Array[Byte]](leftBatchColumnName), left.schema)
 
           assert(originLeftRows == leftRows)
 
-          val rightRows = fileFormatToRows(row.getAs[Array[Byte]]("__window_rightBatch"), right.schema)
+          val rightRows = fileFormatToRows(row.getAs[Array[Byte]](rightBatchColumnName), right.schema)
           val indexRows = fileFormatToRows(
-            row.getAs[Array[Byte]]("__window_indices"),
-            StructType(Seq(StructField("begin", IntegerType), StructField("end", IntegerType)))
+            row.getAs[Array[Byte]](indicesColumnName),
+            StructType(Seq(
+              StructField(beginIndexColumnName, IntegerType),
+              StructField(endIndexColumnName, IntegerType)
+            ))
           )
 
           val resultRows = (leftRows zip indexRows).map {

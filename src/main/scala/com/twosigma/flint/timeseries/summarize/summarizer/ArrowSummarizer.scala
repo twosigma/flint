@@ -16,29 +16,64 @@
 
 package com.twosigma.flint.timeseries.summarize.summarizer
 
-import com.twosigma.flint.rdd.function.summarize.summarizer.{ ArrowSummarizerState, ArrowSummarizer => ArrowSum }
+import com.twosigma.flint.rdd.function.summarize.summarizer.{ ArrowSummarizerResult, ArrowSummarizerState, ArrowSummarizer => ArrowSum }
 import com.twosigma.flint.timeseries.row.Schema
-import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
+import com.twosigma.flint.timeseries.summarize.ColumnList
 import com.twosigma.flint.timeseries.summarize.{ ColumnList, InputAlwaysValid, Summarizer, SummarizerFactory }
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.types.{ BinaryType, StructType }
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.util.GenericArrayData
+import org.apache.spark.sql.types.{ ArrayType, BinaryType, StructType }
 
-case class ArrowSummarizerFactory(columns: Seq[String]) extends SummarizerFactory {
-  override val requiredColumns: ColumnList = Sequence(columns)
+object ArrowSummarizer {
+  val baseRowsColumnName = "__baseRows"
+  val arrowBatchColumnName = "arrow_bytes"
+}
+
+/**
+ * Summarize columns into arrow batch.
+ *
+ * @param columns
+ */
+case class ArrowSummarizerFactory(columns: Seq[String], includeBaseRows: Boolean) extends SummarizerFactory {
+  override val requiredColumns: ColumnList =
+    if (includeBaseRows) {
+      ColumnList.All
+    } else {
+      ColumnList.Sequence(columns)
+    }
   override def apply(inputSchema: StructType): ArrowSummarizer =
-    ArrowSummarizer(inputSchema, prefixOpt, requiredColumns)
+    ArrowSummarizer(inputSchema, includeBaseRows, prefixOpt, requiredColumns)
 }
 
 case class ArrowSummarizer(
   override val inputSchema: StructType,
+  includeBaseRows: Boolean,
   override val prefixOpt: Option[String],
   requiredColumns: ColumnList
 ) extends Summarizer with InputAlwaysValid {
   override type T = InternalRow
   override type U = ArrowSummarizerState
-  override type V = Array[Byte]
-  override val summarizer = ArrowSum(inputSchema)
-  override val schema: StructType = Schema.of("arrow_bytes" -> BinaryType)
+  override type V = ArrowSummarizerResult
+  override val summarizer = ArrowSum(inputSchema, includeBaseRows)
+  override val schema: StructType =
+    if (includeBaseRows) {
+      Schema.of(
+        ArrowSummarizer.baseRowsColumnName -> ArrayType(inputSchema),
+        ArrowSummarizer.arrowBatchColumnName -> BinaryType
+      )
+    } else {
+      Schema.of(
+        ArrowSummarizer.arrowBatchColumnName -> BinaryType
+      )
+    }
+
   override def toT(r: InternalRow): T = r
-  override def fromV(v: V): InternalRow = InternalRow(v)
+  override def fromV(v: V): InternalRow =
+    if (includeBaseRows) {
+      InternalRow(new GenericArrayData(v.baseRows), v.arrowBatch)
+    } else {
+      InternalRow(v.arrowBatch)
+    }
+
 }

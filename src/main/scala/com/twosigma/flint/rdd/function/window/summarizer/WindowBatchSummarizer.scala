@@ -14,11 +14,11 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.rdd.function.window
+package com.twosigma.flint.rdd.function.window.summarizer
 
 /**
  * Interface used during window batch summarization.
- * See: [[com.twosigma.flint.rdd.function.summarize.WindowBatchIterator]]
+ * See: [[com.twosigma.flint.rdd.function.window.WindowBatchIterator]]
  *
  * This summarizer maintains separate state for each secondary SK but keep them in a single state object,
  * sub state for each SK are usually maintained in a Map data structure indexed by SK.

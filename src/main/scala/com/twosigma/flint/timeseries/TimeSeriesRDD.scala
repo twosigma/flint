@@ -22,10 +22,10 @@ import javax.annotation.Nullable
 import com.twosigma.flint.FlintConf
 import com.twosigma.flint.annotation.PythonApi
 import com.twosigma.flint.rdd._
-import com.twosigma.flint.rdd.function.window.{ ArrayWindowBatchSummarizer, ArrowWindowBatchSummarizer }
 import com.twosigma.flint.timeseries.row.{ InternalRowUtils, Schema }
 import com.twosigma.flint.timeseries.summarize.{ ColumnList, OverlappableSummarizer, OverlappableSummarizerFactory, SummarizerFactory }
 import com.twosigma.flint.timeseries.time.TimeFormat
+import com.twosigma.flint.timeseries.window.summarizer.ArrowWindowBatchSummarizer
 import com.twosigma.flint.timeseries.window.{ ShiftTimeWindow, TimeWindow, Window }
 import org.apache.arrow.memory.RootAllocator
 import org.apache.spark.annotation.Experimental

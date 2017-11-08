@@ -28,12 +28,18 @@ import scala.concurrent.duration.Duration
 
 object Summarizers {
 
+  @PythonApi
   private[timeseries] def rows(column: String): SummarizerFactory =
     RowsSummarizerFactory(column)
 
+  @PythonApi(until = "0.4.0")
+  @deprecated("Use arrow summarizer with includeBaseRows")
   private[timeseries] def arrow(columns: Seq[String]): SummarizerFactory =
-    ArrowSummarizerFactory(columns)
+    ArrowSummarizerFactory(columns, false)
 
+  @PythonApi
+  private[timeseries] def arrow(columns: Seq[String], includeBaseRows: Boolean): SummarizerFactory =
+    ArrowSummarizerFactory(columns, includeBaseRows)
   /**
    * Counts the number of rows.
    *

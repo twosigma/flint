@@ -101,8 +101,8 @@ def rows():
     return SummarizerFactory('rows', 'rows')
 
 
-def arrow(cols):
-    return SummarizerFactory('arrow', cols)
+def arrow(cols, include_base_rows):
+    return SummarizerFactory('arrow', cols, include_base_rows)
 
 
 def correlation(cols, other=None):

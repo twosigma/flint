@@ -14,6 +14,8 @@
 #  limitations under the License.
 #
 
+import itertools
+
 from pyspark.sql.types import StructType, StructField
 from pyspark.serializers import PickleSerializer
 
@@ -66,3 +68,27 @@ def _unwrap_data_types(returnType):
     :return:
     '''
     return [f.dataType for f in returnType.fields]
+
+
+def _required_column_names(udf_columns):
+    '''
+    Returns a list of column names (str) that are required for these udfs.
+    :param udf_columns: A list of udf columns.
+    '''
+    return list(set(itertools.chain(
+        *[_children_column_names(col) for col in udf_columns])))
+
+
+def _check_invalid_udfs(udf_columns):
+    '''
+    Checks if given udf columns are valid. Raises ValueError if they are not.
+
+    :param udf_columns: A list of udf columns.
+    '''
+    for col in udf_columns:
+        for index in col.column_indices:
+            if index is None:
+                raise ValueError(
+                    'Column passed to the udf function must be a column in the DataFrame, '
+                    'i.e, df[col] or df[[col1, col2]]. '
+                    'Other types of Column are not supported.')

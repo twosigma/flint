@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint.rdd.function.summarize
+package com.twosigma.flint.rdd.function.window
 
 import java.util.{ ArrayList => JArrayList, HashMap => JHashMap, LinkedList => JLinkedList }
 
@@ -22,7 +22,7 @@ import com.twosigma.flint.rdd._
 import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.OverlappableSummarizer
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ LeftSubtractableOverlappableSummarizer, LeftSubtractableSummarizer }
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ FlippableSummarizer, Summarizer }
-import com.twosigma.flint.rdd.function.window.WindowBatchSummarizer
+import com.twosigma.flint.rdd.function.window.summarizer.WindowBatchSummarizer
 import com.twosigma.flint.util.collection.Implicits._
 import grizzled.slf4j.Logger
 import org.apache.spark.OneToOneDependency
@@ -233,7 +233,7 @@ object SummarizeWindows {
  *     window of the left batch (a gap in left batch, for instance).
  *     Although for performance reasons, number of such rows should be minimized.
  *
- * See also: [[WindowBatchSummarizer]] [[com.twosigma.flint.rdd.function.window.BaseWindowBatchSummarizer]]
+ * See also: [[WindowBatchSummarizer]] [[com.twosigma.flint.timeseries.window.summarizer.BaseWindowBatchSummarizer]]
  *
  */
 class WindowBatchIterator[K, SK, V, U, V2](

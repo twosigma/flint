@@ -41,6 +41,18 @@ class Packages:
 
     @property
     @functools.lru_cache()
+    def ArrowSummarizer(self):
+        return utils.scala_object(utils.jvm(self.sc).com.twosigma.flint.timeseries.summarize.summarizer,
+                                  'ArrowSummarizer')
+
+    @property
+    @functools.lru_cache()
+    def ArrowWindowBatchSummarizer(self):
+        return utils.scala_object(utils.jvm(self.sc).com.twosigma.flint.timeseries.window.summarizer,
+                                  'ArrowWindowBatchSummarizer')
+
+    @property
+    @functools.lru_cache()
     def Summarizers(self):
         return utils.scala_object(utils.jvm(self.sc).com.twosigma.flint.timeseries, "Summarizers")
 

@@ -23,7 +23,8 @@ import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
 import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.OverlappableSummarizer
 import com.twosigma.flint.annotation.PythonApi
 import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.RowsSummarizer
-import com.twosigma.flint.rdd.function.window.WindowBatchSummarizer
+import com.twosigma.flint.rdd.function.window.SummarizeWindows
+import com.twosigma.flint.rdd.function.window.summarizer.WindowBatchSummarizer
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.{ RDD, ShuffledRDD }
 import org.apache.spark._

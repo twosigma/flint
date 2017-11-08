@@ -25,13 +25,15 @@ import org.apache.arrow.memory.RootAllocator
 import org.apache.arrow.vector.file.ArrowFileReader
 import org.apache.arrow.vector.file.json.JsonFileReader
 import org.apache.arrow.vector.util.{ ByteArrayReadableSeekableByteChannel, Validator }
-import org.apache.spark.sql.FlintTestData
+import org.apache.spark.sql.{ FlintTestData, Row }
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 
 class ArrowSummarizerSpec extends SummarizerSuite with FlintTestData {
   override val defaultResourceDir: String = "/timeseries/summarize/summarizer/arrowsummarizer"
 
   var priceTSRdd: TimeSeriesRDD = _
+
+  import ArrowSummarizer._
 
   private lazy val init = {
     priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
@@ -52,7 +54,7 @@ class ArrowSummarizerSpec extends SummarizerSuite with FlintTestData {
     val jsonRoot = jsonReader.read()
 
     val row = result.first()
-    val bytes = row.getAs[Array[Byte]]("arrow_bytes")
+    val bytes = row.getAs[Array[Byte]](arrowBatchColumnName)
     val inputChannel = new ByteArrayReadableSeekableByteChannel(bytes)
     val reader = new ArrowFileReader(inputChannel, allocator)
     val root = reader.getVectorSchemaRoot
@@ -67,6 +69,13 @@ class ArrowSummarizerSpec extends SummarizerSuite with FlintTestData {
     jsonReader.close()
     root.close()
     allocator.close()
+  }
+
+  it should "include baseRows correctly" in {
+    init
+    val tsrdd = priceTSRdd.addColumns("v" -> DoubleType -> { _ => 1.0 })
+    val result = tsrdd.summarizeCycles(Summarizers.arrow(Seq("price"), includeBaseRows = true))
+    assert(result.collect()(0).getAs[Seq[Row]](baseRowsColumnName).sameElements(tsrdd.collect()))
   }
 
   it should "handle exception correctly" in {
