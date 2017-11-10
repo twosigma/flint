@@ -557,10 +557,10 @@ object Summarizers {
    * is the decay between the timestamps jointly specified by timestampsToPeriods and alpha, i.e.
    * <pre>
    * <code>
-   * decay(t<sub>i</sub>, t<sub>n</sub>) = exp(timestampsToPeriods(t<sub>i</sub>, t<sub>n</sub>) * ln(1 - alpha))
+   * decay(t<sub>i</sub>, t<sub>n</sub>) = exp(ln(1 - alpha) * (t<sub>i</sub>, t<sub>n</sub>) / durationPerPeriod)
    * </code>
    * </pre>
-   * If constantPeriod is true, then decay is defined as follows:
+   * If durationPerPeriod is "constant", then decay is defined as follows:
    * <pre><code>decay(t<sub>i</sub>, t<sub>n</sub>) = exp((n - i) * ln(1 - alpha)) </code>
    * </pre>
    *

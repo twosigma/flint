@@ -256,6 +256,52 @@ def ema_halflife(column, halflife_duration, time_column='time', interpolation='p
     return SummarizerFactory('emaHalfLife', column, halflife_duration, time_column, interpolation, convention)
 
 
+def ewma(column, alpha=0.05, time_column='time', duration_per_period='1d', convention='legacy'):
+    """Calculate the exponential weighted moving average over a column.
+
+    It maintains a primary EMA for the series (x_1, x_2, ...) as well as
+    an auxiliary EMA for the series (1.0, 1.0, ...).
+    The primary EMA EMA_p(X) keeps track of the sum of the weighted series,
+    whereas the auxiliary EMA EMA_a(X) keeps track of the sum of the weights.
+
+    The weight of i-th value decay(t_i, t_n) is
+    decay(t_i, t_n) = exp(ln(1 - alpha) * (t_n - t_i) / duration_per_period)
+
+    If duration_per_period is "constant", the decay will be defined as
+    decay(t_i, t_n) = exp(ln(1 - alpha) * (n - i))
+
+    Finally, if the convention is "core", we will the following EMA(X)
+    as output where (EMA(X))_i = (EMA_p(X))_i / (EMA_a(X))_i
+
+    However, if the convention is "legacy", we will simply return EMA(X)
+    such that (EMA(X))_i = (EMA_p(X))_i
+
+    See doc/ema.md for details on different EMA implementations.
+
+    **Adds columns:**
+
+    <column>_ema (*float*)
+        The exponential moving average of the column
+
+    :param column: name of the column to be summarized
+    :type column: str
+    :param alpha: parameter setting the decay rate of the average
+    :type alpha: float
+    :param time_column: Name of the time column.
+    :type time_column: str
+    :param duration_per_period: duration per period. The option could be
+        "constant" or any string that specifies duration like "1d", "1h",
+        "15m" etc. If it is "constant", it will assume that the number
+        of periods between rows is constant (c = 1); otherwise, it will
+        use the duration to calculate how many periods should be
+        considered to have passed between any two given timestamps.
+    :type: duration_per_period: str
+    :param convention: the convention used to compute the final output - options are 'core' and
+        'legacy'.
+    """
+    return SummarizerFactory('ewma', column, alpha, time_column, duration_per_period, convention)
+
+
 def geometric_mean(column):
     '''Computes the geometric mean of a column.
 

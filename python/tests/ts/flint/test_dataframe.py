@@ -1172,6 +1172,12 @@ def test_summary_ema_halflife(pyspark, summarizers, tests_utils, price, forecast
     """
     result = price.summarize(summarizers.ema_halflife("price", "1d")).collect()
 
+def test_summary_ewma(pyspark, summarizers, tests_utils, price, forecast):
+    """
+    Test the python binding for ewma. This does NOT test the correctness of the ewma.
+    """
+    result = price.summarize(summarizers.ewma("price")).collect()
+
 def test_summary_max(pyspark, summarizers, tests_utils, forecast):
     expected_pdf = make_pdf([
         (0, 6.4,)
