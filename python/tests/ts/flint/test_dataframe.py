@@ -357,6 +357,7 @@ def test_merge(pyspark_types, tests_utils, price):
     merged_price = price1.merge(price2)
     tests_utils.assert_same(merged_price.toPandas(), price.toPandas())
 
+
 def test_leftJoin(pyspark_types, tests_utils, price, vol):
     expected_pdf = make_pdf([
         (1000, 7, 0.5, 100,),
@@ -670,6 +671,109 @@ def test_summarizeIntervals(flintContext, tests_utils, summarizers, vol):
     ], ["time", "id", "volume_sum"])
 
     tests_utils.assert_same(new_pdf2, expected_pdf2)
+
+
+def test_summarizeIntervals_udf(flintContext, tests_utils, vol):
+    from ts.flint.functions import udf
+    from pyspark.sql.types import LongType, DoubleType
+
+    clock = flintContext.read.pandas(make_pdf([
+        (1000,),
+        (1100,),
+        (1200,),
+        (1300,),
+    ], ["time"]))
+
+    result1 = vol.summarizeIntervals(
+        clock,
+        {'sum': udf(lambda v: v.sum(), LongType())(vol.volume)}
+    ).toPandas()
+    expected1 = make_pdf([
+        (1100, 1000),
+        (1200, 2600),
+        (1300, 4200),
+    ], ["time", "sum"])
+    tests_utils.assert_same(result1, expected1)
+
+    result2 = vol.summarizeIntervals(
+        clock,
+        {'sum': udf(lambda v: v.sum(), LongType())(vol.volume)},
+        key="id"
+    ).toPandas()
+    expected2 = make_pdf([
+        (1100, 7, 500),
+        (1100, 3, 500),
+        (1200, 3, 1200),
+        (1200, 7, 1400),
+        (1300, 3, 2000),
+        (1300, 7, 2200),
+    ], ["time", "id", "sum"])
+    tests_utils.assert_same(result2, expected2)
+
+    result3 = vol.summarizeIntervals(
+        clock,
+        {'sum': udf(lambda v: v.sum(), LongType())(vol.volume)},
+        rounding="begin"
+    ).toPandas()
+    expected3 = make_pdf([
+        (1000, 1000),
+        (1100, 2600),
+        (1200, 4200),
+    ], ["time", "sum"])
+    tests_utils.assert_same(result3, expected3)
+
+    result4 = vol.summarizeIntervals(
+        clock,
+        {'sum': udf(lambda v: v.sum(), LongType())(vol.volume)},
+        inclusion="end"
+    ).toPandas()
+    expected4 = make_pdf([
+        (1100, 1800),
+        (1200, 3400),
+        (1300, 2300),
+    ], ["time", "sum"])
+    tests_utils.assert_same(result4, expected4)
+
+    result5 = vol.summarizeIntervals(
+        clock,
+        {'mean': udf(lambda v: v.mean(), DoubleType())(vol.volume),
+         'sum': udf(lambda v: v.sum(), LongType())(vol.volume)}
+    ).toPandas()
+    expected5 = make_pdf([
+        (1100, 250.0, 1000),
+        (1200, 650.0, 2600),
+        (1300, 1050.0, 4200),
+    ], ["time", "mean", "sum"])
+    tests_utils.assert_same(result5, expected5)
+
+    @udf((DoubleType(), LongType()))
+    def mean_and_sum(v):
+        return v.mean(), v.sum()
+
+    result6 = vol.summarizeIntervals(
+        clock,
+        {('mean', 'sum'): mean_and_sum(vol.volume) }
+    ).toPandas()
+    expected6 = make_pdf([
+        (1100, 250.0, 1000),
+        (1200, 650.0, 2600),
+        (1300, 1050.0, 4200),
+    ], ["time", "mean", "sum"])
+    tests_utils.assert_same(result6, expected6)
+
+    from pyspark.sql.functions import lit
+
+    vol_with_weights = vol.withColumn('w', lit(1.0))
+    result7 = vol_with_weights.summarizeIntervals(
+        clock,
+        {'weighted_mean': udf(lambda df: np.average(df.volume, weights=df.w), DoubleType()) \
+                             (vol_with_weights[['volume', 'w']]) }
+    ).toPandas()
+    expected7 = make_pdf([
+        (1100, 1000),
+        (1200, 2600),
+        (1300, 4200),
+    ], ["time", "weighted_mean"])
 
 
 def test_summarizeWindows(flintContext, tests_utils, windows, summarizers, vol):

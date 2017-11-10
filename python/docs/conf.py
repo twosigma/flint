@@ -44,7 +44,7 @@ class Mock(MagicMock):
 # readthedocs.
 MOCK_MODULES = ['py4j', 'pyspark', 'pyspark.sql', 'pyspark.sql.types',
                 'pyspark.sql.readwriter', 'pyspark.sql.functions',
-                'pyspark.serializers']
+                'pyspark.serializers', 'pyspark.sql.session']
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # -- General configuration ------------------------------------------------

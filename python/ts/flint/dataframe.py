@@ -512,8 +512,8 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
                 return dataframe_to_arrowfile(result_df)
 
-            # Create a column that has the schema of the returned arrow batch
-            # but no data. This is a hack around not having the arrow batch schema
+            # Create a column that has the schema of the returned Arrow batch
+            # but no data. This is a hack around not having the Arrow batch schema
             # in query planning phase.
             col_schema = StructType([StructField(name, t) for (name, t) in zip(col_name, col_t)])
 
@@ -855,16 +855,17 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         else:
             return self._summarizeCycles_builtin(summarizer, key)
 
-    def _summarizeCycles_udf(self, columns, key):
-        """Summarize cycles using a udf.
+    def _summarizeGroup_udf(self, columns, group_fn):
+        """Summarize groups using a udf. A group can be either a cycle or an
+        interval, defined by ``group_fn``.
 
         This function consist of two steps:
 
-        1. summarizeCycles using arrow summarizer
-           This step summarize data for each cycle into an Arrow batch
+        1. summarize groups using Arrow summarizer
+           This step summarize data for each group into an Arrow batch
 
         2. withColumn with PySpark UDF to compute each batch
-           This is done on PySpark side. Once we have each cycle in arrow
+           This is done on PySpark side. Once we have each group in Arrow
            format, we can now send the bytes to python worker using regular
            PySpark UDF, compute the result, and return the result in regular
            PySpark format.
@@ -874,11 +875,10 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         # Check if illegal columns exists
         udf._check_invalid_udfs(columns.values())
         required_col_names = udf._required_column_names(columns.values())
-        grouped = self._summarizeCycles_builtin(
-            summarizers.arrow(required_col_names, include_base_rows=False),
-            key=key)
+        arrow_summarizer = summarizers.arrow(required_col_names, include_base_rows=False)
+        grouped = group_fn(self, arrow_summarizer)
 
-        # (1) Turns row in each cycle into an arrow file format
+        # (1) Turns row in each group into an Arrow file format
         # (2) For each udf, we apply the function and put the
         #     result in a new column. If the udf returns multiple
         #     values, we put the values in a struct first and later
@@ -912,12 +912,19 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         return grouped.drop(arrow_batch_col_name)
 
+    def _summarizeCycles_udf(self, columns, key):
+        def group_fn(df, summarizer):
+            return df._summarizeCycles_builtin(
+                summarizer,
+                key=key)
+
+        return self._summarizeGroup_udf(columns, group_fn)
+
     def _summarizeCycles_builtin(self, summarizer, key):
         scala_key = utils.list_to_seq(self._sc, key)
         composed_summarizer = summarizers.compose(self._sc, summarizer)
         tsrdd = self.timeSeriesRDD.summarizeCycles(composed_summarizer._jsummarizer(self._sc), scala_key)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
-
 
     def _summarizeWindowsBatch(self, window, key=None):
         jwindow = window._jwindow(self._sc)
@@ -933,22 +940,117 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             utils.list_to_seq(self._sc, data_cols))
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
-    def summarizeIntervals(self, clock, summarizer, key=None, inclusion='begin', rounding='end'):
+    def summarizeIntervals(self, clock, summarizer,
+                           key=None, inclusion='begin', rounding='end'):
         """
-        Computes aggregate statistics of rows within the same interval.
+        Computes aggregate statistics of rows within the same interval
+        using a summarizer spec.
 
-        Example:
+        A summarizer spec can be either:
 
-            >>> # count the number of rows in each interval
-            >>> clock = clocks.uniform(sqlContext, frequency="1day", offset="0ns", begin_date_time="2016-01-01", end_date_time="2017-01-01")
-            >>> counts = df.summarizeIntervals(clock, summarizers.count())
+        1. A summarizer or a list of summarizers. Available
+           summarizers can be found in :mod:`.summarizers`.
 
-        :param clock: A dataframe used to determine the intervals
+        2. A map from column names to columnar udf objects. A columnar
+           udf object is defined by :meth:`ts.flint.functions.udf`
+           with a python function, a return type and a list of input
+           columns. Each map entry can be one of the following:
+
+           1. str -> udf
+
+              This will add a single column. The python function must
+              return a single scalar value, which will be the value
+              for the new column. The ``returnType`` argument of the
+              udf object must be a single
+              :class:`~pyspark.sql.types.DataType`.
+
+           2. tuple(str) -> udf
+
+              This will add multiple columns. The python function must
+              return a tuple of scalar values. The ``returnType``
+              argument of the udf object must be a tuple of
+              :class:`~pyspark.sql.types.DataType`. The cardinality of
+              the column names, return data types and return values
+              must match, i.e, if you are adding
+              two columns, then the column names must be a tuple of two
+              strings, the return type must be two data types, and the python
+              must return a tuple of two scalar values.
+
+        Examples:
+
+        Create a uniform clock
+
+            >>> from ts.flint import clocks
+            >>> clock = clocks.uniform(sqlContext, '1day')
+
+        Use built-in summarizers
+
+            >>> df.summarizeIntervals(clock, summarizers.mean('v'))
+
+            >>> df.summarizeIntervals(clock, [summarizers.mean('v'), summarizers.stddev('v')])
+
+        Use user-defined functions (UDFs):
+
+            >>> from ts.flint.functions import udf
+            >>> @udf(DoubleType())
+            ... def mean(v):
+            ...     return v.mean()
+            >>>
+            >>> @udf(DoubleType())
+            ... def std(v):
+            ...     return v.std()
+            >>>
+            >>> df.summarizeIntervals(
+            ...     clock,
+            ...     {
+            ...         'mean': mean(df['v']),
+            ...         'std': std(df['v'])
+            ...     }
+            ... )
+
+        Use a OrderedDict to specify output column order
+
+            >>> from collections import OrderedDict
+            >>> df.summarizeIntervals(
+            ...     clock,
+            ...     OrderedDict([
+            ...         ('mean', mean(df['v'])),
+            ...         ('std', std(df['v'])),
+            ...     ])
+            ... )
+
+        Return multiple columns from a single udf as a tuple
+
+            >>> @udf((DoubleType(), DoubleType()))
+            >>> def mean_and_std(v):
+            ...     return (v.mean(), v.std())
+            >>>
+            >>> df.summarizeIntervals(
+            ...     clock,
+            ...     {
+            ...         ('mean', 'std'): mean_and_std(df['v']),
+            ...     }
+            ... )
+
+        Use :class:`pandas.DataFrame` as input to udf
+
+            >>> @udf(DoubleType())
+            ... def weighted_mean(cycle_df):
+            ...     return numpy.average(cycle_df.v, weights=cycle_df.w)
+            >>>
+            >>> df.summarizeIntervals(
+            ...    clock,
+            ...    {
+            ...       'wm': weighted_mean(df[['v', 'w']])
+            ...    }
+            ... )
+
+        :param clock: A :class:`TimeSeriesDataFrame` used to determine the intervals
         :type clock: :class:`TimeSeriesDataFrame`
-        :param summarizer: A summarizer or a list of summarizers that
-            will calculate results for the new columns. Available
-            summarizers can be found in :mod:`.summarizers`.
-        :param key: Optional. One or multiple column names to use as the grouping key
+        :param summarizer: A summarizer spec. See above for the
+            allowed types of objects.
+        :param key: Optional. One or multiple column names to use as
+            the grouping key
         :type key: str, list of str
         :param inclusion: Defines the shape of the intervals, i.e, whether intervals are
                           [begin, end) or (begin, end].
@@ -960,23 +1062,49 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                           Defaults to "begin".
         :type inclusion: str
         :param rounding: Determines how timestamps of input rows are rounded to timestamps of
-                         intervals. "begin" causes the input rows to be rounded to the beginning
-                         timestamp of an interval. "end" causes the input rows to be rounded to the
-                         ending timestamp of an interval. Defaults to "end".
-        :type rounding:  str
+                         intervals.
+                         "begin" causes the input rows to be rounded to the beginning timestamp of
+                         an interval. "end" causes the input rows to be rounded to the ending
+                         timestamp of an interval.
+                         Defaults to "end".
+        :type rounding: str
         :returns: a new dataframe with summarization columns
         :rtype: :class:`TimeSeriesDataFrame`
+
+        .. seealso:: :meth:`ts.flint.functions.udf`
+
         """
+
+        if isinstance(summarizer, collections.Mapping):
+            with traceback_utils.SCCallSiteSync(self._sc) as css:
+                return self._summarizeIntervals_udf(clock, summarizer, key, inclusion, rounding)
+        else:
+            with traceback_utils.SCCallSiteSync(self._sc) as css:
+                return self._summarizeIntervals_builtin(clock, summarizer, key, inclusion, rounding)
+
+    @metrics.recorder.instrument(all_args=True)
+    def _summarizeIntervals_udf(self, clock, columns,
+                                key=None, inclusion='begin', rounding='end'):
+        def group_fn(df, summarizer):
+            return df._summarizeIntervals_builtin(
+                clock,
+                summarizer,
+                key=key, inclusion=inclusion, rounding=rounding)
+
+        return self._summarizeGroup_udf(columns, group_fn)
+
+    @metrics.recorder.instrument(all_args=True)
+    def _summarizeIntervals_builtin(self, clock, summarizer,
+                                    key=None, inclusion='begin', rounding='end'):
         scala_key = utils.list_to_seq(self._sc, key)
         composed_summarizer = summarizers.compose(self._sc, summarizer)
 
-        with traceback_utils.SCCallSiteSync(self._sc) as css:
-            tsrdd = self.timeSeriesRDD.summarizeIntervals(
-                clock.timeSeriesRDD,
-                composed_summarizer._jsummarizer(self._sc),
-                scala_key,
-                inclusion,
-                rounding)
+        tsrdd = self.timeSeriesRDD.summarizeIntervals(
+            clock.timeSeriesRDD,
+            composed_summarizer._jsummarizer(self._sc),
+            scala_key,
+            inclusion,
+            rounding)
 
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
@@ -1147,9 +1275,9 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
               and compute indices for each left row.
 
            2. withColumn with PySpark UDF to compute each batch
-              This is done on PySpark side. Once we have each batch in arrow format, we can now
+              This is done on PySpark side. Once we have each batch in Arrow format, we can now
               send the bytes to python worker using regular PySpark UDF, compute rolling windows
-              in python using precomputed indices, and return the result in arrow format.
+              in python using precomputed indices, and return the result in Arrow format.
 
            3. concatArrowAndExplode
               The final step concat new columns to the original rows, and explode each batch back
