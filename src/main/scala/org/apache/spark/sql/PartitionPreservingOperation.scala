@@ -24,7 +24,7 @@ import org.apache.spark.sql.execution.python.BatchEvalPythonExec
 /**
  * A class to used to check whether a DataFrame operation is partition preserving.
  *
- * See doc/partition-preserving-operation.md
+ * See doc/partition.md
  */
 object PartitionPreservingOperation {
 
