@@ -50,7 +50,7 @@ lazy val formattingPreferences = {
 }
 
 lazy val compilationSettings = scalariformSettings ++ Seq(
-  version := "0.2.0-SNAPSHOT",
+  version := "0.4.0-SNAPSHOT",
   organization := "com.twosigma",
   scalaVersion := "2.11.8",
   assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false),
