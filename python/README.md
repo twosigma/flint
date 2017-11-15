@@ -28,6 +28,12 @@ Building
 
 You can build flint by running this in the top level of this repo:
 
+    python setup.py install
+    # -or-
+    pip install .
+
+You can also install directly from gitlab:
+
     make dist
 
 This will create a jar under target/scala-2.11/flint-assembly-0.2.0-SNAPSHOT.jar
@@ -39,9 +45,19 @@ You can use ts-flint with PySpark by:
 
     pyspark --jars /path/to/flint-assembly-0.2.0-SNAPSHOT.jar --py-files /path/to/flint-assembly-0.2.0-SNAPSHOT.jar
 
+
 or
 
+    >>> import os
+    >>> import ts.flint
+    >>> ts.flint.__file__[len(os.getcwd()):]
+    '/ts/flint/__init__.py'
+
+Running Tests
+-------------
+
     spark-submit --jars /path/to/flint-assembly-0.2.0-SNAPSHOT.jar --py-files /path/to/flint-assembly-0.2.0-SNAPSHOT.jar myapp.py
+
 
 Running in a notebook
 ---------------------
@@ -50,6 +66,30 @@ You can also run ts-flint from within a jupyter notebook.  First, create a virtu
 
     conda create -n flint  python=3.5 pandas notebook
     source activate flint
+
+    py.test
+
+To run tests against a deployment:
+
+    FLINT_TEST_CODEBASE=/opt/ts/services/spark-2.0-ts-qa.ts_spark_2_0 py.test
+
+To run tests against a Flint jar:
+
+    FLINT_TEST_JAR=flint-assembly-0.4.0-SNAPSHOT.jar py.test
+
+You can get code coverage by running them under `coverage`:
+
+    coverage run setup.py test
+    coverage report
+
+Instead of `coverage report`'s text output, you can get an HTML report
+including branch coverage information:
+
+    coverage run setup.py test
+    coverage html
+    (cd build/coverage/html; python -m http.server 8080)
+
+Then visit http://localhost:8080.
 
 * Note that this issue https://github.com/numpy/numpy/issues/8958 currently prevents Jupyter notebooks running under pyspark from importing the numpy module in python 3.6.  That's why "python=3.5" is specified above.
 
@@ -69,6 +109,13 @@ The Flint python bindings are documented at https://ts-flint.readthedocs.io/en/l
 
 Run tests
 ---------
+
+    git tag 0.1.2
+    git push origin 0.1.2
+
+Once this tag exists, future package and documentation builds will
+automatically get that version, and users can `pip install` using that
+git tag from gitlab.
 
 To run tests for the Python code see a separate [README](tests/README.md) file in the tests directory
 
