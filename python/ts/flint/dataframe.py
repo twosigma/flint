@@ -408,15 +408,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         if legacy_udfs:
             tsdf = tsdf._addColumnsForCycle_legacy_udf(legacy_udfs, key)
 
-        new_columns = []
-        for col_name in columns.keys():
-            if isinstance(col_name, str):
-                new_columns.append(col_name)
-            elif isinstance(col_name, collections.Sequence):
-                new_columns.extend(col_name)
-            else:
-                raise ValueError("Invalid column names {}".format(col_name))
-
+        new_columns = udf._flat_column_indices(columns.keys())
         final_columns = self.columns + new_columns
         # Reorder to maintain order specified in `columns`
         tsdf = tsdf.select(*final_columns)
@@ -928,8 +920,9 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
     def _summarizeWindowsBatch(self, window, key=None):
         jwindow = window._jwindow(self._sc)
+        scala_columns = utils.list_to_seq(self._sc, columns, preserve_none=True)
         scala_key = utils.list_to_seq(self._sc, key)
-        tsrdd = self.timeSeriesRDD.summarizeWindowsBatch(jwindow, scala_key)
+        tsrdd = self.timeSeriesRDD.summarizeWindowsBatch(jwindow, scala_columns, scala_key)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def _concatArrowAndExplode(self, base_rows_col, schema_cols, data_cols):
@@ -1270,7 +1263,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
            This function consists of three steps:
 
-           1. summarizeWindowsBatch
+           1. summarizeWindowBatches
               This step breaks the left table and right table into multiple Arrow batches
               and compute indices for each left row.
 
@@ -1292,9 +1285,23 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         indices_col_name = self._jpkg.ArrowWindowBatchSummarizer.indicesColumnName()
         is_placeholder_col_name = '__window_is_placeholder'
 
+        # required columns for column pruning
+        required_columns = set()
+        other_required_columns = set()
+
         for col in columns.values():
-            if len(col.column_indices) > 2:
-                raise ValueError("Received more than 2 args to the udf. "
+            if len(col.column_indices) == 1:
+                if other is None:
+                    required_columns.update(udf._flat_column_indices(col.column_indices))
+                else:
+                    other_required_columns.update(udf._flat_column_indices(col.column_indices))
+            elif len(col.column_indices) == 2:
+                if other is None:
+                    raise ValueError("Cannot specify 2 args to the UDF if other is None")
+                required_columns.update(udf._flat_column_indices(col.column_indices[0:1]))
+                other_required_columns.update(udf._flat_column_indices(col.column_indices[1:2]))
+            else:
+                raise ValueError("Received more than 2 args to the UDF. "
                                  "Use either udf(df[[col]]) or udf(df[[col]], df2[[col2]]).")
 
             for index in col.column_indices:
@@ -1303,7 +1310,10 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                         'Column passed to the udf function must be a column in the DataFrame, '
                         'i.e, df[col] or df[[col]]. Other types of Column are not supported.')
 
-        windowed = self._summarizeWindowsBatch(window, key)
+        windowed = self._summarizeWindowsBatch(
+            window,
+            columns=list(required_columns),
+            key=key)
 
         # This is a hack to get around the issue where pyspark batches rows in groups of 100 for python udf.
         # As a result it significantly increases memory usage.

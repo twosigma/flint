@@ -32,9 +32,15 @@ import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.FlintConf
+import com.twosigma.flint.arrow.ArrowUtils
 import com.twosigma.flint.rdd.function.window.summarizer.WindowBatchSummarizer
+import com.twosigma.flint.timeseries.window.summarizer.ArrowWindowBatchSummarizer
 
-class SummarizeWindowsBatchSpec extends MultiPartitionSuite with TimeSeriesTestData with PropertyChecks {
+import com.twosigma.flint.timeseries.ArrowTestUtils.fileFormatToRows
+
+class SummarizeWindowBatchesSpec extends MultiPartitionSuite
+  with TimeSeriesTestData
+  with PropertyChecks {
 
   override val defaultResourceDir: String = "/timeseries/summarizewindows"
 
@@ -97,35 +103,6 @@ class SummarizeWindowsBatchSpec extends MultiPartitionSuite with TimeSeriesTestD
     expected
   }
 
-  def fileFormatToRows(bytes: Array[Byte], schema: StructType): Seq[Row] = {
-    val allocator = new RootAllocator(Int.MaxValue)
-    val channel = new ByteArrayReadableSeekableByteChannel(bytes)
-    val reader = new ArrowFileReader(channel, allocator)
-
-    val root = reader.getVectorSchemaRoot
-    reader.loadNextBatch()
-    val vectors = root.getFieldVectors.asScala
-
-    val rowCount = root.getRowCount
-    val columnCount = root.getSchema.getFields.size()
-
-    val values = (0 until rowCount).map { i =>
-      (0 until columnCount).map{ j =>
-        vectors(j).getAccessor.getObject(i)
-      }
-    }
-
-    val rows = values.map { value =>
-      new GenericRowWithSchema(value.toArray, schema)
-    }
-
-    reader.close()
-    root.close()
-    allocator.close()
-
-    rows
-  }
-
   def computeResult(
     left: TimeSeriesRDD,
     right: TimeSeriesRDD,
@@ -144,28 +121,22 @@ class SummarizeWindowsBatchSpec extends MultiPartitionSuite with TimeSeriesTestD
 
       val sk = if (shouldMatchSk) Seq("id") else Seq.empty
 
-      val summarizedTSRdd = left.summarizeWindowsBatch(window, sk)
+      val summarizedTSRdd = left.summarizeWindowBatches(window, key = sk)
 
       val result = summarizedTSRdd.collect().flatMap {
         case row =>
           val originLeftRows = row.getAs[Seq[Row]](baseRowsColumnName)
-          val leftRows = fileFormatToRows(row.getAs[Array[Byte]](leftBatchColumnName), left.schema)
+          val leftRows = fileFormatToRows(row.getAs[Array[Byte]](leftBatchColumnName))
 
           assert(originLeftRows == leftRows)
 
-          val rightRows = fileFormatToRows(row.getAs[Array[Byte]](rightBatchColumnName), right.schema)
-          val indexRows = fileFormatToRows(
-            row.getAs[Array[Byte]](indicesColumnName),
-            StructType(Seq(
-              StructField(beginIndexColumnName, IntegerType),
-              StructField(endIndexColumnName, IntegerType)
-            ))
-          )
+          val rightRows = fileFormatToRows(row.getAs[Array[Byte]](rightBatchColumnName))
+          val indexRows = fileFormatToRows(row.getAs[Array[Byte]](indicesColumnName))
 
           val resultRows = (leftRows zip indexRows).map {
             case (leftRow, indexRow) =>
               val sum = leftRow.getAs[Int]("v1") +
-                rightRows.slice(indexRow.getInt(0), indexRow.getInt(1)).map(_.getAs[Int]("v2")).sum
+                rightRows.slice(indexRow.getInt(0), indexRow.getInt(1)).map(_.getAs[Int]("v1")).sum
               new GenericRowWithSchema((leftRow.toSeq :+ sum).toArray, schema)
           }
 
@@ -189,6 +160,33 @@ class SummarizeWindowsBatchSpec extends MultiPartitionSuite with TimeSeriesTestD
     val result = computeResult(left, right, windowSize, shouldMatchSk, batchSize)
 
     assert(expected == result)
+  }
+
+  it should "prune columns" in {
+    val window = Windows.pastAbsoluteTime("500ns")
+
+    // No pruning
+    val result1 = v1.summarizeWindowBatches(window)
+    val rightSchema1 = v1.schema
+    val leftBatch1 = result1.first().getAs[Array[Byte]](leftBatchColumnName)
+    assert(leftBatch1 != null)
+    val rightRow1 = fileFormatToRows(result1.first().getAs[Array[Byte]](rightBatchColumnName)).head
+    assert(rightRow1 == new GenericRowWithSchema(Array(1000, 1, 100), rightSchema1))
+
+    val result2 = v1.summarizeWindowBatches(window, Seq("time", "v1"))
+    val rightSchema2 = StructType(Seq(StructField("time", LongType), StructField("v1", IntegerType)))
+    val rightRow2 = fileFormatToRows(result2.first().getAs[Array[Byte]](rightBatchColumnName)).head
+    assert(rightRow2 == new GenericRowWithSchema(Array(1000, 100), rightSchema2))
+
+    val result3 = v1.summarizeWindowBatches(window, Seq("v1"))
+    val rightSchema3 = StructType(Seq(StructField("v1", IntegerType)))
+    val rightRow3 = fileFormatToRows(result3.first().getAs[Array[Byte]](rightBatchColumnName)).head
+    assert(rightRow3 == new GenericRowWithSchema(Array(100), rightSchema3))
+
+    val result5 = v1.summarizeWindowBatches(window, columns = Seq())
+    val leftBatch5 = result5.first().getAs[Array[Byte]](leftBatchColumnName)
+    assert(leftBatch5 == null)
+
   }
 
   {

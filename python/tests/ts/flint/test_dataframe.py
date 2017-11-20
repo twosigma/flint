@@ -968,6 +968,52 @@ def test_summarizeWindows_udf(flintContext, tests_utils, windows, vol):
     expected6 = expected3
     tests_utils.assert_same(result6, expected6)
 
+    @udf(DoubleType())
+    def mean(v):
+        return v.mean()
+    result7 = vol.summarizeWindows(
+        windows.past_absolute_time('99ns'),
+        {'mean': mean(vol['volume'])},
+        key='id'
+    ).toPandas()
+    expected7 = make_pdf([
+        (1000, 7, 100, 100.0),
+        (1000, 3, 200, 200.0),
+        (1050, 3, 300, 250.0),
+        (1050, 7, 400, 250.0),
+        (1100, 3, 500, 400.0),
+        (1100, 7, 600, 500.0),
+        (1150, 3, 700, 600.0),
+        (1150, 7, 800, 700.0),
+        (1200, 3, 900, 800.0),
+        (1200, 7, 1000, 900.0),
+        (1250, 3, 1100, 1000.0),
+        (1250, 7, 1200, 1100.0),
+    ], ['time', 'id', 'volume', 'mean'])
+
+    tests_utils.assert_same(result7, expected7)
+
+    result8 = vol.summarizeWindows(
+        windows.past_absolute_time('99ns'),
+        {'mean': mean(vol['volume'])}
+    ).toPandas()
+    expected8 = make_pdf([
+        (1000, 7, 100, 150.0),
+        (1000, 3, 200, 150.0),
+        (1050, 3, 300, 250.0),
+        (1050, 7, 400, 250.0),
+        (1100, 3, 500, 450.0),
+        (1100, 7, 600, 450.0),
+        (1150, 3, 700, 650.0),
+        (1150, 7, 800, 650.0),
+        (1200, 3, 900, 850.0),
+        (1200, 7, 1000, 850.0),
+        (1250, 3, 1100, 1050.0),
+        (1250, 7, 1200, 1050.0),
+    ], ['time', 'id', 'volume', 'mean'])
+
+    tests_utils.assert_same(result8, expected8)
+
 
 @pytest.mark.net
 def test_summarizeWindows_trading_time(flintContext, tests_utils, windows, summarizers):

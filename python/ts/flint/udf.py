@@ -14,6 +14,7 @@
 #  limitations under the License.
 #
 
+import collections
 import itertools
 
 from pyspark.sql.types import StructType, StructField
@@ -92,3 +93,15 @@ def _check_invalid_udfs(udf_columns):
                     'Column passed to the udf function must be a column in the DataFrame, '
                     'i.e, df[col] or df[[col1, col2]]. '
                     'Other types of Column are not supported.')
+
+
+def _flat_column_indices(column_indices):
+    new_columns = []
+    for col_name in column_indices:
+        if isinstance(col_name, str):
+            new_columns.append(col_name)
+        elif isinstance(col_name, collections.Sequence):
+            new_columns.extend(col_name)
+        else:
+            raise ValueError("Invalid column indices {}".format(col_name))
+    return new_columns

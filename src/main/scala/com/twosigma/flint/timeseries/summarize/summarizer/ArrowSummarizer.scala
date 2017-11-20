@@ -42,12 +42,16 @@ case class ArrowSummarizerFactory(columns: Seq[String], includeBaseRows: Boolean
     } else {
       ColumnList.Sequence(columns)
     }
-  override def apply(inputSchema: StructType): ArrowSummarizer =
-    ArrowSummarizer(inputSchema, includeBaseRows, prefixOpt, requiredColumns)
+
+  override def apply(inputSchema: StructType): ArrowSummarizer = {
+    val outputBatchSchema = StructType(columns.map(col => inputSchema(inputSchema.fieldIndex(col))))
+    ArrowSummarizer(inputSchema, outputBatchSchema, includeBaseRows, prefixOpt, requiredColumns)
+  }
 }
 
 case class ArrowSummarizer(
   override val inputSchema: StructType,
+  outputBatchSchema: StructType,
   includeBaseRows: Boolean,
   override val prefixOpt: Option[String],
   requiredColumns: ColumnList
@@ -55,7 +59,7 @@ case class ArrowSummarizer(
   override type T = InternalRow
   override type U = ArrowSummarizerState
   override type V = ArrowSummarizerResult
-  override val summarizer = ArrowSum(inputSchema, includeBaseRows)
+  override val summarizer = ArrowSum(inputSchema, outputBatchSchema, includeBaseRows)
   override val schema: StructType =
     if (includeBaseRows) {
       Schema.of(
@@ -75,5 +79,4 @@ case class ArrowSummarizer(
     } else {
       InternalRow(v.arrowBatch)
     }
-
 }

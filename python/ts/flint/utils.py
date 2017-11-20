@@ -75,17 +75,20 @@ def to_list(lst):
             lst = [lst]
     return lst
 
-def list_to_seq(sc, lst):
+def list_to_seq(sc, lst, preserve_none=False):
     """Shorthand for accessing PythonUtils Java Package
 
-    If lst is a Python None, returns a Scala empty Seq
+    If lst is a Python None, returns a None or empty Scala Seq (depending on preserve_none)
     If lst is a Python object, such as str, returns a Scala Seq containing the object
     If lst is a Python tuple/list, returns a Scala Seq containing the objects in the tuple/list
 
     :return: A copy of ``lst`` as a ``scala.collection.Seq``
     """
     if lst is None:
-        lst = []
+        if preserve_none:
+            return None
+        else:
+            lst = []
     return jvm(sc).org.apache.spark.api.python.PythonUtils.toSeq(to_list(lst))
 
 def py_col_to_scala_col(sc, py_col):

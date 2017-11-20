@@ -26,7 +26,7 @@ import org.apache.arrow.memory.{ BufferAllocator, RootAllocator }
 import org.apache.arrow.vector.file.ArrowFileWriter
 import org.apache.arrow.vector.{ NullableIntVector, VectorSchemaRoot }
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, UnsafeProjection }
 import org.apache.spark.sql.catalyst.util.GenericArrayData
 import org.apache.spark.sql.types._
 
@@ -209,7 +209,9 @@ object ArrowWindowBatchSummarizer {
 
 private[flint] case class ArrowWindowBatchSummarizer(
   override val leftSchema: StructType,
-  override val rightSchema: StructType
+  leftPrunedSchema: StructType,
+  override val rightSchema: StructType,
+  rightPrunedSchema: StructType
 ) extends BaseWindowBatchSummarizer(leftSchema, rightSchema) {
 
   import ArrowWindowBatchSummarizer._
@@ -227,15 +229,16 @@ private[flint] case class ArrowWindowBatchSummarizer(
 
   private def serializeRows(
     rows: util.ArrayList[InternalRow],
-    schema: StructType,
+    originalSchema: StructType,
+    prunedSchema: StructType,
     allocator: BufferAllocator
   ): Array[Byte] = {
     val allocator = new RootAllocator(Long.MaxValue)
-    val arrowSchema = ArrowUtils.toArrowSchema(schema)
+    val arrowSchema = ArrowUtils.toArrowSchema(prunedSchema)
     val root = VectorSchemaRoot.create(arrowSchema, allocator)
     val out = new ByteArrayOutputStream()
     val writer = new ArrowFileWriter(root, null, Channels.newChannel(out))
-    val arrowWriter = ArrowWriter.create(root)
+    val arrowWriter = ArrowWriter.create(originalSchema, prunedSchema, root)
 
     try {
       val rowIter = rows.iterator()
@@ -306,21 +309,25 @@ private[flint] case class ArrowWindowBatchSummarizer(
 
   override def renderOutput(u: WindowBatchSummarizerState): InternalRow = {
     // Do this to call the correct constructor in GenericArrayData
-    val leftRows: Array[Any] = u.leftRows.toArray.asInstanceOf[Array[Any]]
+    val baseRows: Array[Any] = u.leftRows.toArray.asInstanceOf[Array[Any]]
     // This is used for reconstructing the rows after computing the window value
-    val leftRowsData = new GenericArrayData(leftRows)
+    val baseRowsData = new GenericArrayData(baseRows)
 
     val allocator = new RootAllocator(Int.MaxValue)
-    val leftArrowBytes = serializeRows(u.leftRows, leftSchema, allocator)
-    val rightArrowBytes = serializeRows(u.rightRows, rightSchema, allocator)
+    val (leftLength, leftBatch) = if (leftPrunedSchema.length > 0) {
+      (u.leftRows.size, serializeRows(u.leftRows, leftSchema, leftPrunedSchema, allocator))
+    } else {
+      (0, null)
+    }
+    val rightBatch = serializeRows(u.rightRows, rightSchema, rightPrunedSchema, allocator)
     val indicesArrowBytes = serializeIndices(u.beginIndices, u.endIndices, allocator)
     allocator.close()
 
     val values: Array[Any] = Array(
-      leftRowsData,
-      leftArrowBytes,
-      u.leftRows.size,
-      rightArrowBytes,
+      baseRowsData,
+      leftBatch,
+      leftLength,
+      rightBatch,
       u.rightRows.size,
       indicesArrowBytes
     )

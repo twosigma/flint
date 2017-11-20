@@ -28,18 +28,39 @@ import org.apache.spark.sql.types._
 
 object ArrowWriter {
 
-  def create(schema: StructType): ArrowWriter = {
-    val arrowSchema = ArrowUtils.toArrowSchema(schema)
-    val root = VectorSchemaRoot.create(arrowSchema, ArrowUtils.rootAllocator)
-    create(root)
-  }
+  def create(schema: StructType): ArrowWriter = create(schema, schema)
 
   def create(root: VectorSchemaRoot): ArrowWriter = {
+    val sparkSchema = ArrowUtils.fromArrowSchema(root.getSchema)
+    create(sparkSchema, sparkSchema, root)
+  }
+
+  def create(inputSchema: StructType, outputSchema: StructType, root: VectorSchemaRoot): ArrowWriter = {
+    require(
+      outputSchema.fields.toSet.subsetOf(inputSchema.fields.toSet),
+      s"$outputSchema is no a subset of $inputSchema"
+    )
+
+    require(
+      ArrowUtils.toArrowSchema(outputSchema).equals(root.getSchema),
+      s"output schema doesn't match root schema"
+    )
+
+    val inputIndices = outputSchema.map(f => inputSchema.fieldIndex(f.name)).toArray
+
     val children = root.getFieldVectors().asScala.map { vector =>
       vector.allocateNew()
       createFieldWriter(vector)
     }
-    new ArrowWriter(root, children.toArray)
+    new ArrowWriter(root, children.toArray, inputIndices)
+  }
+
+  def create(inputSchema: StructType, outputSchema: StructType): ArrowWriter = {
+
+    val arrowSchema = ArrowUtils.toArrowSchema(outputSchema)
+    val root = VectorSchemaRoot.create(arrowSchema, ArrowUtils.rootAllocator)
+
+    create(inputSchema, outputSchema, root)
   }
 
   private def createFieldWriter(vector: ValueVector): ArrowFieldWriter = {
@@ -75,10 +96,11 @@ object ArrowWriter {
 
 class ArrowWriter(
   val root: VectorSchemaRoot,
-  fields: Array[ArrowFieldWriter]
+  fields: Array[ArrowFieldWriter],
+  inputIndices: Array[Int]
 ) {
 
-  def schema: StructType = StructType(fields.map { f =>
+  def outputSchema: StructType = StructType(fields.map { f =>
     StructField(f.name, f.dataType, f.nullable)
   })
 
@@ -87,7 +109,8 @@ class ArrowWriter(
   def write(row: InternalRow): Unit = {
     var i = 0
     while (i < fields.size) {
-      fields(i).write(row, i)
+      // println(s"writing original field ${inputIndices(i)} for field ${i}")
+      fields(i).write(row, inputIndices(i))
       i += 1
     }
     count += 1

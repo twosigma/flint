@@ -62,9 +62,9 @@ case class ArrowSummarizerResult(baseRows: Array[Any], arrowBatch: Array[Byte])
  *
  * This summarizer is only meant to be used in local mode, such as in summarizeCycles and summarizeWindows.
  */
-case class ArrowSummarizer(schema: StructType, includeBaseRows: Boolean)
+case class ArrowSummarizer(inputSchema: StructType, outputSchema: StructType, includeBaseRows: Boolean)
   extends Summarizer[InternalRow, ArrowSummarizerState, ArrowSummarizerResult] {
-  private[this] val size = schema.size
+  private[this] val size = outputSchema.size
   require(size > 0, "Cannot create summarizer with no input columns")
 
   // This function will allocate memory from the BufferAllocator to initialize arrow vectors.
@@ -74,10 +74,10 @@ case class ArrowSummarizer(schema: StructType, includeBaseRows: Boolean)
 
   private def init(u: ArrowSummarizerState): Unit = {
     if (!u.initialized) {
-      val arrowSchema = ArrowUtils.toArrowSchema(schema)
+      val arrowSchema = ArrowUtils.toArrowSchema(outputSchema)
       val allocator = new RootAllocator(Int.MaxValue)
       val root = VectorSchemaRoot.create(arrowSchema, allocator)
-      val arrowWriter = ArrowWriter.create(root)
+      val arrowWriter = ArrowWriter.create(inputSchema, outputSchema, root)
 
       u.initialized = true
       u.baseRows = new util.ArrayList[InternalRow]()

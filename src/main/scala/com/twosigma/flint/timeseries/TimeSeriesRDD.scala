@@ -1104,8 +1104,9 @@ trait TimeSeriesRDD extends Serializable {
     key: String
   ): TimeSeriesRDD = summarizeWindows(window, summarizer)
 
-  private[flint] def summarizeWindowsBatch(
+  private[flint] def summarizeWindowBatches(
     window: Window,
+    columns: Seq[String] = null,
     key: Seq[String] = Seq.empty
   ): TimeSeriesRDD
 
@@ -1599,7 +1600,7 @@ class TimeSeriesRDDImpl private[timeseries] (
    * Summarize window batches.
    *
    * `summarizeWindows` with python udf consists of three steps:
-   *  1. [[summarizeWindowsBatch]]
+   *  1. [[summarizeWindowBatches]]
    *  This step breaks the left table and right table into multiple batches and computes indices for each left row.
    *
    *  2. withColumn with PySpark UDF to compute each batch
@@ -1638,10 +1639,15 @@ class TimeSeriesRDDImpl private[timeseries] (
    * |2500|[[2500,1,4], ...]]  |[41 52 52 4F 57 3...||[41 52 52 4F 57 3...||[41 52 52 4F 57 3...|
    * +----+--------------------+--------------------+---------------------+---------------------+
    *
+   * @param columns: Required columns in leftBatch.
+   *                 If null, all columns from the left table will be included in left batches.
+   *                 If empty seq, leftBatches will be nulls.
    * @see [[concatArrowAndExplode()]]
    */
-  private[flint] override def summarizeWindowsBatch(
+  @PythonApi
+  private[flint] override def summarizeWindowBatches(
     window: Window,
+    columns: Seq[String] = null,
     key: Seq[String] = Seq.empty
   ): TimeSeriesRDD = {
     val batchSize = sparkSession.conf.get(
@@ -1649,16 +1655,33 @@ class TimeSeriesRDDImpl private[timeseries] (
       FlintConf.WINDOW_BATCH_MAXSIZE_DEFAULT
     ).toInt
 
-    val (otherORdd, otherSchema, otherSk) = (this.orderedRdd, this.schema, this.safeGetAsAny(key))
+    val otherRdd: TimeSeriesRDD = null
+    val otherColumns: Seq[String] = null
+
+    val prunedSchema = Option(columns).map(cols =>
+      StructType(cols.map(c => this.schema(this.schema.fieldIndex(c))))).getOrElse(this.schema)
+
+    val (otherORdd, otherSchema, otherPrunedSchema, otherSk) =
+      if (otherRdd == null) {
+        (this.orderedRdd, this.schema, prunedSchema, this.safeGetAsAny(key))
+      } else {
+        val otherPrunedSchema = Option(otherColumns).map{ cols =>
+          require(cols.nonEmpty, "otherColumns cannot be empty")
+          StructType(cols.map(c => otherRdd.schema(otherRdd.schema.fieldIndex(c))))
+        }.getOrElse(otherRdd.schema)
+
+        (otherRdd.orderedRdd, otherRdd.schema, otherPrunedSchema, otherRdd.safeGetAsAny(key))
+      }
 
     val sk = this.safeGetAsAny(key)
 
-    val sum = new ArrowWindowBatchSummarizer(this.schema, otherSchema)
+    val sum = new ArrowWindowBatchSummarizer(
+      this.schema, prunedSchema, otherSchema, otherPrunedSchema
+    )
 
-    // TODO: Implement column pruning
     val summarizedRdd = window match {
       case w: TimeWindow =>
-        orderedRdd.summarizeWindowsBatch(w.of, sum, sk, otherORdd, otherSk, batchSize)
+        orderedRdd.summarizeWindowBatches(w.of, sum, sk, otherORdd, otherSk, batchSize)
     }
 
     val (concat, newSchema) = InternalRowUtils.concat2(
@@ -1826,7 +1849,7 @@ class TimeSeriesRDDImpl private[timeseries] (
    *
    * For each input row, the number of elements in the base column and Arrow columns must match.
    *
-   * @see [[summarizeWindowsBatch()]]
+   * @see [[summarizeWindowBatches()]]
    */
   private[flint] override def concatArrowAndExplode(
     baseRowsColumnName: String,

@@ -65,6 +65,11 @@ trait TimeSeriesSuite extends FlintSuite {
   def assertAlmostEquals(x: Double, y: Double): Unit =
     assert(x.isNaN && y.isNaN || x === y)
 
+  def assertEquals(thisRow: Row, thatRow: Row): Unit = {
+    assert(thisRow.schema == thatRow.schema)
+    assert(thisRow == thatRow)
+  }
+
   /**
    * Assert if two rows have the same values within additive precision `defaultAdditivePrecision`.
    *

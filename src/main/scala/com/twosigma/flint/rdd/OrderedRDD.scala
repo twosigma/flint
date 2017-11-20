@@ -382,7 +382,7 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
   ): OrderedRDD[K, (V, V2)] =
     SummarizeWindows.applyOverlapped(self, window, summarizer, sk, overlapWindow)
 
-  def summarizeWindowsBatch[SK: ClassTag, U, V2: ClassTag](
+  def summarizeWindowBatches[SK: ClassTag, U, V2: ClassTag](
     window: K => (K, K),
     summarizer: WindowBatchSummarizer[K, SK, V, U, V2],
     sk: V => SK,
