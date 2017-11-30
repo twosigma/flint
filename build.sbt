@@ -147,3 +147,8 @@ mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) =>
     case _ => MergeStrategy.deduplicate
   }
 }
+
+addCommandAlias(
+  "assemblyNoTest",
+  "; set test in Test := {}; assembly"
+)

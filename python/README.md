@@ -45,7 +45,6 @@ You can use ts-flint with PySpark by:
 
     pyspark --jars /path/to/flint-assembly-0.2.0-SNAPSHOT.jar --py-files /path/to/flint-assembly-0.2.0-SNAPSHOT.jar
 
-
 or
 
     >>> import os
@@ -73,7 +72,7 @@ To run tests against a deployment:
 
     FLINT_TEST_CODEBASE=/opt/ts/services/spark-2.0-ts-qa.ts_spark_2_0 py.test
 
-To run tests against a Flint jar:
+To run tests against a specific Flint assembly jar (of version e.g. `0.4.0`):
 
     FLINT_TEST_JAR=flint-assembly-0.4.0-SNAPSHOT.jar py.test
 
