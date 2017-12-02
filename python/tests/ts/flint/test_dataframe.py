@@ -1534,6 +1534,52 @@ def test_addColumnsForCycle_percentile_rank(rankers, tests_utils, price2):
     tests_utils.assert_same(new_pdf, expected_pdf)
 
 
+def test_addColumnsForCycle_percentile_rank_with_null(flintContext, rankers, tests_utils):
+    data = [
+        [1000, 1.0],
+        [2000, None],
+        [3000, 2.0],
+        [4000, None],
+    ]
+
+    df = flintContext.read.pandas(make_pdf(data, ["time", "value"]))
+    new_pdf = df.addColumnsForCycle({
+        'rank': rankers.percentile('value')
+    }).toPandas()
+
+    expected_pdf = make_pdf([
+        (1000, 1.0, .5),
+        (2000, None, None),
+        (3000, 2.0, .5),
+        (4000, None, None),
+    ], ['time', 'value', 'rank'])
+
+    tests_utils.assert_same(new_pdf, expected_pdf)
+
+
+def test_addColumnsForCycle_percentile_rank_with_null_filtered(
+        pyspark, price, vol, rankers, tests_utils):
+    """
+    Tests the percentile ranker with nulls filtered out of the data is the same
+    as running the ranker with null.
+    """
+    import pyspark.sql.functions as F
+
+    # Remove data at timestamp 1050
+    data = (price.leftJoin(vol.filter(vol.time != 1050), key="id")
+        .withColumn('volume', F.col('volume').cast('double')))
+
+    new_pdf = data.addColumnsForCycle({
+            'rank': rankers.percentile('volume')
+        }).where(F.col('rank').isNotNull()).toPandas()
+
+    expected_pdf = data.where(F.col('volume').isNotNull()).addColumnsForCycle({
+            'rank': rankers.percentile('volume')
+        }).toPandas()
+
+    tests_utils.assert_same(new_pdf, expected_pdf)
+
+
 def test_addColumnsForCycle_exclusive_rank(rankers, tests_utils, price2):
     new_pdf = price2.addColumnsForCycle({
         'result': rankers.exclusive('price', 0, 1)
