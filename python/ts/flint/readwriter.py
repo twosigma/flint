@@ -197,7 +197,7 @@ class TSDataFrameReader(object):
         return TimeSeriesDataFrame._from_pandas(
             df, schema, self._flintContext._sqlContext,
             time_column=self._parameters.timeColumn(),
-            is_sorted=is_sorted,
+            is_sorted=bool(self._extra_options.get("isSorted")),
             unit=self._parameters.timeUnitString())
 
     def _df_between(self, df, begin_nanos, end_nanos, time_column):
@@ -273,6 +273,7 @@ class TSDataFrameReader(object):
         time_column = self._parameters.timeColumn()
         begin_nanos = self._parameters.range().beginNanosOrNull()
         end_nanos = self._parameters.range().endNanosOrNull()
+        is_sorted = bool(self._extra_options.get("isSorted"))
 
         if begin_nanos or end_nanos:
             df = self._df_between(df, begin_nanos, end_nanos, time_column)
