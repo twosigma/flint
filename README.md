@@ -14,7 +14,7 @@ It differs from other time series efforts in Spark in its ability to efficiently
 
 | Dependency     | Version           |
 | -------------- | ----------------- |
-| Spark version  |  2.0 and above    |
+| Spark version  |  2.0              |
 | Scala version  |  2.11.7 and above |
 | Python version |  3.5 and above    |
 
