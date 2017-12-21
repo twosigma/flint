@@ -1530,6 +1530,10 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             except:
                 series = pdf['time']
             pdf = pdf.assign(time=series)
+
+            if not self._is_sorted:
+                pdf = pdf.sort_values(by='time').reset_index(drop=True)
+
         return pdf
 
 

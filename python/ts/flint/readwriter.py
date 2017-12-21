@@ -161,12 +161,15 @@ class TSDataFrameReader(object):
         return self
 
     def pandas(self, df, schema=None, *,
-               is_sorted=True,
+               is_sorted=None,
                time_column=None,
                unit=None):
         '''Creates a :class:`.TimeSeriesDataFrame` from an existing
-        :class:`pandas.DataFrame`. The :class:`pandas.DataFrame` must be sorted on
-        time column, otherwise user must specify ``is_sorted=False``.
+        :class:`pandas.DataFrame`.
+
+        .. note:: The :class:`pandas.DataFrame` must be
+            sorted on the time column, otherwise specify
+            is_sorted=False, or call ``.option("isSorted", False)``.
 
         **Supported options:**
 
@@ -194,10 +197,12 @@ class TSDataFrameReader(object):
             timeUnit=unit
         )
 
+        is_sorted = self._get_bool_option("isSorted", True)
+
         return TimeSeriesDataFrame._from_pandas(
             df, schema, self._flintContext._sqlContext,
             time_column=self._parameters.timeColumn(),
-            is_sorted=bool(self._extra_options.get("isSorted")),
+            is_sorted=is_sorted,
             unit=self._parameters.timeUnitString())
 
     def _df_between(self, df, begin_nanos, end_nanos, time_column):
@@ -215,13 +220,15 @@ class TSDataFrameReader(object):
 
     def dataframe(self, df, begin=None, end=None, *,
                   timezone='UTC',
-                  is_sorted=True,
+                  is_sorted=None,
                   time_column=None,
                   unit=None):
         """Creates a :class:`TimeSeriesDataFrame` from an existing
-        :class:`pyspark.sql.DataFrame`. The :class:`pyspark.sql.DataFrame` must be
-        sorted on time column, otherwise user must specify
-        is_sorted=False.
+        :class:`pyspark.sql.DataFrame`.
+
+        .. note:: The :class:`pyspark.sql.DataFrame` must be
+            sorted on the time column, otherwise specify
+            is_sorted=False, or call ``.option("isSorted", False)``.
 
         **Supported options:**
 
@@ -231,6 +238,9 @@ class TSDataFrameReader(object):
             and end can be omitted. If omitted, no boundary on time
             range will be set.
             Specified using :meth:`.TSDataFrameReader.range`.
+        isSorted (optional)
+            Whether the input dataframe is sorted on `timeColumn`.
+            Default: true.
         timeUnit (optional)
             Time unit of the time column. Default: "ns"
         timeColumn (optional)
@@ -273,7 +283,7 @@ class TSDataFrameReader(object):
         time_column = self._parameters.timeColumn()
         begin_nanos = self._parameters.range().beginNanosOrNull()
         end_nanos = self._parameters.range().endNanosOrNull()
-        is_sorted = bool(self._extra_options.get("isSorted"))
+        is_sorted = self._get_bool_option("isSorted", True)
 
         if begin_nanos or end_nanos:
             df = self._df_between(df, begin_nanos, end_nanos, time_column)
@@ -289,6 +299,10 @@ class TSDataFrameReader(object):
         Create a :class:`TimeSeriesDataFrame` from one or more paths
         containing parquet files.
 
+        .. note:: The Parquet files must be sorted on the time column,
+            otherwise specify is_sorted=False, or call
+            ``.option("isSorted", False)``.
+
         **Supported options:**
 
         range (optional)
@@ -297,6 +311,9 @@ class TSDataFrameReader(object):
             and end can be omitted. If omitted, no boundary on time
             range will be set.
             Specified using :meth:`.TSDataFrameReader.range`.
+        isSorted (optional)
+            Whether the input dataframe is sorted on `timeColumn`.
+            Default: true.
         timeUnit (optional)
             Time unit of the time column. Default: "ns"
         timeColumn (optional)
@@ -354,6 +371,19 @@ class TSDataFrameReader(object):
         :return: a dict containing string key-value pairs
         """
         return self._parameters.extraOptionsAsJavaMap()
+
+    def _get_bool_option(self, key, default=None):
+        value = self._extra_options.get(key)
+        if value is None:
+            return default
+        elif value.lower() == "true":
+            return True
+        elif value.lower() == "false":
+            return False
+        else:
+            raise ValueError(
+                "Unrecognized Boolean value for option {}={}".format(
+                    key, value))
 
 
 class TSDataFrameWriter(DataFrameWriter):

@@ -1853,6 +1853,30 @@ def test_read_uri(flintContext):
     assert spark_df.count() == len(pandas_df.index)
 
 
+@pytest.mark.human
+@pytest.mark.net
+def test_read_parquet(sqlContext, flintContext, tests_utils):
+    columns = ['time', 'id', 'value']
+    data_unsorted = [(3000, 1, 'a'),
+                     (4000, 2, 'b'),
+                     (2000, 3, 'c'),
+                     (1000, 4, 'd')]
+    df_unsorted = sqlContext.createDataFrame(data_unsorted, columns)
+
+    path = "flint/test/parquet/{}".format(pd.Timestamp.now().value)
+    # Write unsorted dataframe Parquet file for testing
+    df_unsorted.write.parquet(path)
+
+    actual_pdf = (flintContext.read
+                  .option('isSorted', False)
+                  .parquet(path).toPandas())
+    expected_pdf = (make_pdf(data_unsorted, columns)
+                    .sort_values(by='time')
+                    .reset_index(drop=True))
+
+    tests_utils.assert_same(actual_pdf, expected_pdf)
+
+
 def test_reader_parameters(flintContext):
     from ts.flint import utils as flint_utils
     reader = (flintContext.read.
@@ -2011,14 +2035,54 @@ def test_read_dataframe_begin_end(sqlContext, flintContext, tests_utils):
     df = sqlContext.createDataFrame(pdf)
     begin_nanos, end_nanos = 1100, 1200
 
-    df = flintContext.read.range(pd.Timestamp(begin_nanos), pd.Timestamp(end_nanos)).dataframe(df)
+    df = flintContext.read.range(begin_nanos, end_nanos).dataframe(df)
     expected_df = df.filter(df.time >= begin_nanos).filter(df.time < end_nanos)
     expected = expected_df.count()
     assert(df.count() == expected)
 
-    begin_str, end_str = pd.Timestamp(begin_nanos).isoformat(), pd.Timestamp(end_nanos).isoformat()
-    df2 = flintContext.read.dataframe(df, begin_str, end_str)
+    df2 = flintContext.read.range(begin_nanos, end_nanos).dataframe(df)
     assert(df2.count() == expected)
+
+
+@pytest.mark.net
+def test_read_dataframe_unsorted(sqlContext, flintContext, tests_utils):
+    columns = ['time', 'value']
+    data = [(4000, 4),
+            (2000, 2),
+            (3000, 3),
+            (1000, 1)]
+    pdf_shuffled = make_pdf(data, columns)
+    pdf_sorted = pdf_shuffled.sort_values(by='time').reset_index(drop=True)
+
+    df_sorted = sqlContext.createDataFrame(pdf_sorted)
+    df_shuffled = sqlContext.createDataFrame(pdf_shuffled)
+
+    # default isSorted is True
+    tsdf_sorted = (flintContext.read.dataframe(df_sorted)).toPandas()
+    tsdf_shuffled = (flintContext.read
+                     .option('isSorted', False)
+                     .dataframe(df_shuffled)).toPandas()
+
+    tests_utils.assert_same(tsdf_sorted, tsdf_shuffled)
+
+
+@pytest.mark.net
+def test_read_pandas_unsorted(sqlContext, flintContext, tests_utils):
+    columns = ['time', 'value']
+    data = [(4000, 4),
+            (2000, 2),
+            (3000, 3),
+            (1000, 1)]
+    pdf_shuffled = make_pdf(data, columns)
+    pdf_sorted = pdf_shuffled.sort_values(by='time').reset_index(drop=True)
+
+    # default isSorted is True
+    tsdf_sorted = (flintContext.read.pandas(pdf_sorted)).toPandas()
+    tsdf_shuffled = (flintContext.read
+                     .option('isSorted', False)
+                     .pandas(pdf_shuffled)).toPandas()
+
+    tests_utils.assert_same(tsdf_sorted, tsdf_shuffled)
 
 
 def test_uniform_clocks(sqlContext, clocks):
