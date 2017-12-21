@@ -16,7 +16,6 @@
 
 package com.twosigma.flint.timeseries.summarize
 
-import com.sun.prism.PixelFormat.DataType
 import com.twosigma.flint.timeseries._
 import org.apache.commons.math3.primes
 import org.apache.spark.sql.{ CatalystTypeConvertersWrapper, DFConverter, Row }
