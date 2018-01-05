@@ -2365,3 +2365,34 @@ def assert_order_preserving(input_df, func, preserve):
     else:
         assert(not output_df._is_sorted)
         assert(output_df._tsrdd_part_info == None)
+
+def test_groupedData(tests_utils, price):
+    from pyspark.sql import DataFrame
+    from pyspark.sql.functions import sum, pandas_udf
+    from ts.flint import TimeSeriesGroupedData
+
+    assert(type(price.groupBy('time')) is TimeSeriesGroupedData)
+    assert(type(price.groupby('time')) is TimeSeriesGroupedData)
+
+    result1 = price.groupBy('time').agg(sum(price['price'])).sort('time').toPandas()
+    expected1 = DataFrame.groupBy(price, 'time').agg(sum(price['price'])).sort('time').toPandas()
+    tests_utils.assert_same(result1, expected1)
+
+    result2 = price.groupBy('time').pivot('id').sum('price').toPandas()
+    expected2 = DataFrame.groupBy(price, 'time').pivot('id').sum('price').toPandas()
+    tests_utils.assert_same(result2, expected2)
+
+    @pandas_udf(price.schema)
+    def foo(df):
+        return df
+    result3 = price.groupby('time').apply(foo).toPandas()
+    expected3 = DataFrame.groupBy(price, 'time').apply(foo).toPandas()
+    tests_utils.assert_same(result3, expected3)
+
+    result4 = price.groupby('time').count().toPandas()
+    expected4 = DataFrame.groupBy(price, 'time').count().toPandas()
+    tests_utils.assert_same(result4, expected4)
+
+    result5 = price.groupby('time').mean('price').toPandas()
+    expected5 = DataFrame.groupBy(price, 'time').mean('price').toPandas()
+    tests_utils.assert_same(result5, expected5)

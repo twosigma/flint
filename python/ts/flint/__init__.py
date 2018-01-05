@@ -18,6 +18,7 @@
 
 from .context import FlintContext
 from .dataframe import TimeSeriesDataFrame
+from .group import TimeSeriesGroupedData
 from .functions import udf
 
 from ._version import get_versions

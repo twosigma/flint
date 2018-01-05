@@ -37,6 +37,7 @@ from . import summarizers
 from . import functions
 from . import udf
 from . import utils
+from .group import TimeSeriesGroupedData
 from .error import FlintError
 from .readwriter import TSDataFrameWriter
 from .serializer import arrowfile_to_dataframe, dataframe_to_arrowfile
@@ -1522,6 +1523,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
     def __str__(self):
         return "TimeSeriesDataFrame[%s]" % (", ".join("%s: %s" % c for c in self.dtypes))
 
+    @metrics.recorder.instrument(all_args=True)
     def toPandas(self):
         pdf = super().toPandas()
         if 'time' in pdf.columns:
@@ -1536,5 +1538,13 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         return pdf
 
+    @metrics.recorder.instrument(all_args=True)
+    def groupBy(self, *cols):
+        gd = super().groupBy(*cols)
+        return TimeSeriesGroupedData(gd)
+
+    # Will be instrumented by groupBy
+    def groupby(self, *cols):
+        return self.groupBy(*cols)
 
 TimeSeriesDataFrame._override_df_methods()
