@@ -28,10 +28,33 @@ import org.apache.spark.sql.execution.python.BatchEvalPythonExec
  */
 object PartitionPreservingOperation {
 
-  // Accessing executedPlan will force the cause it to be evaluated and change the original df
-  // Create a new df to ensure the original df is not changed
+  /**
+   * Return the root [[SparkPlan]] in the `df`'s executedPlan.
+   *
+   * @param df [[DataFrame]] to exam
+   * @note Accessing executedPlan will force the cause it to be evaluated and change the original [[DataFrame]].
+   *       Create a new [[DataFrame]] to ensure the original df is not changed
+   * @return the root [[SparkPlan]] in the `df`'s executedPlan.
+   */
   def executedPlan(df: DataFrame): SparkPlan =
     DFConverter.newDataFrame(df).queryExecution.executedPlan
+
+  /**
+   * Return the leaf [[SparkPlan]] in the `df`'s executedPlan.
+   *
+   * @param df [[DataFrame]] to exam
+   * @note Accessing executedPlan will force the cause it to be evaluated and change the original [[DataFrame]].
+   *       Create a new df to ensure the original [[DataFrame]] is not changed
+   * @return the leaf [[SparkPlan]] in the `df`'s executedPlan.
+   */
+  def leafExecutedPlan(df: DataFrame): SparkPlan = {
+    var plan = DFConverter.newDataFrame(df).queryExecution.executedPlan
+    while (plan.children.nonEmpty) {
+      require(plan.children.length == 1)
+      plan = plan.children.head
+    }
+    plan
+  }
 
   private def isPartitionPreservingUnaryNode(node: SparkPlan): Boolean = {
     node match {
@@ -41,31 +64,31 @@ object PartitionPreservingOperation {
       case _: WholeStageCodegenExec => true
       case _: InputAdapter => true
       case _: GenerateExec => true
+      case _: SerializeFromObjectExec => true
       case _ => false
     }
   }
 
   private def isPartitionPreservingLeafNode(node: SparkPlan): Boolean = {
     node match {
-      // PhysicalRDD is renamed to RDDScanExec in Spark 2.x
-      case physicalRDD: RDDScanExec =>
-        // TODO: This is hacky. Should use LogicalRelation/LogicalRDD to distinguish ExistingRDD/ParquetRelation
-        // This works for 2.x as well
-        physicalRDD.nodeName == "ExistingRDD"
+      case _: RDDScanExec => true
       case _: InMemoryTableScanExec => true
+      case _: ExternalRDDScanExec[_] => true
       case _ => false
     }
   }
 
-  private def isPartitionPreservingPlan(node: SparkPlan): Boolean = {
+  private def isPartitionPreservingPlan(node: SparkPlan): Boolean =
     if (node.children.isEmpty) {
       isPartitionPreservingLeafNode(node)
     } else {
-      isPartitionPreservingUnaryNode(node) && isPartitionPreservingPlan(node.children.head)
+      isPartitionPreservingUnaryNode(node) && isPartitionPreservingPlan(
+        node.children.head
+      )
     }
-  }
 
-  def isPartitionPreservingDataFrame(df: DataFrame): Boolean = isPartitionPreservingPlan(executedPlan(df))
+  def isPartitionPreservingDataFrame(df: DataFrame): Boolean =
+    isPartitionPreservingPlan(executedPlan(df))
 
   /**
    * Checks if df1 -> df2 is partition preserving.

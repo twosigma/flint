@@ -17,65 +17,72 @@
 package org.apache.spark.sql
 
 import com.twosigma.flint.FlintSuite
-import PartitionPreservingOperation.{ executedPlan, isPartitionPreserving }
-import org.apache.spark.sql.execution.RDDScanExec
+import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
-
 import org.apache.spark.sql.{ functions => F }
 
 class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
+  import PartitionPreservingOperation._
 
-  def assertPartitionPreserving(op: (DataFrame) => DataFrame, expected: Boolean): Unit = {
+  def assertPartitionPreserving(
+    op: (DataFrame) => DataFrame,
+    expected: Boolean
+  ): Unit = {
     assert(isPartitionPreserving(testData, op(testData)) == expected)
-    assert(isPartitionPreserving(testDataCached, op(testDataCached)) == expected)
+    assert(
+      isPartitionPreserving(testDataCached, op(testDataCached)) == expected
+    )
   }
 
   it should "test RDDScanDataFrame correctly" in {
-    assert(PartitionPreservingOperation.isPartitionPreservingDataFrame(testData), true)
+    assert(
+      isPartitionPreservingDataFrame(testData),
+      true
+    )
   }
 
   it should "test select('col')" in {
-    assertPartitionPreserving(selectV, true)
+    assertPartitionPreserving(selectV, expected = true)
   }
 
   it should "test selectExpr('col + 1 as col')" in {
-    assertPartitionPreserving(selectExprVPlusOne, true)
+    assertPartitionPreserving(selectExprVPlusOne, expected = true)
   }
 
   it should "test selectExpr('sum(col)')" in {
-    assertPartitionPreserving(selectExprSumV, false)
+    assertPartitionPreserving(selectExprSumV, expected = false)
   }
 
   it should "test filter" in {
-    assertPartitionPreserving(filterV, true)
+    assertPartitionPreserving(filterV, expected = true)
   }
 
   it should "test withColumn simple expression" in {
-    assertPartitionPreserving(withTime2Column, true)
+    assertPartitionPreserving(withTime2Column, expected = true)
   }
 
   it should "test withColumn udf" in {
-    assertPartitionPreserving(withTime3ColumnUdf, true)
+    assertPartitionPreserving(withTime3ColumnUdf, expected = true)
   }
 
   it should "test orderBy" in {
-    assertPartitionPreserving(orderByTime, false)
+    assertPartitionPreserving(orderByTime, expected = false)
   }
 
   it should "test select aggregation" in {
-    assertPartitionPreserving(selectSumV, false)
+    assertPartitionPreserving(selectSumV, expected = false)
   }
 
   it should "test groupBy aggregation" in {
-    assertPartitionPreserving(groupByTimeSumV, false)
+    assertPartitionPreserving(groupByTimeSumV, expected = false)
   }
 
   it should "test repartition" in {
-    assertPartitionPreserving(repartition, false)
+    assertPartitionPreserving(repartition, expected = false)
   }
 
   it should "test coalesce" in {
-    assertPartitionPreserving(coalesce, false)
+    assertPartitionPreserving(coalesce, expected = false)
   }
 
   it should "test cache" in {
@@ -96,16 +103,18 @@ class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
 
   it should "get executedPlan of cached DataFrame" in {
     val data = DFConverter.newDataFrame(testData)
-    assert(executedPlan(data).isInstanceOf[RDDScanExec])
+    assert(leafExecutedPlan(data).isInstanceOf[ExternalRDDScanExec[_]])
     data.cache()
     data.count()
     assert(executedPlan(data).isInstanceOf[InMemoryTableScanExec])
+    assert(leafExecutedPlan(data).isInstanceOf[InMemoryTableScanExec])
     data.unpersist()
 
     val orderedData = data.orderBy("time")
     orderedData.cache()
     orderedData.count()
     assert(executedPlan(orderedData).isInstanceOf[InMemoryTableScanExec])
+    assert(leafExecutedPlan(orderedData).isInstanceOf[InMemoryTableScanExec])
     orderedData.unpersist()
   }
 
@@ -118,7 +127,10 @@ class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
 
   it should "throw exception when not derived" in {
     intercept[IllegalArgumentException] {
-      isPartitionPreserving(testData.select("time", "v"), testData2.select("time", "v"))
+      isPartitionPreserving(
+        testData.select("time", "v"),
+        testData2.select("time", "v")
+      )
     }
   }
 }
