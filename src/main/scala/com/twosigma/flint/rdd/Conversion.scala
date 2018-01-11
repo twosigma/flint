@@ -142,7 +142,7 @@ object Conversion {
           case (idx2, _) => partitionToFirstKey.get(idx2)
         }
         RangeSplit(OrderedRDDPartition(idx).asInstanceOf[Partition], CloseOpen(begin, end))
-    }.toArray
+    }.toArray.sortBy(_.partition.index)
 
     val indexToParentPartition = indexMapping.map {
       case (idx, (parentIdx, _)) => (idx, rdd.partitions(parentIdx))
