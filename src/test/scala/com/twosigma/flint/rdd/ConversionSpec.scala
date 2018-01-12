@@ -70,6 +70,7 @@ class ConversionSpec extends FlatSpec with SharedSparkContext with Timeouts {
     assert(sortedRDDWithEmptyPartitions.getNumPartitions == 10)
 
     val orderedRdd = Conversion.fromNormalizedSortedRDD(sortedRDDWithEmptyPartitions)
+    assert(orderedRdd.collect.length == sortedData.length)
     assert(orderedRdd.getNumPartitions == 8)
   }
 

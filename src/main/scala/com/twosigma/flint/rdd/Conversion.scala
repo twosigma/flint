@@ -20,6 +20,7 @@ import com.twosigma.flint.hadoop._
 import org.apache.spark.rdd.RDD
 import org.apache.spark._
 
+import scala.collection.SortedMap
 import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
 
@@ -134,7 +135,7 @@ object Conversion {
         Iterator(if (iter.nonEmpty) Map(index -> iter.next._1) else Map[Int, K]())
     }.reduce(_ ++ _)
 
-    val indexMapping = partitionToFirstKey.toSeq.sortBy(_._1).zipWithIndex.map(_.swap).toMap
+    val indexMapping = SortedMap[Int, (Int, K)]() ++ partitionToFirstKey.toSeq.sortBy(_._1).zipWithIndex.map(_.swap)
 
     val rangeSplits = indexMapping.map {
       case (idx, (parentIdx, begin)) =>
