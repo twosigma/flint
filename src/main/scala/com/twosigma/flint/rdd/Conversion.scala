@@ -109,7 +109,7 @@ object Conversion {
         )
         val iter = PeekableIterator(
           OrderedIterator(
-            PartitionsIterator(rdd, thisDep.parents, context)
+            PartitionsIterator(rdd, thisDep.parents, context, preservesPartitionsOrdering = true)
           ).filterByRange(thisDep.range)
         )
         new InterruptibleIterator[(K, V)](context, iter)

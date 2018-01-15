@@ -17,8 +17,9 @@
 package com.twosigma.flint.rdd
 
 import org.scalatest.FlatSpec
+import org.scalatest.prop.TableDrivenPropertyChecks
 
-class RangeDependencySpec extends FlatSpec {
+class RangeDependencySpec extends FlatSpec with TableDrivenPropertyChecks {
   // partition 0: [1, 1, 2, ..., 4]
   // partition 1: [4, ..., 4]
   // partition 2: [4, 4, 5, ..., 7]
@@ -140,5 +141,66 @@ class RangeDependencySpec extends FlatSpec {
     assert(RangeDependency(1, CloseOpen(5, Some(8)), List(Split(2), Split(3))) == dep(1))
     assert(RangeDependency(2, CloseOpen(8, Some(14)), List(Split(3), Split(4))) == dep(2))
     assert(RangeDependency(3, CloseOpen(14, None), List(Split(4))) == dep(3))
+  }
+
+  private def makeHeader(
+   firstKey: Int,
+   secondKey: Option[Int],
+   partitionNumber: Int = 0):
+    OrderedPartitionHeader[Int, OrderedRDDPartition] =
+    OrderedPartitionHeader(OrderedRDDPartition(partitionNumber), firstKey, secondKey)
+
+  import OrderedPartitionHeaderUtils.HeaderOrdering
+  import org.scalatest.Matchers.{an, thrownBy}
+
+  "HeaderOrdering" should "throw error if first keys are both equal, and second keys are both Some" in {
+    val a = makeHeader(1, Some(2))
+    val b = makeHeader(1, Some(2))
+    an[Exception] shouldBe thrownBy {
+      a.compare(b)
+    }
+  }
+
+  val secondKeyExamples = Table(
+    ("left", "right"),
+    (Some(1), Some(2)),
+    (Some(2), Some(1)),
+    (None, Some(1)),
+    (Some(1), None),
+    (None, None))
+
+
+  forAll(secondKeyExamples) { (leftSecondKey, rightSecondKey) => {
+        it should s"say a < b if a.firstKey < b.firstKey with second keys ($leftSecondKey, $rightSecondKey)" in {
+        val left = makeHeader(1, leftSecondKey)
+        val right = makeHeader(2, rightSecondKey)
+        assert(left.compare(right) < 0)
+      }
+    }
+  }
+
+  forAll(secondKeyExamples) { (leftSecondKey, rightSecondKey) => {
+      it should s"say a > b if a.firstKey > b.firstKey with second keys ($leftSecondKey, $rightSecondKey)" in {
+        import OrderedPartitionHeaderUtils.HeaderOrdering
+        val left = makeHeader(2, leftSecondKey)
+        val right = makeHeader(1, rightSecondKey)
+        assert(left.compare(right) > 0)
+      }
+    }
+  }
+
+  it should "say the header with Some second key is larger if first keys are equal" in {
+    val smaller = makeHeader(1, None)
+    val larger = makeHeader(1, Some(2))
+
+    assert(smaller.compare(larger) < 0)
+    assert(larger.compare(smaller) > 0)
+  }
+
+  it should "say headers are ordered by partition number if first keys are equal and second keys are both None" in {
+    val a = makeHeader(1, None, 1)
+    val b = makeHeader(1, None, 2)
+    assert(a.compare(b) < 0)
+    assert(b.compare(a) > 0)
   }
 }
