@@ -34,6 +34,7 @@ from . import utils
 
 
 __all__ = [
+    'SummarizerFactory',
     'correlation',
     'count',
     'covariance',
