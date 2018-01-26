@@ -19,6 +19,7 @@ package com.twosigma.flint.timeseries.summarize.summarizer.subtractable
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
 import com.twosigma.flint.timeseries.{ Summarizers, TimeSeriesRDD, Windows }
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
 class WeightedMeanTestSummarizerSpec extends SummarizerSuite {
@@ -75,6 +76,31 @@ class WeightedMeanTestSummarizerSpec extends SummarizerSuite {
       joinedRdd.summarize(Summarizers.weightedMeanTest("price", "forecast")),
       insertNullRows(joinedRdd, "price", "forecast").summarize(Summarizers.weightedMeanTest("price", "forecast"))
     )
+  }
+
+  it should "handle zero weight" in {
+    init
+
+    val weightedRdd1 = priceTSRdd.addColumns("weight" -> DoubleType -> { _: Row => 0.0 })
+    val result1 = weightedRdd1.summarize(Summarizers.weightedMeanTest("price", "weight")).collect()(0)
+    assert(result1.getAs[Double]("price_weight_weightedMean").isNaN)
+    assert(result1.getAs[Double]("price_weight_weightedStandardDeviation").isNaN)
+    assert(result1.getAs[Double]("price_weight_weightedTStat").isNaN)
+    assert(result1.getAs[Long]("price_weight_observationCount") == 0)
+
+    val weightedRdd2 = priceTSRdd.addColumns("weight" -> DoubleType -> { row: Row =>
+      if (row.getAs[Long]("time") == 1200 && row.getAs[Int]("id") == 3) {
+        1.0
+      } else if (row.getAs[Long]("time") == 1250 && row.getAs[Int]("id") == 7) {
+        -1.0
+      } else {
+        0.0
+      }
+    })
+
+    val result2 = weightedRdd2.summarize(Summarizers.weightedMeanTest("price", "weight")).collect()(0)
+    assert(result2.getAs[Double]("price_weight_weightedMean") === -0.75)
+    assert(result2.getAs[Long]("price_weight_observationCount") == 2)
   }
 
   it should "pass summarizer property test" in {
