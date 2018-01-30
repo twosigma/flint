@@ -16,7 +16,6 @@
 
 package com.twosigma.flint.rdd
 
-import com.twosigma.flint.rdd.{ CloseOpen, Range }
 import org.apache.spark.Partition
 
 import scala.collection.Searching._

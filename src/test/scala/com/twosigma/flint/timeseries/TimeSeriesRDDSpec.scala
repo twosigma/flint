@@ -21,12 +21,9 @@ import java.util.concurrent.TimeUnit
 import com.twosigma.flint.timeseries.row.Schema
 import org.scalatest.tagobjects.Slow
 import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
-import com.twosigma.flint.timeseries
 import com.twosigma.flint.timeseries.TimeSeriesRDD.timeColumnName
-import com.twosigma.flint.timeseries.summarize.summarizer.LagSumSummarizerFactory
-import org.apache.hadoop.mapreduce.jobhistory.HistoryViewer.SummarizedJob
 import org.apache.spark.sql.functions.{ col, udf }
-import org.apache.spark.sql.{ DataFrame, Row }
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ExternalRow }
 
@@ -691,5 +688,37 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
         }
     }.collect()
     assert(badTimestamps.nonEmpty)
+  }
+
+  it should "fail to merge tables with incompatible schema" in {
+    intercept[IllegalArgumentException] {
+      TimeSeriesRDD.mergeSchema(priceSchema, clockSchema)
+    }
+    intercept[IllegalArgumentException] {
+      TimeSeriesRDD.mergeSchema(volSchema, vol4Schema)
+    }
+  }
+
+  it should "correctly handle nullable flags during merge" in {
+    val notNullable = StructType(priceSchema.map(field => StructField(field.name, field.dataType, nullable = false)))
+    val merged = TimeSeriesRDD.mergeSchema(priceSchema, notNullable)
+    assert(merged.forall(_.nullable))
+
+    val notNullableMerged = TimeSeriesRDD.mergeSchema(notNullable, notNullable)
+    assert(notNullableMerged.forall(!_.nullable))
+  }
+
+  it should "correctly handle field metadata during merge" in {
+    val metadata = new MetadataBuilder().putString("foo", "bar").build()
+    val withMeta = StructType(priceSchema.map(field => StructField(field.name, field.dataType, metadata = metadata)))
+    val merged = TimeSeriesRDD.mergeSchema(priceSchema, withMeta)
+    assert(merged.forall(!_.metadata.contains("foo")))
+  }
+
+  it should "correctly merge tables" in {
+    val renamedPriceTsrdd = priceTSRdd.renameColumns("price" -> "forecast")
+    val merged = renamedPriceTsrdd.merge(forecastTSRdd)
+    assert(merged.schema == forecastTSRdd.schema)
+    assert(merged.count() == forecastData.length + priceData.length)
   }
 }

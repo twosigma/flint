@@ -32,7 +32,7 @@ import org.apache.spark.annotation.Experimental
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{ Dependency, OneToOneDependency, SparkContext, TaskContext }
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, GenericRow, UnsafeProjection, UnsafeRow, GenericRowWithSchema => ERow }
+import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, GenericRow, GenericRowWithSchema => ERow }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
@@ -520,6 +520,20 @@ object TimeSeriesRDD {
       } else {
         input.keepColumns(neededColumns: _*)
       }
+  }
+
+  private[flint] def mergeSchema(schemaA: StructType, schemaB: StructType): StructType = {
+    require(schemaA.length == schemaB.length, "Tables should have the same number of columns.")
+    val zipped = schemaA.zip(schemaB)
+    val isCompatible = zipped.forall {
+      case (columnA, columnB) =>
+        columnA.name == columnB.name && columnA.dataType == columnB.dataType
+    }
+    require(isCompatible, s"Schema $schemaA isn't compatible with $schemaB. Can't merge the tables.")
+    val newFields = zipped.map {
+      case (fieldA, fieldB) => StructField(fieldA.name, fieldA.dataType, fieldA.nullable | fieldB.nullable)
+    }
+    StructType(newFields)
   }
 }
 
@@ -1438,12 +1452,9 @@ class TimeSeriesRDDImpl private[timeseries] (
   ): TimeSeriesRDD = summarizeWindows(window, Summarizers.rows(s"window_${window.name}"), key)
 
   def merge(other: TimeSeriesRDD): TimeSeriesRDD = {
-    require(
-      schema == other.schema,
-      s"Cannot merge this TimeSeriesRDD of schema $schema with other TimeSeriesRDD with schema ${other.schema} "
-    )
+    val newSchema = TimeSeriesRDD.mergeSchema(schema, other.schema)
     val otherOrderedRdd = other.orderedRdd
-    TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.merge(otherOrderedRdd), schema)
+    TimeSeriesRDD.fromInternalOrderedRDD(orderedRdd.merge(otherOrderedRdd), newSchema)
   }
 
   def leftJoin(
