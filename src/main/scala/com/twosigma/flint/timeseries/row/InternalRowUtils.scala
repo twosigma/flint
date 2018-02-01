@@ -17,7 +17,7 @@
 package com.twosigma.flint.timeseries.row
 
 import org.apache.arrow.memory.BufferAllocator
-import org.apache.arrow.vector.file.ArrowFileReader
+import org.apache.arrow.vector.ipc.ArrowFileReader
 import org.apache.arrow.vector.util.ByteArrayReadableSeekableByteChannel
 import org.apache.spark.sql.CatalystTypeConvertersWrapper
 import org.apache.spark.sql.catalyst.InternalRow
@@ -306,8 +306,6 @@ private[timeseries] object InternalRowUtils {
       root.getFieldVectors.asScala
     }.toArray
 
-    val arrowAccessors = arrowVectors.map(_.getAccessor)
-
     // i is row index, j is column index
     var i = 0
     while (i < baseRows.numElements) {
@@ -321,7 +319,7 @@ private[timeseries] object InternalRowUtils {
       }
 
       while (j < totalColumns) {
-        data(j) = arrowAccessors(j - numBaseRowColumns).getObject(i)
+        data(j) = arrowVectors(j - numBaseRowColumns).getObject(i)
         j += 1
       }
 

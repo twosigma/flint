@@ -23,8 +23,7 @@ import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.SummarizerSuite
 import com.twosigma.flint.timeseries.ArrowTestUtils
 import org.apache.arrow.memory.RootAllocator
-import org.apache.arrow.vector.file.ArrowFileReader
-import org.apache.arrow.vector.file.json.JsonFileReader
+import org.apache.arrow.vector.ipc.{ ArrowFileReader, JsonFileReader }
 import org.apache.arrow.vector.util.{ ByteArrayReadableSeekableByteChannel, Validator }
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.{ FlintTestData, Row }

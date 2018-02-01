@@ -23,8 +23,8 @@ import java.util
 import com.twosigma.flint.arrow.{ ArrowUtils, ArrowWriter }
 import com.twosigma.flint.rdd.function.window.summarizer.WindowBatchSummarizer
 import org.apache.arrow.memory.{ BufferAllocator, RootAllocator }
-import org.apache.arrow.vector.file.ArrowFileWriter
-import org.apache.arrow.vector.{ NullableIntVector, VectorSchemaRoot }
+import org.apache.arrow.vector.{ IntVector, VectorSchemaRoot }
+import org.apache.arrow.vector.ipc.ArrowFileWriter
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, UnsafeProjection }
 import org.apache.spark.sql.catalyst.util.GenericArrayData
@@ -276,24 +276,24 @@ private[flint] case class ArrowWindowBatchSummarizer(
 
     val root = VectorSchemaRoot.create(arrowSchema, allocator)
     val vectors = root.getFieldVectors
-    val beginIndexVector = vectors.get(0).asInstanceOf[NullableIntVector]
-    val endIndexVector = vectors.get(1).asInstanceOf[NullableIntVector]
+    val beginIndexVector = vectors.get(0).asInstanceOf[IntVector]
+    val endIndexVector = vectors.get(1).asInstanceOf[IntVector]
     beginIndexVector.allocateNew()
     endIndexVector.allocateNew()
 
     var j = 0
     while (j < beginIndices.size()) {
-      beginIndexVector.getMutator.setSafe(j, beginIndices.get(j))
+      beginIndexVector.setSafe(j, beginIndices.get(j))
       j += 1
     }
-    beginIndexVector.getMutator.setValueCount(rowCount)
+    beginIndexVector.setValueCount(rowCount)
 
     j = 0
     while (j < endIndices.size()) {
-      endIndexVector.getMutator.setSafe(j, endIndices.get(j))
+      endIndexVector.setSafe(j, endIndices.get(j))
       j += 1
     }
-    endIndexVector.getMutator.setValueCount(rowCount)
+    endIndexVector.setValueCount(rowCount)
 
     root.setRowCount(rowCount)
 

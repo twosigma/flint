@@ -21,15 +21,14 @@ import java.nio.channels.Channels
 
 import org.apache.arrow.memory.BufferAllocator
 import org.apache.arrow.vector._
-import org.apache.arrow.vector.file._
-import org.apache.arrow.vector.schema.ArrowRecordBatch
 import org.apache.arrow.vector.util.ByteArrayReadableSeekableByteChannel
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow
 import org.apache.spark.sql.types._
-
 import com.twosigma.flint.util.Utils
+import org.apache.arrow.vector.ipc.{ ArrowFileReader, ArrowFileWriter }
+import org.apache.arrow.vector.ipc.message.ArrowRecordBatch
 
 trait ClosableIterator[T] extends Iterator[T] with AutoCloseable
 
@@ -74,6 +73,7 @@ class ArrowPayload(payload: Array[Byte]) extends Serializable {
    * Convert the ArrowPayload to an ArrowRecordBatch.
    */
   def loadBatch(allocator: BufferAllocator): ArrowRecordBatch = {
+
     ArrowConverters.byteArrayToBatch(payload, allocator)
   }
 

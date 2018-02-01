@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.arrow.ArrowUtils
 import org.apache.arrow.memory.RootAllocator
-import org.apache.arrow.vector.file.ArrowFileReader
+import org.apache.arrow.vector.ipc.ArrowFileReader
 import org.apache.arrow.vector.util.ByteArrayReadableSeekableByteChannel
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
@@ -41,7 +41,7 @@ object ArrowTestUtils {
 
     val values = (0 until rowCount).map { i =>
       (0 until columnCount).map{ j =>
-        vectors(j).getAccessor.getObject(i)
+        vectors(j).getObject(i)
       }
     }
 

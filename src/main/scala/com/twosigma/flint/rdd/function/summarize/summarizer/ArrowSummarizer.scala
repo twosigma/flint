@@ -23,9 +23,7 @@ import java.util
 import com.twosigma.flint.arrow.{ ArrowFieldWriter, ArrowPayload, ArrowUtils, ArrowWriter }
 import org.apache.arrow.memory.{ BufferAllocator, RootAllocator }
 import org.apache.arrow.vector.VectorSchemaRoot
-import org.apache.arrow.vector.file.ArrowFileWriter
-import org.apache.arrow.vector.schema.ArrowRecordBatch
-import org.apache.arrow.vector.stream.MessageSerializer
+import org.apache.arrow.vector.ipc.ArrowFileWriter
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.util.GenericArrayData

@@ -87,7 +87,7 @@ lazy val versions = new {
   val scalatest = "2.2.4"
   val scalacheck = "1.12.6"
   val grizzled_slf4j = "1.3.0"
-  val arrow = "0.6.0"
+  val arrow = "0.8.0"
   val jackson_module = "2.7.2"
 }
 
@@ -108,7 +108,8 @@ lazy val dependencySettings = libraryDependencies ++= Seq(
   lazyDependencies.sparkSQL,
   "org.scalatest" %% "scalatest" % versions.scalatest % "test",
   "org.scalacheck" %% "scalacheck" % versions.scalacheck % "test",
-  "org.apache.arrow" % "arrow-vector" % versions.arrow,
+  // Arrow 0.8 comes with netty 4.1.17, which doesn't work with Spark 2.2
+  "org.apache.arrow" % "arrow-vector" % versions.arrow excludeAll(ExclusionRule(organization = "io.netty")),
   // These jackson modules are not directly used by Flint. We need to put it
   // there because Spark 2.0.2 uses Jackson 2.6 and Arrow uses Jackson
   // 2.7. We should be able to remove these once we moved to newer Spark

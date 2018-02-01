@@ -19,7 +19,6 @@ package com.twosigma.flint.timeseries
 import com.twosigma.flint.timeseries.PartitionStrategy.{ FillWithEmptyPartition, MultiTimestampNormalized, OnePartition, Origin }
 import com.twosigma.flint.timeseries.row.Schema
 import org.apache.arrow.memory.RootAllocator
-import org.apache.arrow.vector.file.ArrowFileReader
 import org.apache.arrow.vector.util.ByteArrayReadableSeekableByteChannel
 import org.apache.spark.sql.{ Row, SparkSession }
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema

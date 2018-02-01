@@ -22,8 +22,8 @@ import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.arrow.ArrowUtils
 import org.apache.arrow.memory.RootAllocator
-import org.apache.arrow.vector.file.ArrowFileWriter
-import org.apache.arrow.vector.{ NullableBigIntVector, NullableFloat8Vector, VectorSchemaRoot }
+import org.apache.arrow.vector.ipc.ArrowFileWriter
+import org.apache.arrow.vector.{ BigIntVector, Float8Vector, VectorSchemaRoot }
 import org.apache.spark.sql.functions.{ array, col, lit, struct }
 import org.apache.spark.sql.types._
 
@@ -41,13 +41,13 @@ class ConcatArrowAndExplodeSpec extends TimeSeriesSuite {
 
     val schema1 = StructType(Seq(StructField("v1", DoubleType)))
     val root1 = VectorSchemaRoot.create(ArrowUtils.toArrowSchema(schema1), allocator)
-    val vector1 = root1.getVector("v1").asInstanceOf[NullableFloat8Vector]
+    val vector1 = root1.getVector("v1").asInstanceOf[Float8Vector]
     vector1.allocateNew()
 
     for (i <- 0 until batchSize) {
-      vector1.getMutator.set(i, i + 10.0)
+      vector1.set(i, i + 10.0)
     }
-    vector1.getMutator.setValueCount(batchSize)
+    vector1.setValueCount(batchSize)
     val out1 = new ByteArrayOutputStream()
     val arrowWriter1 = new ArrowFileWriter(root1, null, Channels.newChannel(out1))
     arrowWriter1.writeBatch()
@@ -58,20 +58,20 @@ class ConcatArrowAndExplodeSpec extends TimeSeriesSuite {
 
     val schema2 = StructType(Seq(StructField("v2", DoubleType), StructField("v3", LongType)))
     val root2 = VectorSchemaRoot.create(ArrowUtils.toArrowSchema(schema2), allocator)
-    val vector2 = root2.getVector("v2").asInstanceOf[NullableFloat8Vector]
-    val vector3 = root2.getVector("v3").asInstanceOf[NullableBigIntVector]
+    val vector2 = root2.getVector("v2").asInstanceOf[Float8Vector]
+    val vector3 = root2.getVector("v3").asInstanceOf[BigIntVector]
     vector2.allocateNew()
     vector3.allocateNew()
 
     for (i <- 0 until batchSize) {
-      vector2.getMutator.set(i, i + 20.0)
+      vector2.set(i, i + 20.0)
     }
-    vector2.getMutator.setValueCount(batchSize)
+    vector2.setValueCount(batchSize)
 
     for (i <- 0 until batchSize) {
-      vector3.getMutator.set(i, i + 30L)
+      vector3.set(i, i + 30L)
     }
-    vector3.getMutator.setValueCount(batchSize)
+    vector3.setValueCount(batchSize)
     val out2 = new ByteArrayOutputStream()
     val arrowWriter2 = new ArrowFileWriter(root2, null, Channels.newChannel(out2))
     arrowWriter2.writeBatch()
