@@ -17,8 +17,9 @@ Reading Data with FlintContext
 :class:`ts.flint.TimeSeriesDataFrame`, which provides additional
 time-series aware functionality.
 
-    >>> prices = flintContext.read.parquet(..., begin, end)
-
+    >>> prices = (flintContext.read
+    ...           .range(begin, end)
+    ...           .uri(uri))
 
 Manipulating and Analyzing Data
 -------------------------------
@@ -32,7 +33,6 @@ new features like temporal joins.
 EMAs.
 
     >>> events.leftJoin(returns, tolerance='5d', key='id')
-
 
 Contents:
 

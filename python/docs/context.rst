@@ -18,7 +18,10 @@ existing :class:`pandas.DataFrame` or :class:`pyspark.sql.DataFrame` to a
 advantage of its time-aware functionality:
 
     >>> df1 = flintContext.read.pandas(pd.read_csv(path))
-    >>> df2 = flintContext.read.dataframe(sqlContext.read.parquet(hdfs_path))
+    >>> df2 = (flintContext.read
+    ...        .option('isSorted', False)
+    ...        .dataframe(sqlContext.read.parquet(hdfs_path)))
+
 
 
 Writing temporary data to HDFS
@@ -33,19 +36,18 @@ of some preprocessing.
     >>> df.write.parquet(filename)
 
 The `Apache Parquet`_ format is a good fit for most tabular data sets
-we work with in Flint.
+that we work with in Flint.
 
 .. _`Apache Parquet`: https://parquet.apache.org/
 
-To read a Parquet file back into Flint, use the normal
-:meth:`sqlContext.read.parquet <pyspark.sql.DataFrameReader.parquet>`
-function to read it in as a :class:`pyspark.sql.DataFrame`, then use
-:meth:`flintContext.read.dataframe
-<ts.flint.TSDataFrameReader.dataframe>` to convert it to a
-:class:`ts.flint.TimeSeriesDataFrame`.  If you know you originally
-wrote a :class:`ts.flint.TimeSeriesDataFrame`, then it will have been
-written in time order, and you can pass ``is_sorted=True`` to avoid
-doing an unnecessary sort operation:
+To read a sequence of Parquet files, use the :meth:`flintContext.read.parquet
+<ts.flint.readwriter.TSDataFrameReader.parquet>` method.  This method assumes
+the Parquet data is sorted by time. You can pass the 
+``.option('isSorted', False)`` option to the reader if the underlying data is
+not sorted on time:
 
-    >>> vanilla_df = sqlContext.read.parquet(filename)
-    >>> ts_df = flintContext.read.dataframe(vanilla_df, is_sorted=True)
+    >>> ts_df1 = flintContext.read.parquet(hdfs_path)  # assumes sorted by time
+    >>> ts_df2 = (flintContext.read
+    ...           .option('isSorted', False)
+    ...           .parquet(hdfs_path))  # this will sort by time before load
+
