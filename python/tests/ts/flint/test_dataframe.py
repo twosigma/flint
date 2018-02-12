@@ -46,12 +46,6 @@ original_environ = dict(os.environ)
 original_sys_path = list(sys.path)
 
 
-@pytest.yield_fixture(scope='module', autouse=True)
-def cleanup():
-    yield
-    reset_env()
-
-
 def reset_env():
     cleaned_env = dict(original_environ)
     # pytest sets some env vars it expects to still be there, but if we delete
@@ -139,10 +133,7 @@ def sc(launcher, pyspark):
     with test_support.suppress_instrumentation:
         with launcher.create_spark_context() as sc:
             yield sc
-    from pyspark import SparkContext
-    SparkContext._gateway.shutdown()
-    SparkContext._gateway = None
-    reset_env()
+        reset_env()
 
 
 @pytest.fixture(scope='module')
