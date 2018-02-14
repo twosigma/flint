@@ -246,6 +246,14 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
     @staticmethod
     def _from_pandas(df, schema, sql_ctx, *, time_column, is_sorted, unit):
+        # Spark 2.2.1+ infers Pandas datetime column as Timestamp type
+        # See: https://issues.apache.org/jira/browse/SPARK-22417
+        # This converts a datetime column to a long type in Pandas
+        # before creating a Spark DataFrame. This retains support for
+        # converting from Pandas with a datetime time column to a Flint
+        # DataFrame and back.
+        if df[time_column].dtype == np.dtype('datetime64[ns]'):
+            df[time_column] = df[time_column].astype('long')
         df = sql_ctx.createDataFrame(df, schema)
         return TimeSeriesDataFrame(df,
                                    sql_ctx,

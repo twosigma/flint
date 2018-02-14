@@ -2023,6 +2023,7 @@ def test_eval_groovy_failure(flintContext):
 def test_read_dataframe_begin_end(sqlContext, flintContext, tests_utils):
     # Data goes from time 1000 to 1250
     pdf = make_pdf(vol_data, ['time', 'id', 'volume'])
+    pdf['time'] = pdf.time.astype('long')
     df = sqlContext.createDataFrame(pdf)
     begin_nanos, end_nanos = 1100, 1200
 
