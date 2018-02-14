@@ -70,8 +70,8 @@ def to_nanos(when):
     return calendar.timegm(t) * 1000 * 1000 * 1000
 
 def get_codebase_params():
-    default_codebase = '/opt/ts/services/spark-2.0-ts.ts_spark_2_0/'
-    default_spark_version = '2.0.2-66-geec4183'
+    default_codebase = '/opt/ts/services/spark-2.2-ts.ts_spark_2_2/'
+    default_spark_version = 'spark-2.2.0-44-g70d4c85da9'
 
     codebase_env = 'FLINT_TEST_CODEBASE'
     flintjar_env = 'FLINT_TEST_JAR'
