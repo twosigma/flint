@@ -70,7 +70,7 @@ You can also run ts-flint from within a jupyter notebook.  First, create a virtu
 
 To run tests against a deployment:
 
-    FLINT_TEST_CODEBASE=/opt/ts/services/spark-2.0-ts-qa.ts_spark_2_0 py.test
+    FLINT_TEST_CODEBASE=/opt/ts/services/spark-2.2-ts-qa.ts_spark_2_2 py.test
 
 To run tests against a specific Flint assembly jar (of version e.g. `0.4.0`):
 
