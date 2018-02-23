@@ -120,6 +120,46 @@ class TestDataframe(BASE):
             "with key 7"
         )
 
+    def test_addColumnsForCycleTimeNotFirst(self):
+        import pyspark.sql.types as pyspark_types
+        price = self.flintContext.read.pandas(test_utils.make_pdf([
+            [7, 1000, 0.5],
+            [3, 1000, 1.0],
+            [3, 1050, 1.5],
+            [7, 1050, 2.0],
+            [3, 1100, 2.5],
+            [7, 1100, 3.0],
+            [3, 1150, 3.5],
+            [7, 1150, 4.0],
+            [3, 1200, 4.5],
+            [7, 1200, 5.0],
+            [3, 1250, 5.5],
+            [7, 1250, 6.0],
+        ], ["id", "time", "price"]))
+        expected_pdf = test_utils.make_pdf([
+            [1000, 7, 0.5, 1.0],
+            [1000, 3, 1.0, 2.0],
+            [1050, 3, 1.5, 3.0],
+            [1050, 7, 2.0, 4.0],
+            [1100, 3, 2.5, 5.0],
+            [1100, 7, 3.0, 6.0],
+            [1150, 3, 3.5, 7.0],
+            [1150, 7, 4.0, 8.0],
+            [1200, 3, 4.5, 9.0],
+            [1200, 7, 5.0, 10.0],
+            [1250, 3, 5.5, 11.0],
+            [1250, 7, 6.0, 12.0],
+        ], ["time", "id", "price", "adjustedPrice"])
+
+        def fn_1(rows):
+            size = len(rows)
+            return {row: row.price*size for row in rows}
+
+        new_pdf = price.addColumnsForCycle(
+            {"adjustedPrice": (pyspark_types.DoubleType(), fn_1)}
+        ).toPandas()
+        test_utils.assert_same(new_pdf, expected_pdf)
+
     def test_merge(self):
         price = self.price()
         price1 = price.filter(price.time > 1100)
@@ -130,6 +170,79 @@ class TestDataframe(BASE):
     def test_leftJoin(self):
         price = self.price()
         vol = self.vol()
+        expected_pdf = test_utils.make_pdf([
+            (1000, 7, 0.5, 100,),
+            (1000, 3, 1.0, 200,),
+            (1050, 3, 1.5, 300,),
+            (1050, 7, 2.0, 400,),
+            (1100, 3, 2.5, 500,),
+            (1100, 7, 3.0, 600,),
+            (1150, 3, 3.5, 700,),
+            (1150, 7, 4.0, 800,),
+            (1200, 3, 4.5, 900,),
+            (1200, 7, 5.0, 1000,),
+            (1250, 3, 5.5, 1100,),
+            (1250, 7, 6.0, 1200,)
+        ], ["time", "id", "price", "volume"])
+
+        new_pdf = price.leftJoin(vol, key=["id"]).toPandas()
+        test_utils.assert_same(new_pdf, expected_pdf)
+        test_utils.assert_same(
+            new_pdf, price.leftJoin(vol, key="id").toPandas()
+        )
+
+        expected_pdf = test_utils.make_pdf([
+            (1000, 7, 0.5, 100),
+            (1000, 3, 1.0, 200),
+            (1050, 3, 1.5, None),
+            (1050, 7, 2.0, None),
+            (1100, 3, 2.5, 500),
+            (1100, 7, 3.0, 600),
+            (1150, 3, 3.5, 700),
+            (1150, 7, 4.0, 800),
+            (1200, 3, 4.5, 900),
+            (1200, 7, 5.0, 1000),
+            (1250, 3, 5.5, 1100),
+            (1250, 7, 6.0, 1200),
+        ], ["time", "id", "price", "volume"])
+
+        new_pdf = price.leftJoin(
+            vol.filter(vol.time != 1050), key="id"
+        ).toPandas()
+        test_utils.assert_same(new_pdf, expected_pdf)
+
+    def test_leftJoinTimeNotFirst(self):
+        # Note that in price we have time as the second column
+        price = self.flintContext.read.pandas(test_utils.make_pdf([
+            [7, 1000, 0.5],
+            [3, 1000, 1.0],
+            [3, 1050, 1.5],
+            [7, 1050, 2.0],
+            [3, 1100, 2.5],
+            [7, 1100, 3.0],
+            [3, 1150, 3.5],
+            [7, 1150, 4.0],
+            [3, 1200, 4.5],
+            [7, 1200, 5.0],
+            [3, 1250, 5.5],
+            [7, 1250, 6.0],
+        ], ["id", "time", "price"]))
+        # Time is also the second column of vol
+        vol = self.flintContext.read.pandas(test_utils.make_pdf([
+            [7, 1000, 100],
+            [3, 1000, 200],
+            [3, 1050, 300],
+            [7, 1050, 400],
+            [3, 1100, 500],
+            [7, 1100, 600],
+            [3, 1150, 700],
+            [7, 1150, 800],
+            [3, 1200, 900],
+            [7, 1200, 1000],
+            [3, 1250, 1100],
+            [7, 1250, 1200],
+        ], ["id", "time", "volume"]))
+        # We expect to get the result with time as the first column
         expected_pdf = test_utils.make_pdf([
             (1000, 7, 0.5, 100,),
             (1000, 3, 1.0, 200,),
