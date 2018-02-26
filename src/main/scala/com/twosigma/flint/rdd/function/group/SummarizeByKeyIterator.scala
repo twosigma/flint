@@ -19,6 +19,7 @@ package com.twosigma.flint.rdd.function.group
 import java.util
 
 import com.twosigma.flint.rdd.function.summarize.summarizer.Summarizer
+import com.twosigma.flint.rdd.function.window.SummarizeWindows
 import org.apache.spark.TaskContext
 
 import scala.reflect.ClassTag
@@ -70,7 +71,7 @@ private[rdd] class SummarizeByKeyIterator[K, V, SK, U, V2](
     do {
       val v = bufferedIter.next._2
       val sk = skFn(v)
-      val intermediate = intermediates.getOrDefault(sk, summarizer.zero())
+      val intermediate = SummarizeWindows.lazyGetOrDefault(intermediates, sk, summarizer.zero())
       intermediates.put(sk, summarizer.add(intermediate, v))
     } while (bufferedIter.hasNext && ord.equiv(bufferedIter.head._1, currentKey))
   }
