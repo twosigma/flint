@@ -443,13 +443,16 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
     assert(resultWindows.deep == expectedWindows.deep)
   }
 
-  it should "`keepRows` correctly" in {
+  it should "`keepRows and filter` correctly" in {
     val expectedData = volData.filter { case (t: Long, r: Row) => r.getAs[Long]("volume") > 900 }
     val result = volTSRdd.keepRows { row: Row => row.getAs[Long]("volume") > 900 }
+    val filterResult = volTSRdd.filter(volTSRdd("volume") > 900)
     assert(result.collect().deep == expectedData.map(_._2).deep)
+    assert(filterResult.collect().deep == expectedData.map(_._2).deep)
 
-    val result2 = volTSRdd.addColumns("volume2" -> LongType -> { _ => null }).keepRows(_.getAs[Any]("volume2") != null)
-    assert(result2.count() == 0)
+    val withNulls = volTSRdd.addColumns("volume2" -> LongType -> { _ => null })
+    assert(withNulls.keepRows(_.getAs[Any]("volume2") != null).count == 0)
+    assert(withNulls.filter(withNulls("volume2").isNotNull).count == 0)
   }
 
   it should "`deleteRows` correctly" in {

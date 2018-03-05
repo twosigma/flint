@@ -620,6 +620,14 @@ trait TimeSeriesRDD extends Serializable {
   def unpersist(blocking: Boolean = true): TimeSeriesRDD
 
   /**
+   * Select a column by column name, and return it as a [[Column]]
+   *
+   * @param colName Column name
+   * @return [[Column]] representation
+   */
+  def apply(colName: String): Column
+
+  /**
    * Return a new [[TimeSeriesRDD]] that has exactly numPartitions partitions.
    *
    * Can increase or decrease the level of parallelism in this [[TimeSeriesRDD]]. Internally, this uses
@@ -650,6 +658,15 @@ trait TimeSeriesRDD extends Serializable {
    * @return a new [[TimeSeriesRDD]] containing only the rows that satisfy a predicate.
    */
   def keepRows(fn: Row => Boolean): TimeSeriesRDD
+
+  /**
+   * Filters rows using the given [[Column]] condition. The functionality is identical to [[TimeSeriesRDD.keepRows]],
+   * but this implementation is based on [[Dataset.filter]] method, and provides better performance.
+   *
+   * @param condition boolean [[Column]] expression.
+   * @return a filtered [[TimeSeriesRDD]].
+   */
+  def filter(condition: Column): TimeSeriesRDD
 
   /**
    * @param fn A predicate.
@@ -1310,6 +1327,8 @@ class TimeSeriesRDDImpl private[timeseries] (
 
   override def toDF: DataFrame = dataStore.dataFrame
 
+  def apply(colName: String): Column = dataStore.dataFrame(colName)
+
   def count(): Long = dataStore.dataFrame.count()
 
   def first(): Row = dataStore.dataFrame.first()
@@ -1342,6 +1361,10 @@ class TimeSeriesRDDImpl private[timeseries] (
     TimeSeriesRDD.fromInternalOrderedRDD(unsafeOrderedRdd.filterOrdered {
       (_: Long, r: InternalRow) => fn(toExternalRow(r))
     }, schema)
+
+  def filter(condition: Column): TimeSeriesRDD = withUnshuffledDataFrame {
+    dataStore.dataFrame.filter(condition)
+  }
 
   def deleteRows(fn: Row => Boolean): TimeSeriesRDD =
     TimeSeriesRDD.fromInternalOrderedRDD(unsafeOrderedRdd.filterOrdered {
