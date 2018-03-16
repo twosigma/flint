@@ -22,7 +22,10 @@ def uniform(sql_ctx, frequency,
             begin_date_time = "1970-01-01",
             end_date_time = "2030-01-01",
             time_zone = "UTC"):
-    """ Returns an evenly sampled clock :class:`TimeSeriesDataFrame` which has only a "time" column.
+    """Return an evenly sampled TimeSeriesDataFrame with only a time column.
+
+    This function is end-inclusive and will create a tick if the last tick
+    falls on the ``end_date_time``.
 
     :param sql_ctx: pyspark.sql.SQLContext
     :param frequency: the time interval between rows, e.g "1s", "2m", "3d" etc.
@@ -35,6 +38,7 @@ def uniform(sql_ctx, frequency,
     :returns: a new :class:`TimeSeriesDataFrame`
     """
     sc = sql_ctx._sc
-    scala_sc = utils.jvm(sc).org.apache.spark.api.java.JavaSparkContext.toSparkContext(sc._jsc)
-    tsrdd = utils.jvm(sc).com.twosigma.flint.timeseries.Clocks.uniform(scala_sc, frequency, offset, begin_date_time, end_date_time, time_zone)
+    tsrdd = utils.jvm(sc).com.twosigma.flint.timeseries.Clocks.uniform(
+        utils.jsc(sc), frequency, offset, begin_date_time,
+        end_date_time, time_zone, True)
     return TimeSeriesDataFrame._from_tsrdd(tsrdd, sql_ctx)

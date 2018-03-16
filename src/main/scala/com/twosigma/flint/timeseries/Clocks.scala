@@ -16,8 +16,8 @@
 
 package com.twosigma.flint.timeseries
 
-import org.apache.spark.SparkContext
 import com.twosigma.flint.timeseries.clock.{ RandomClock, UniformClock }
+import org.apache.spark.SparkContext
 
 object Clocks {
 
@@ -25,7 +25,8 @@ object Clocks {
   private val defaultEnd = "2030-01-01"
 
   /**
-   * Returns a evenly sampled clock as a [[TimeSeriesRDD]]. The [[TimeSeriesRDD]] has only a "time" column.
+   * Returns an evenly sampled clock as a [[TimeSeriesRDD]].
+   * The [[TimeSeriesRDD]] has only a "time" column.
    *
    * @param sc            The spark context.
    * @param frequency     The time between rows, e.g "1s", "2m", "3d" etc.
@@ -36,6 +37,8 @@ object Clocks {
    *                      last tick is at the end of this clock.
    * @param timeZone      The time zone which will be used to parse the `beginDateTime` and `endDateTime` when time
    *                      zone information is not included in the date time string. Default "UTC".
+   * @param endInclusive  If true, a clock tick will be created at the `endDateTime` if the last
+   *                      tick is at the end of this clock.
    * @return a [[TimeSeriesRDD]] with just a "time" column and rows at a specified frequency
    */
   def uniform(
@@ -44,9 +47,10 @@ object Clocks {
     offset: String = "0s",
     beginDateTime: String = defaultBegin,
     endDateTime: String = defaultEnd,
-    timeZone: String = "UTC"
+    timeZone: String = "UTC",
+    endInclusive: Boolean = true
   ): TimeSeriesRDD = {
-    val clock = new UniformClock(sc, beginDateTime, endDateTime, frequency, offset, timeZone)
+    val clock = new UniformClock(sc, beginDateTime, endDateTime, frequency, offset, timeZone, endInclusive)
     clock.asTimeSeriesRDD(sc.defaultParallelism)
   }
 
@@ -66,6 +70,8 @@ object Clocks {
    *                      zone information is not included in the date time string. Default "UTC".
    * @param seed          The random seed expected to use when randomly generating a new tick. Default current time
    *                      in MILLISECOND.
+   * @param endInclusive  If true, a clock tick will be created at the `endDateTime` if the last
+   *                      tick is at the end of this clock.
    * @return a [[TimeSeriesRDD]] with just a "time" column.
    */
   def random(
@@ -75,9 +81,10 @@ object Clocks {
     beginDateTime: String = defaultBegin,
     endDateTime: String = defaultEnd,
     timeZone: String = "UTC",
-    seed: Long = System.currentTimeMillis()
+    seed: Long = System.currentTimeMillis(),
+    endInclusive: Boolean = true
   ): TimeSeriesRDD = {
-    val clock = new RandomClock(sc, beginDateTime, endDateTime, frequency, offset, timeZone, seed)
+    val clock = new RandomClock(sc, beginDateTime, endDateTime, frequency, offset, timeZone, seed, endInclusive)
     clock.asTimeSeriesRDD(sc.defaultParallelism)
   }
 }

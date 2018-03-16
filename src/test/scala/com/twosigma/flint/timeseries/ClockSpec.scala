@@ -25,17 +25,17 @@ import scala.concurrent.duration.Duration
 class ClockSpec extends TimeSeriesSuite with TimeTypeSuite {
 
   "UniformClock" should "generate clock ticks correctly" in {
-    var clock = new UniformClock(sc, 1000L, 2000L, 300L, 0L).asStream().toArray
+    var clock = new UniformClock(sc, 1000L, 2000L, 300L, 0L, true).asStream().toArray
     var benchmark = Array(1000L, 1300L, 1600L, 1900L)
     assert(clock.deep == benchmark.deep)
 
-    clock = new UniformClock(sc, 1000L, 2000L, 300L, 500L).asStream().toArray
+    clock = new UniformClock(sc, 1000L, 2000L, 300L, 500L, true).asStream().toArray
     benchmark = Array(1200L, 1500L, 1800L)
     assert(clock.deep == benchmark.deep)
   }
 
   it should "generate clock ticks in RDD correctly" in {
-    val clock = new UniformClock(sc, 1000L, 5000L, 30L, 0L)
+    val clock = new UniformClock(sc, 1000L, 5000L, 30L, 0L, true)
     var clockRdd = clock.asOrderedRDD(10).map(_._1)
     val clockStream = clock.asStream().toArray
     assert(clockRdd.collect().deep == clockStream.deep)
@@ -52,7 +52,8 @@ class ClockSpec extends TimeSeriesSuite with TimeTypeSuite {
       TimeFormat.parseNano("20010101"),
       TimeFormat.parseNano("20010201"),
       Duration("5h").toNanos,
-      0L
+      0L,
+      true
     ).asStream()
     val rdd = clockTSRdd.rdd.map(r => r.getAs[Long](TimeSeriesRDD.timeColumnName))
     assert(rdd.collect().deep == clockStream.toArray.deep)
@@ -110,7 +111,8 @@ class ClockSpec extends TimeSeriesSuite with TimeTypeSuite {
         frequency = "1h",
         offset = "0s",
         timeZone = "UTC",
-        seed = System.currentTimeMillis()
+        seed = System.currentTimeMillis(),
+        endInclusive = true
       )
       verifyDistribution(
         clock.asTimeSeriesRDD().collect().map(_.getAs[Long]("time")),

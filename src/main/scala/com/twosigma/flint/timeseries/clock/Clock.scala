@@ -45,10 +45,15 @@ object Clock {
     begin: Long,
     end: Long,
     frequency: Long,
-    nextTick: (Long) => Long
+    nextTick: (Long) => Long,
+    endInclusive: Boolean
   ): Stream[Long] = {
     def loop(t: Long): Stream[Long] = t #:: loop(nextTick(t))
-    loop(begin).takeWhile(_ <= end)
+    if (endInclusive) {
+      loop(begin).takeWhile(_ <= end)
+    } else {
+      loop(begin).takeWhile(_ < end)
+    }
   }
 }
 
@@ -57,7 +62,8 @@ abstract class Clock(
   val begin: Long,
   val end: Long,
   val frequency: Long,
-  val offset: Long
+  val offset: Long,
+  endInclusive: Boolean
 ) extends Serializable {
 
   /**
@@ -94,7 +100,8 @@ abstract class Clock(
     begin = firstTick,
     end = end,
     frequency = frequency,
-    nextTick
+    nextTick,
+    endInclusive
   )
 
   /**
@@ -113,7 +120,7 @@ abstract class Clock(
       case (index, _) =>
         val b = begins(index)
         val e = if (index < begins.length - 1) begins(index + 1) - 1L else end
-        Clock(b, e, frequency, nextTick).toIterator
+        Clock(b, e, frequency, nextTick, endInclusive).toIterator
     }
     val splits = begins.zipWithIndex.map {
       case (b, index) => if (index < begins.length - 1) {
@@ -148,11 +155,12 @@ abstract class Clock(
  */
 class UniformClock(
   @transient override val sc: SparkContext,
-  override val begin: Long,
-  override val end: Long,
-  override val frequency: Long,
-  override val offset: Long
-) extends Clock(sc, begin, end, frequency, offset) {
+  begin: Long,
+  end: Long,
+  frequency: Long,
+  offset: Long,
+  endInclusive: Boolean
+) extends Clock(sc, begin, end, frequency, offset, endInclusive) {
   override def nextTick(t: Long): Long = t + frequency
 
   def this(
@@ -161,13 +169,15 @@ class UniformClock(
     endDateTime: String,
     frequency: String,
     offset: String,
-    timeZone: String
+    timeZone: String,
+    endInclusive: Boolean
   ) = this(
     sc,
     TimeFormat.parseNano(beginDateTime, DateTimeZone.forID(timeZone)),
     TimeFormat.parseNano(endDateTime, DateTimeZone.forID(timeZone)),
     Duration(frequency).toNanos,
-    Duration(offset).toNanos
+    Duration(offset).toNanos,
+    endInclusive
   )
 }
 
@@ -178,12 +188,13 @@ class UniformClock(
  */
 class RandomClock(
   @transient override val sc: SparkContext,
-  override val begin: Long,
-  override val end: Long,
-  override val frequency: Long,
-  override val offset: Long,
+  begin: Long,
+  end: Long,
+  frequency: Long,
+  offset: Long,
+  endInclusive: Boolean,
   val seed: Long = System.currentTimeMillis()
-) extends Clock(sc, begin, end, frequency, offset) {
+) extends Clock(sc, begin, end, frequency, offset, endInclusive) {
   private val rand = new Random(seed)
 
   override def nextTick(t: Long): Long = {
@@ -199,13 +210,15 @@ class RandomClock(
     frequency: String,
     offset: String,
     timeZone: String,
-    seed: Long
+    seed: Long,
+    endInclusive: Boolean
   ) = this(
     sc,
     TimeFormat.parseNano(beginDateTime, DateTimeZone.forID(timeZone)),
     TimeFormat.parseNano(endDateTime, DateTimeZone.forID(timeZone)),
     Duration(frequency).toNanos,
     Duration(offset).toNanos,
+    endInclusive,
     seed
   )
 }

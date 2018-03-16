@@ -196,6 +196,53 @@ class TSDataFrameReader(object):
         self._reader.expand(begin_ns, end_ns)
         return self
 
+    def clock(self,
+              name,
+              frequency,
+              offset=None,
+              end_inclusive=True):
+        """Return TimeSeriesDataFrame using the specified clock.
+
+        The returned :class:`~ts.flint.TimeSeriesDataFrame` will only
+        have a time column.
+
+        Example:
+
+            >>> (flintContext.read
+            ...  .range('20170101', '20180101')
+            ...  .clock('uniform', '30s'))
+
+        **Supported options:**
+
+        range (required)
+            Set the inclusive-begin and **inclusive-end** time (by default).
+            See documentation on the ``end_inclusive`` parameter for
+            why this source is end-inclusive.
+            Specified using :meth:`~.TSDataFrameReader.range`.
+
+        :param str name: The name of the clock.
+            Currently supported: ``uniform``.
+        :param str frequency: the time interval between rows,
+            e.g., "1s", "2m", "3d" etc.
+        :param str offset: the time to offset this clock from the begin time.
+            Default: "0s". Note that specifying an offset greater than
+            the frequency is the same as specifying (offset % frequency).
+        :param bool end_inclusive: If true, a clock tick will be created
+            at the end time if the last tick falls at the end of the
+            time range. This defaults to true because it is typically
+            used with
+            :meth:`~ts.flint.TimeSeriesDataFrame.summarizeInterval` to
+            handle values that are rounded up to the next clock tick.
+            Set this parameter to False to be end-exclusive.
+            Default: True.
+        """
+        from .dataframe import TimeSeriesDataFrame
+        frequency_ns = pd.Timedelta(frequency).value
+        offset_ns = pd.Timedelta(offset).value if offset else None
+        tsrdd = self._reader.clock(name, frequency_ns, offset_ns,
+                                   bool(end_inclusive))
+        return TimeSeriesDataFrame._from_tsrdd(tsrdd, self._sqlContext)
+
     def pandas(self, df, schema=None, *,
                is_sorted=None,
                time_column=None,

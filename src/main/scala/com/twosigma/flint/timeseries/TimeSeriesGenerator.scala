@@ -92,9 +92,10 @@ class TimeSeriesGenerator(
 
   def generate(): TimeSeriesRDD = {
     val cycles = if (uniform) {
-      new UniformClock(sc, begin = begin, end = end, frequency = frequency, offset = 0L)
+      new UniformClock(sc, begin = begin, end = end, frequency = frequency, offset = 0L, endInclusive = true)
     } else {
-      new RandomClock(sc, begin = begin, end = end, frequency = frequency, offset = 0L, seed = seed)
+      new RandomClock(sc, begin = begin, end = end, frequency = frequency, offset = 0L,
+        seed = seed, endInclusive = true)
     }
     val cycleSize = math.max(math.ceil(ids.size * ratioOfCycleSize), 1).toInt
 

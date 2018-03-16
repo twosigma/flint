@@ -2273,6 +2273,28 @@ def test_uniform_clocks(sqlContext, clocks):
     assert(df.collect()[-1]['time'] == make_timestamp(1479340800))
 
 
+def test_read_uniform_clock(flintContext):
+    expected_exclusive = pd.date_range('20171116 12:00:05am',
+                                       tz='Asia/Tokyo', periods=2880,
+                                       freq='30s')
+    actual_exclusive = (flintContext.read
+                        .range('2017-11-16', '2017-11-17 12:00:05am',
+                               'Asia/Tokyo')
+                        .clock('uniform', '30s', '5s', end_inclusive=False)
+                        .toPandas()['time'])
+
+    assert np.all(expected_exclusive == actual_exclusive)
+
+    expected_inclusive = pd.date_range('20171116', periods=2881,
+                                       freq='30s')
+    actual_inclusive = (flintContext.read
+                        .range('2017-11-16', '2017-11-17')
+                        .clock('uniform', '30s')
+                        .toPandas()['time'])
+
+    assert np.all(expected_inclusive == actual_inclusive)
+
+
 def test_from_tsrdd(sqlContext, flintContext, flint):
     df = flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
     tsrdd = df.timeSeriesRDD

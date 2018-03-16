@@ -16,12 +16,14 @@
 
 package com.twosigma.flint.timeseries.io.read
 
+import java.lang.{ Long => JLong }
 import java.util.concurrent.TimeUnit
 import javax.annotation.Nullable
 
 import org.joda.time.DateTimeZone
 import com.twosigma.flint.annotation.PythonApi
-import com.twosigma.flint.timeseries.TimeSeriesRDD
+import com.twosigma.flint.timeseries.clock.UniformClock
+import com.twosigma.flint.timeseries.{ Clocks, TimeSeriesRDD }
 import com.twosigma.flint.timeseries.time.TimeFormat
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
@@ -193,6 +195,49 @@ class ReadBuilder(
       timeColumn = parameters.timeColumn
     )
 
+  /**
+   * Returns an a [[TimeSeriesRDD]] containing time ticks from the specified clock.
+   *
+   * @param name The clock to use. Supported clocks: uniform
+   * @param frequency Frequency of the clock ticks.
+   * @param offset Offset from the begin time.
+   * @param endInclusive If true, a clock tick will be created if it falls exactly
+   *                     on the specified end time. Default: true.
+   */
+  def clock(
+    name: String,
+    frequency: String,
+    @Nullable offset: String = null,
+    endInclusive: Boolean = true
+  ): TimeSeriesRDD =
+    clock(name, Duration(frequency).toNanos,
+      Option(offset).map(v => Long.box(Duration(v).toNanos)).orNull,
+      endInclusive)
+
+  @PythonApi
+  private[read] def clock(
+    name: String,
+    frequencyNanos: Long,
+    @Nullable offsetNanos: JLong,
+    endInclusive: Boolean
+  ): TimeSeriesRDD = {
+    name match {
+      case "uniform" =>
+        val clock = new UniformClock(
+          sc,
+          parameters.range.beginNanos,
+          parameters.range.endNanos,
+          frequencyNanos,
+          Option(offsetNanos).map(_.toLong).getOrElse(0L),
+          endInclusive
+        )
+        clock.asTimeSeriesRDD(sc.defaultParallelism)
+      case unsupported =>
+        throw new IllegalArgumentException(
+          s"'$unsupported' is not a supported clock. Supported clocks are: uniform"
+        )
+    }
+  }
 }
 
 object ReadBuilder {
