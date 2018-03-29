@@ -19,12 +19,13 @@ package com.twosigma.flint.timeseries.io.read
 import java.util.concurrent.TimeUnit
 
 import org.apache.spark.sql.{ functions => F }
-
 import com.twosigma.flint.SharedSparkContext
 import com.twosigma.flint.timeseries.io.read.ReadBuilder._
 import com.twosigma.flint.timeseries.time.TimeFormat
 import com.twosigma.flint.timeseries.time.TimeFormat.parseNano
 import org.scalatest.FlatSpec
+
+import scala.concurrent.duration.Duration
 
 class ReadBuilderSpec extends FlatSpec with SharedSparkContext {
 
@@ -170,15 +171,6 @@ class ReadBuilderSpec extends FlatSpec with SharedSparkContext {
 
   behavior of "BeginEndRange"
 
-  it should "create begin and end strings compatible with TimeFormat" in {
-    val range = BeginEndRange(Some(parseNano("20170101")), Some(parseNano("20170201")))
-    val beginString = range.beginFlintString
-    val endString = range.endFlintString
-
-    assert(TimeFormat.parseDateTime(beginString).toString() === "2017-01-01T00:00:00.000Z")
-    assert(TimeFormat.parseDateTime(endString).toString() === "2017-02-01T00:00:00.000Z")
-  }
-
   it should "return null for beginNanosOrNull when beginNanosOpt is None" in {
     val range = BeginEndRange(None, Some(parseNano("20170201")))
     assert(range.beginNanosOrNull === null)
@@ -202,4 +194,100 @@ class ReadBuilderSpec extends FlatSpec with SharedSparkContext {
     assert(reader.parameters.range.endNanos === expectedEndNanos)
   }
 
+  it should "return expanded begin and end when expand is set" in {
+    val rawBeginNanos = parseNano("20170101")
+    val rawEndNanos = parseNano("20170201")
+    val expandBegin = "1day"
+    val expandEnd = "2day"
+    val expectedBeginNanos = rawBeginNanos - Duration(expandBegin).toNanos
+    val expectedEndNanos = rawEndNanos + Duration(expandEnd).toNanos
+    val reader = new ReadBuilder()
+      .range(rawBeginNanos, rawEndNanos)
+      .expand(expandBegin, expandEnd)
+
+    assert(reader.parameters.range.beginNanosOrNull === expectedBeginNanos)
+    assert(reader.parameters.range.endNanosOrNull === expectedEndNanos)
+
+    assert(reader.parameters.range.beginNanos === expectedBeginNanos)
+    assert(reader.parameters.range.endNanos === expectedEndNanos)
+  }
+
+  it should "override previous expand calls" in {
+    val rawBeginNanos = parseNano("20170101")
+    val rawEndNanos = parseNano("20170201")
+    val expandBegin = "1day"
+    val expandEnd = "2day"
+    val expectedBeginNanos = rawBeginNanos - Duration(expandBegin).toNanos
+    val expectedEndNanos = rawEndNanos + Duration(expandEnd).toNanos
+
+    val reader = new ReadBuilder()
+      .range(rawBeginNanos, rawEndNanos)
+      .expand("60days", "30days")
+      .expand("30days", "60days")
+      .expand(expandBegin, expandEnd)
+
+    assert(reader.parameters.range.beginNanosOrNull === expectedBeginNanos)
+    assert(reader.parameters.range.endNanosOrNull === expectedEndNanos)
+
+    assert(reader.parameters.range.beginNanos === expectedBeginNanos)
+    assert(reader.parameters.range.endNanos === expectedEndNanos)
+  }
+
+  it should "has no effect if range is not called" in {
+    val expandBegin = "1day"
+    val expandEnd = "2day"
+
+    val reader = new ReadBuilder()
+      .expand(expandBegin, expandEnd)
+
+    assert(reader.parameters.range.beginNanosOrNull === null)
+    assert(reader.parameters.range.endNanosOrNull === null)
+  }
+
+  it should "support calling expand before range" in {
+    val rawBeginNanos = parseNano("20170101")
+    val rawEndNanos = parseNano("20170201")
+    val expandBegin = "1day"
+    val expandEnd = "2day"
+    val expectedBeginNanos = rawBeginNanos - Duration(expandBegin).toNanos
+    val expectedEndNanos = rawEndNanos + Duration(expandEnd).toNanos
+    val reader = new ReadBuilder()
+      .expand(expandBegin, expandEnd)
+      .range(rawBeginNanos, rawEndNanos)
+
+    assert(reader.parameters.range.beginNanosOrNull === expectedBeginNanos)
+    assert(reader.parameters.range.endNanosOrNull === expectedEndNanos)
+
+    assert(reader.parameters.range.beginNanos === expectedBeginNanos)
+    assert(reader.parameters.range.endNanos === expectedEndNanos)
+  }
+
+  it should "support expanding only one side" in {
+    val rawBeginNanos = parseNano("20170101")
+    val rawEndNanos = parseNano("20170201")
+    val expandBegin = "1day"
+    val expandEnd = "2day"
+    val expectedBeginNanos = rawBeginNanos - Duration(expandBegin).toNanos
+    val expectedEndNanos = rawEndNanos + Duration(expandEnd).toNanos
+    val reader1 = new ReadBuilder()
+      .range(rawBeginNanos, rawEndNanos)
+      .expand(begin = expandBegin)
+
+    assert(reader1.parameters.range.beginNanosOrNull === expectedBeginNanos)
+    assert(reader1.parameters.range.endNanosOrNull === rawEndNanos)
+
+    assert(reader1.parameters.range.beginNanos === expectedBeginNanos)
+    assert(reader1.parameters.range.endNanos === rawEndNanos)
+
+    val reader2 = new ReadBuilder()
+      .range(rawBeginNanos, rawEndNanos)
+      .expand(end = expandEnd)
+
+    assert(reader2.parameters.range.beginNanosOrNull === rawBeginNanos)
+    assert(reader2.parameters.range.endNanosOrNull === expectedEndNanos)
+
+    assert(reader2.parameters.range.beginNanos === rawBeginNanos)
+    assert(reader2.parameters.range.endNanos === expectedEndNanos)
+
+  }
 }

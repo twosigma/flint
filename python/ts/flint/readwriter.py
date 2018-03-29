@@ -160,6 +160,31 @@ class TSDataFrameReader(object):
         self._reader.range(begin_ns, end_ns)
         return self
 
+    def expand(self, begin=None, end=None):
+        """
+        Builder method to set time distance to expand the begin and end date
+        range for the reader. This is useful to read a DataFrame that is on the
+        right side of leftJoin or futureLeftJoin:
+            >>> begin, end = ("2017-01-01", "2018-01-01")
+            >>> tolerance = "21days"
+            >>> left = flintContext.read.range(begin, end).uri(...)
+            >>> right = flintContext.read.range(begin, end).expand(begin=tolerance).uri(...)
+            >>> joined = left.leftJoin(right, tolerance=tolerance)
+
+        If called multiple times, only the last call is effective.
+
+        :param begin: The time distance to expand the begin time, e.g., "1hour", "7days"
+        :type begin: str
+        :param end: The time distance to expand the end time, e.g., "1hour", "7days"
+        :type end: str
+        :rtype: TSDataFrameReader
+        """
+        begin_ns = pd.Timedelta(begin).value if begin else None
+        end_ns = pd.Timedelta(end).value if end else None
+
+        self._reader.expand(begin_ns, end_ns)
+        return self
+
     def pandas(self, df, schema=None, *,
                is_sorted=None,
                time_column=None,

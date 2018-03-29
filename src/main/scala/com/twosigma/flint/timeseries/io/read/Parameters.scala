@@ -25,7 +25,7 @@ import com.twosigma.flint.annotation.PythonApi
 
 private[read] class Parameters private (
   val extraOptions: mutable.Map[String, String],
-  var range: BeginEndRange = BeginEndRange(None, None)
+  var range: BeginEndRange = BeginEndRange(None, None, None, None)
 ) extends Serializable {
 
   def this(defaultOptions: Map[String, String]) =
@@ -48,7 +48,12 @@ private[read] class Parameters private (
 
 }
 
-private[read] case class BeginEndRange(beginNanosOpt: Option[Long], endNanosOpt: Option[Long]) {
+private[read] case class BeginEndRange(
+  rawBeginNanosOpt: Option[Long] = None,
+  rawEndNanosOpt: Option[Long] = None,
+  expandBeginNanosOpt: Option[Long] = None,
+  expandEndNanosOpt: Option[Long] = None
+) {
 
   def beginNanos: Long = beginNanosOpt.getOrElse(
     throw new IllegalArgumentException("'begin' range must be set")
@@ -58,43 +63,17 @@ private[read] case class BeginEndRange(beginNanosOpt: Option[Long], endNanosOpt:
     throw new IllegalArgumentException("'end' range must be set")
   )
 
+  def beginNanosOpt: Option[Long] = {
+    rawBeginNanosOpt.map(_ - expandBeginNanosOpt.getOrElse(0L))
+  }
+
+  def endNanosOpt: Option[Long] = {
+    rawEndNanosOpt.map(_ + expandEndNanosOpt.getOrElse(0L))
+  }
+
   @PythonApi
   private[read] def beginNanosOrNull: java.lang.Long = beginNanosOpt.map(Long.box).orNull
 
   @PythonApi
   private[read] def endNanosOrNull: java.lang.Long = endNanosOpt.map(Long.box).orNull
-
-  /**
-   * Converts the begin date to an ISO string, or null.
-   *
-   * TODO(sshe): 9/29/2017. Deprecated. Keeping for compatibility with old Python packages.
-   * Newer Python bindings use [[beginNanosOrNull]].
-   *
-   * @return A string representation of the begin time or null
-   */
-  @PythonApi
-  @Nullable
-  private[read] def beginFlintString: String = beginNanosOpt.map(toISOString).orNull
-
-  /**
-   * Converts the begin date to an ISO string, or null.
-   *
-   * TODO(sshe): 9/29/2017. Deprecated. Keeping for compatibility with old Python packages.
-   * Newer Python bindings use [[endNanosOrNull]].
-   *
-   * @return A string representation of the begin time or null
-   */
-  @PythonApi
-  @Nullable
-  private[read] def endFlintString: String = endNanosOpt.map(toISOString).orNull
-
-  /**
-   * TODO(sshe): 9/29/2017. Deprecated. Keeping for compatibility with old Python packages.
-   */
-  @PythonApi
-  private def toISOString(nanos: Long): String =
-    ZonedDateTime.ofInstant(Instant.ofEpochSecond(0, nanos), ZoneOffset.UTC)
-      .toOffsetDateTime // Remove timezone ID
-      .toString // ISO8601 compatible string
-
 }

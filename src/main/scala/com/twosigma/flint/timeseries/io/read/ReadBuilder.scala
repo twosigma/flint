@@ -116,7 +116,32 @@ class ReadBuilder(
    * @return this [[ReadBuilder]]
    */
   private[read] def range(beginNanosOpt: Option[Long], endNanosOpt: Option[Long]): this.type = {
-    parameters.range = BeginEndRange(beginNanosOpt, endNanosOpt)
+    parameters.range = parameters.range.copy(rawBeginNanosOpt = beginNanosOpt, rawEndNanosOpt = endNanosOpt)
+    this
+  }
+
+  /**
+   * Set the time distance to expand begin / end date range.
+   *
+   * If called multiple times, only the last call is effective.
+   *
+   * @param begin A string that specifies the time distance to expand the begin time, e.g., "7days"
+   * @param end A string that specifies the time distance to expand the end time, e.g., "7days"
+   * @return
+   */
+  def expand(@Nullable begin: String = null, @Nullable end: String = null): this.type = {
+    val expandBeginNanos = Option(begin).map(begin => Long.box(Duration(begin).toNanos)).orNull
+    val expandEndNanos = Option(end).map(end => Long.box(Duration(end).toNanos)).orNull
+    expand(expandBeginNanos, expandEndNanos)
+    this
+  }
+
+  @PythonApi
+  def expand(@Nullable beginNanos: java.lang.Long, @Nullable endNanos: java.lang.Long): this.type = {
+    parameters.range = parameters.range.copy(
+      expandBeginNanosOpt = Option(beginNanos).map(_.toLong),
+      expandEndNanosOpt = Option(endNanos).map(_.toLong)
+    )
     this
   }
 

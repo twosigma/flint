@@ -1977,6 +1977,21 @@ def test_reader_missing_range(pyspark, flintContext):
         reader2._parameters.range().endNanos()
 
 
+def test_reader_expand(flintContext):
+    expected_begin = pd.Timestamp('20161231', tz='UTC')
+    expected_end = pd.Timestamp('20170203', tz='UTC')
+
+    reader1 = flintContext.read.range('20170101', '20170201').expand(end="2day")
+    assert reader1._parameters.range().endNanos() == expected_end.value
+
+    reader2 = flintContext.read.range('20170101', '20170201').expand(begin="1day")
+    assert reader2._parameters.range().beginNanos() == expected_begin.value
+
+    reader3 = flintContext.read.range('20170101', '20170201').expand("1day", "2days")
+    assert reader3._parameters.range().beginNanos() == expected_begin.value
+    assert reader3._parameters.range().endNanos() == expected_end.value
+
+
 def test_eval_groovy(flintContext):
     '''Check that we can evaluate a Groovy dcat script into a TimeSeriesDataFrame.'''
     begin = '19700101'
@@ -2019,7 +2034,6 @@ def test_eval_groovy_failure(flintContext):
         df = flintContext.read.eval_groovy(script, begin, end)
 
 
-@pytest.mark.net
 def test_read_dataframe_begin_end(sqlContext, flintContext, tests_utils):
     # Data goes from time 1000 to 1250
     pdf = make_pdf(vol_data, ['time', 'id', 'volume'])
@@ -2036,7 +2050,6 @@ def test_read_dataframe_begin_end(sqlContext, flintContext, tests_utils):
     assert(df2.count() == expected)
 
 
-@pytest.mark.net
 def test_read_dataframe_unsorted(sqlContext, flintContext, tests_utils):
     columns = ['time', 'value']
     data = [(4000, 4),
@@ -2058,7 +2071,6 @@ def test_read_dataframe_unsorted(sqlContext, flintContext, tests_utils):
     tests_utils.assert_same(tsdf_sorted, tsdf_shuffled)
 
 
-@pytest.mark.net
 def test_read_pandas_unsorted(sqlContext, flintContext, tests_utils):
     columns = ['time', 'value']
     data = [(4000, 4),
