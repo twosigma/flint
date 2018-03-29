@@ -1555,4 +1555,17 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
     def groupby(self, *cols):
         return self.groupBy(*cols)
 
+    def preview(self, n=10):
+        """
+        Return the first n rows of the :class:`TimeSeriesDataFrame` as ``pandas.DataFrame``
+
+        This is only available if Pandas is installed and available.
+
+        The time column will be converted to timestamp type.
+
+        :param n: number of rows to return. Default is 10.
+        """
+        df = pd.DataFrame(self.head(n), columns=self.columns)
+        return df.assign(**{self._time_column: pd.to_datetime(df[self._time_column])})
+
 TimeSeriesDataFrame._override_df_methods()

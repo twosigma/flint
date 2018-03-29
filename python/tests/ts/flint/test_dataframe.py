@@ -2388,3 +2388,6 @@ def test_groupedData(tests_utils, price):
     result5 = price.groupby('time').mean('price').toPandas()
     expected5 = DataFrame.groupBy(price, 'time').mean('price').toPandas()
     tests_utils.assert_same(result5, expected5)
+
+def test_preview(tests_utils, price):
+    tests_utils.assert_same(price.limit(10).toPandas(), price.preview())
