@@ -284,8 +284,8 @@ def ewma(column, alpha=0.05, time_column='time', duration_per_period='1d', conve
 
     **Adds columns:**
 
-    <column>_ema (*float*)
-        The exponential moving average of the column
+    <column>_ewma (*float*)
+        The exponential weighted moving average of the column
 
     :param column: name of the column to be summarized
     :type column: str

@@ -29,14 +29,6 @@ import com.twosigma.flint.timeseries.summarize.ColumnList.Sequence
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 
-object ExponentialWeightedMovingAverageSummarizer {
-  val ewmaColumn: String = "exponentialWeightedMovingAverage"
-
-  val outputSchema = Schema.of(
-    ewmaColumn -> DoubleType
-  )
-}
-
 object ExponentialWeightedMovingAverageConvention extends Enumeration {
   type ExponentialWeightedMovingAverageConvention = Value
   val Core = Value("core")
@@ -93,12 +85,12 @@ case class ExponentialWeightedMovingAverageSummarizer(
     exponentialWeightedMovingAverageConvention
   )
 
+  override val schema: StructType = Schema.of(s"${xColumn}_ewma" -> DoubleType)
+
   override def toT(r: InternalRow): EWMARow = EWMARow(
     time = r.getLong(timeColumnId),
     x = xExtractor(r)
   )
-
-  override val schema: StructType = ExponentialWeightedMovingAverageSummarizer.outputSchema
 
   override def fromV(
     o: ExponentialWeightedMovingAverageOutput

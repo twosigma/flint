@@ -53,9 +53,7 @@ class ExponentialWeightedMovingAverageSummarizerSpec extends SummarizerSuite {
     result1.rdd
       .collect()
       .foreach { row =>
-        val test = row.getAs[Double](
-          ExponentialWeightedMovingAverageSummarizer.ewmaColumn
-        )
+        val test = row.getAs[Double]("price_ewma")
         val expected = row.getAs[Double]("expected_core")
         assert(test === expected)
       }
@@ -72,9 +70,7 @@ class ExponentialWeightedMovingAverageSummarizerSpec extends SummarizerSuite {
     result2.rdd
       .collect()
       .foreach { row =>
-        val test = row.getAs[Double](
-          ExponentialWeightedMovingAverageSummarizer.ewmaColumn
-        )
+        val test = row.getAs[Double]("price_ewma")
         val expected = row.getAs[Double]("expected_legacy")
         assert(test === expected)
       }
@@ -110,7 +106,7 @@ class ExponentialWeightedMovingAverageSummarizerSpec extends SummarizerSuite {
             durationPerPeriod = "constant",
             convention = "legacy"
           )
-          .prefix("legacy_v")
+          .prefix("legacy")
       )
       .addSummaryColumns(
         Summarizers
@@ -119,14 +115,14 @@ class ExponentialWeightedMovingAverageSummarizerSpec extends SummarizerSuite {
             durationPerPeriod = "constant",
             convention = "legacy"
           )
-          .prefix("legacy_c")
+          .prefix("legacy")
       )
 
     result1.rdd
       .collect()
       .foreach { row =>
         val test = row.getAs[Double](
-          s"core_${ExponentialWeightedMovingAverageSummarizer.ewmaColumn}"
+          s"core_v_ewma"
         )
         val expected = row.getAs[Double]("expected_core")
         assert(test === expected)
@@ -135,10 +131,10 @@ class ExponentialWeightedMovingAverageSummarizerSpec extends SummarizerSuite {
         // two "legacy" computations. A "legacy" computation is on the original column and
         // the other "legacy" is on a constant column with all ones.
         val legacy1 = row.getAs[Double](
-          s"legacy_v_${ExponentialWeightedMovingAverageSummarizer.ewmaColumn}"
+          s"legacy_v_ewma"
         )
         val legacy2 = row.getAs[Double](
-          s"legacy_c_${ExponentialWeightedMovingAverageSummarizer.ewmaColumn}"
+          s"legacy_c_ewma"
         )
         assert(legacy1 / legacy2 === expected)
       }
@@ -178,9 +174,7 @@ class ExponentialWeightedMovingAverageSummarizerSpec extends SummarizerSuite {
     tsRdd.rdd
       .collect()
       .foreach { row =>
-        val test = row.getAs[Double](
-          ExponentialWeightedMovingAverageSummarizer.ewmaColumn
-        )
+        val test = row.getAs[Double]("value_ewma")
         val expected = row.getAs[Double]("expected_core")
         assert(test === expected)
       }
