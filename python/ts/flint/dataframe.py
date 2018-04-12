@@ -1454,6 +1454,21 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             tsrdd = self.timeSeriesRDD.summarize(composed_summarizer._jsummarizer(self._sc), scala_key)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
+    def summarizeState(self, summarizer, key=None):
+        """
+        Undocumented function for the bravest.
+
+        Returns a Java map from key to summarize state (also Java object).
+        This function can be changed/removed/broken without notice.
+
+        Use at your own risk.
+        """
+        scala_key = utils.list_to_seq(self._sc, key)
+        composed_summarizer = summarizers.compose(self._sc, summarizer)
+        with traceback_utils.SCCallSiteSync(self._sc) as css:
+            result = self.timeSeriesRDD.summarizeState(composed_summarizer._jsummarizer(self._sc), scala_key)
+        return result
+
     def addSummaryColumns(self, summarizer, key=None):
         """Computes the running aggregate statistics of a table. For a
         given row R, the new columns will be the summarization of all

@@ -427,6 +427,16 @@ class OrderedRDD[K: ClassTag, V: ClassTag](
   ): Map[SK, V2] = Summarize(self, summarizer, windowFn, skFn, depth)
 
   /**
+   * Summarize and return both state and output
+   */
+  def summarizeState[SK, U, V2](
+    summarizer: OverlappableSummarizer[V, U, V2],
+    windowFn: K => (K, K),
+    skFn: V => SK,
+    depth: Int
+  ): Map[SK, (U, V2)] = Summarize.summarizeState(self, summarizer, windowFn, skFn, depth)
+
+  /**
    * Similar to [[org.apache.spark.rdd.RDD.zipWithIndex]], it zips values of this [[OrderedRDD]] with
    * its element indices. The ordering of this [[OrderedRDD]] will be preserved.
    *

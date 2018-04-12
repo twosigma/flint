@@ -1163,6 +1163,16 @@ trait TimeSeriesRDD extends Serializable {
    */
   def summarize(summarizer: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD
 
+  /**
+   * Undocumented function for the bravest.
+   *
+   * Returns a Java map from key to summarize state (also Java object).
+   * This function can be changed/removed/broken without notice.
+   *
+   * Use at your own risk.
+   */
+  def summarizeState(summarizerFactory: SummarizerFactory, key: Seq[String] = Seq.empty): Map[Seq[Any], (Any, Any)]
+
   private[flint] def summarize(summarizer: SummarizerFactory, key: String): TimeSeriesRDD =
     summarize(summarizer, Option(key).toSeq)
 
@@ -1765,6 +1775,20 @@ class TimeSeriesRDDImpl private[timeseries] (
 
   def summarize(summarizerFactory: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD =
     summarizeInternal(summarizerFactory, key, 2)
+
+  def summarizeState(summarizerFactory: SummarizerFactory, key: Seq[String] = Seq.empty): Map[Seq[Any], (Any, Any)] = {
+    val depth = 2
+    val pruned = TimeSeriesRDD.pruneColumns(this, summarizerFactory.requiredColumns, key)
+    val summarizer = summarizerFactory(pruned.schema)
+    val keyGetter = pruned.safeGetAsAny(key)
+    val summarized = summarizerFactory match {
+      case factory: OverlappableSummarizerFactory =>
+        pruned.orderedRdd.summarizeState(
+          summarizer.asInstanceOf[OverlappableSummarizer], factory.window.of, keyGetter, depth
+        )
+    }
+    summarized
+  }
 
   def addSummaryColumns(summarizer: SummarizerFactory, key: Seq[String] = Seq.empty): TimeSeriesRDD = {
     val sum = summarizer(schema)
