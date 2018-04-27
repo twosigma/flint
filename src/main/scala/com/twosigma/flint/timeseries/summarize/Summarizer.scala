@@ -16,16 +16,20 @@
 
 package com.twosigma.flint.timeseries.summarize
 
+import com.google.common.base.Preconditions
+
 import scala.reflect.runtime.universe.{ TypeTag, typeTag }
 import com.twosigma.flint.rdd.function.summarize.summarizer.overlappable.{ OverlappableSummarizer => OOverlappableSummarizer }
-import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ LeftSubtractableSummarizer => OLeftSubtractableSummarizer, LeftSubtractableOverlappableSummarizer => OLeftSubtractableOverlappableSummarizer }
+import com.twosigma.flint.rdd.function.summarize.summarizer.subtractable.{ LeftSubtractableOverlappableSummarizer => OLeftSubtractableOverlappableSummarizer, LeftSubtractableSummarizer => OLeftSubtractableSummarizer }
 import com.twosigma.flint.rdd.function.summarize.summarizer.{ FlippableSummarizer => OFlippableSummarizer, Summarizer => OSummarizer }
+import com.twosigma.flint.timeseries.TimeSeriesRDD
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.summarize.summarizer.PredicateSummarizerFactory
+import com.twosigma.flint.timeseries.time.types.TimeType
 import com.twosigma.flint.timeseries.window.TimeWindow
 import org.apache.spark.sql.CatalystTypeConvertersWrapper
 import org.apache.spark.sql.catalyst.{ InternalRow, ScalaReflection }
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{ LongType, StructType, TimestampType }
 
 import scala.util.Try
 
@@ -217,6 +221,22 @@ trait Summarizer extends OSummarizer[InternalRow, Any, InternalRow] with InputVa
   final override def render(u: Any): InternalRow = fromV(summarizer.render(toU(u)))
 
   final override def close(u: Any): Unit = summarizer.close(toU(u))
+}
+
+/**
+ * A sub type of summarizers that needs to access `time` column.
+ *
+ * `time` column in [[TimeSeriesRDD]] can be of different [[com.twosigma.flint.timeseries.time.types.TimeType]]
+ *
+ * This interface provides abstraction to get time in nanoseconds.
+ */
+trait TimeAwareSummarizer extends Summarizer {
+  final val getTimeNanos: (InternalRow, Int) => Long = {
+    val timeField = inputSchema.head
+    require(timeField.name == TimeSeriesRDD.timeColumnName)
+    val timeType = TimeType(timeField.dataType)
+    (r: InternalRow, columnIndex: Int) => timeType.internalToNanos(r.getLong(columnIndex))
+  }
 }
 
 trait FlippableSummarizer extends Summarizer with OFlippableSummarizer[InternalRow, Any, InternalRow] {

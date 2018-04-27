@@ -22,7 +22,7 @@ import com.twosigma.flint.timeseries.time.TimeFormat
 
 import scala.concurrent.duration.Duration
 
-class ClockSpec extends TimeSeriesSuite {
+class ClockSpec extends TimeSeriesSuite with TimeTypeSuite {
 
   "UniformClock" should "generate clock ticks correctly" in {
     var clock = new UniformClock(sc, 1000L, 2000L, 300L, 0L).asStream().toArray
@@ -76,6 +76,13 @@ class ClockSpec extends TimeSeriesSuite {
     val clockTSRdd1: TimeSeriesRDD = Clocks.uniform(sc, "1d", "0h", "19700101", "20300101", "UTC")
     val clockTSRdd2: TimeSeriesRDD = Clocks.uniform(sc, "1d")
     assert(clockTSRdd1.collect().deep == clockTSRdd2.collect().deep)
+  }
+
+  it should "generate timestamp correctly" in {
+    withTimeType("timestamp") {
+      val clock1 = Clocks.uniform(sc, "1day", beginDateTime = "19900101")
+      assert(clock1.toDF.first().getTimestamp(0) == java.sql.Timestamp.valueOf("1990-01-01 00:00:00"))
+    }
   }
 
   "RandomClock" should "generate clock ticks randomly" in {

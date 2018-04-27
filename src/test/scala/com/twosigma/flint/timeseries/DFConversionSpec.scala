@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 import com.twosigma.flint.timeseries.row.Schema
+import com.twosigma.flint.timeseries.time.types.TimeType
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
@@ -45,10 +46,10 @@ class DFConversionSpec extends TimeSeriesSuite with FlintTestData {
     idDf.select(timeColumn.as(TimeSeriesRDD.timeColumnName).cast(LongType), functions.randn(SEED).as("value"))
   }
 
-  it should "convert timestamps correctly" in {
+  it should "convert time unit correctly" in {
     init
     val df = clockTSRdd.toDF
-    val convertedDf = TimeSeriesRDD.convertDfTimestamps(df, TimeUnit.MICROSECONDS)
+    val convertedDf = TimeSeriesRDD.canonizeTime(df, TimeUnit.MICROSECONDS)
 
     val dfRows = df.collect()
     val convertedRows = convertedDf.collect()
@@ -57,6 +58,23 @@ class DFConversionSpec extends TimeSeriesSuite with FlintTestData {
     assert(zipped.forall {
       case (row, convertedRow) => row.getAs[Long]("time") * 1000 == convertedRow.getAs[Long]("time")
     })
+  }
+
+  it should "convert timestamp correctly" in {
+    init
+    val df = clockTSRdd.toDF.withColumn("time", col("time") * (123456 * 10e8).toLong)
+    val convertedDf = df.withColumn("time", (df("time") / 10e8).cast(TimestampType))
+
+    // These should all be the same
+    val result1 = TimeSeriesRDD.fromDF(convertedDf)(isSorted = true, null)
+    val result2 = TimeSeriesRDD.fromDF(convertedDf)(isSorted = true, TimeUnit.NANOSECONDS)
+    val result3 = TimeSeriesRDD.fromDF(convertedDf)(isSorted = true, TimeUnit.MICROSECONDS)
+
+    val expected = TimeSeriesRDD.fromDF(df)(isSorted = true, TimeUnit.NANOSECONDS)
+
+    assertEquals(expected, result1)
+    assertEquals(expected, result2)
+    assertEquals(expected, result3)
   }
 
   it should "sort dataframes correctly" in {

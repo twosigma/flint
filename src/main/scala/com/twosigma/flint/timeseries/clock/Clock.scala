@@ -16,11 +16,14 @@
 
 package com.twosigma.flint.timeseries.clock
 
+import java.util.concurrent.TimeUnit
+
 import com.twosigma.flint.rdd.{ CloseOpen, OrderedRDD }
 import com.twosigma.flint.timeseries.TimeSeriesRDD
 import com.twosigma.flint.timeseries.row.Schema
 import com.twosigma.flint.timeseries.time.TimeFormat
 import org.apache.spark.SparkContext
+import org.apache.spark.sql.{ DFConverter, SQLContext }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.joda.time.DateTimeZone
 
@@ -131,10 +134,12 @@ abstract class Clock(
    * @return a sequence of ticks as a [[TimeSeriesRDD]].
    */
   protected[flint] def asTimeSeriesRDD(numSlices: Int = sc.defaultParallelism): TimeSeriesRDD = {
-    val rdd = asOrderedRDD(numSlices).mapValues {
-      case (t, _) => InternalRow(t)
-    }
-    TimeSeriesRDD.fromInternalOrderedRDD(rdd, Schema())
+    val rdd = asOrderedRDD(numSlices)
+    val rowRdd = rdd.map(kv => InternalRow(kv._2))
+    val ranges = rdd.rangeSplits.map(_.range)
+    val schema = Schema()
+    val df = TimeSeriesRDD.canonizeTime(DFConverter.toDataFrame(rowRdd, schema), TimeUnit.NANOSECONDS)
+    TimeSeriesRDD.fromDFWithRanges(df, ranges)
   }
 }
 

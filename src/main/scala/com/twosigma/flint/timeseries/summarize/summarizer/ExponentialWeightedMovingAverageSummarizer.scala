@@ -66,7 +66,9 @@ case class ExponentialWeightedMovingAverageSummarizer(
   constantPeriods: Boolean,
   exponentialWeightedMovingAverageConvention: ExponentialWeightedMovingAverageConvention.Value
 ) extends LeftSubtractableSummarizer
-  with FilterNullInput {
+  with FilterNullInput
+  with TimeAwareSummarizer {
+
   private val Sequence(Seq(xColumn, timeColumn)) = requiredColumns
   private val xColumnId = inputSchema.fieldIndex(xColumn)
   private val timeColumnId = inputSchema.fieldIndex(timeColumn)
@@ -88,7 +90,7 @@ case class ExponentialWeightedMovingAverageSummarizer(
   override val schema: StructType = Schema.of(s"${xColumn}_ewma" -> DoubleType)
 
   override def toT(r: InternalRow): EWMARow = EWMARow(
-    time = r.getLong(timeColumnId),
+    time = getTimeNanos(r, timeColumnId),
     x = xExtractor(r)
   )
 

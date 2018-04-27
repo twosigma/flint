@@ -23,7 +23,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ DoubleType, IntegerType }
 import org.scalactic.{ Equality, TolerantNumerics }
 
-class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
+class ExponentialSmoothingSummarizerSpec extends SummarizerSuite with TimeTypeSuite {
 
   override val defaultPartitionParallelism: Int = 10
 
@@ -32,7 +32,7 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
   private var price1: TimeSeriesRDD = _
   private var price2: TimeSeriesRDD = _
 
-  private lazy val init = {
+  private def init(): Unit = {
     price1 = fromCSV(
       "Price.csv",
       Schema(
@@ -62,55 +62,62 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
     exponentialSmoothingInterpolation: String,
     exponentialSmoothingConvention: String
   ): Unit = {
-    init
-    val results = price1.addSummaryColumns(Summarizers.exponentialSmoothing(
-      xColumn = "price",
-      timestampsToPeriods = (a, b) => (b - a) / 100.0,
-      alpha = 0.5,
-      primingPeriods = primingPeriods,
-      interpolation = exponentialSmoothingInterpolation,
-      convention = exponentialSmoothingConvention
-    ))
+    withTimeType("long", "timestamp") {
+      init()
+      val results = price1.addSummaryColumns(Summarizers.exponentialSmoothing(
+        xColumn = "price",
+        timestampsToPeriods = (a, b) => (b - a) / 100000000000.0,
+        alpha = 0.5,
+        primingPeriods = primingPeriods,
+        interpolation = exponentialSmoothingInterpolation,
+        convention = exponentialSmoothingConvention
+      ))
 
-    results.rdd.collect().foreach{ row =>
-      val predVal = row.getAs[Double]("price_ema")
-      val trueVal = row.getAs[Double](s"expected_${exponentialSmoothingConvention}_$exponentialSmoothingInterpolation")
-      if (predVal.isNaN) {
-        assert(trueVal.isNaN)
-      } else {
-        assert(predVal === trueVal)
+      results.rdd.collect().foreach { row =>
+        val predVal = row.getAs[Double]("price_ema")
+        val trueVal = row.getAs[Double](s"expected_" +
+          s"${exponentialSmoothingConvention}_$exponentialSmoothingInterpolation")
+        if (predVal.isNaN) {
+          assert(trueVal.isNaN)
+        } else {
+          assert(predVal === trueVal)
+        }
       }
     }
   }
 
   "ExponentialSmoothingSummarizer" should "smooth correctly" in {
-    init
-    val results = price1.addSummaryColumns(Summarizers.exponentialSmoothing(
-      xColumn = "price",
-      timestampsToPeriods = (a, b) => (b - a) / 100.0
-    ), Seq("id"))
-    results.rdd.collect().foreach(row => {
-      val predVal = row.getAs[Double]("price_ema")
-      val trueVal = row.getAs[Double]("expected")
-      assert(predVal === trueVal)
-    })
+    withTimeType("long", "timestamp") {
+      init()
+      val results = price1.addSummaryColumns(Summarizers.exponentialSmoothing(
+        xColumn = "price",
+        timestampsToPeriods = (a, b) => (b - a) / 100000000000.0
+      ), Seq("id"))
+      results.rdd.collect().foreach(row => {
+        val predVal = row.getAs[Double]("price_ema")
+        val trueVal = row.getAs[Double]("expected")
+        assert(predVal === trueVal)
+      })
+    }
   }
 
   it should "decay using half life correctly" in {
-    init
-    val results = price1.addSummaryColumns(Summarizers.emaHalfLife(
-      xColumn = "price",
-      halfLifeDuration = "100ns"
-    ))
-    results.rdd.collect().foreach(row => {
-      val predVal = row.getAs[Double]("price_ema")
-      val trueVal = row.getAs[Double]("expected_legacy_previous")
-      if (predVal.isNaN) {
-        assert(trueVal.isNaN)
-      } else {
-        assert(predVal === trueVal)
-      }
-    })
+    withTimeType("long", "timestamp") {
+      init()
+      val results = price1.addSummaryColumns(Summarizers.emaHalfLife(
+        xColumn = "price",
+        halfLifeDuration = "100s"
+      ))
+      results.rdd.collect().foreach(row => {
+        val predVal = row.getAs[Double]("price_ema")
+        val trueVal = row.getAs[Double]("expected_legacy_previous")
+        if (predVal.isNaN) {
+          assert(trueVal.isNaN)
+        } else {
+          assert(predVal === trueVal)
+        }
+      })
+    }
   }
 
   it should "interpolate using previous point core correctly" in {
@@ -189,31 +196,33 @@ class ExponentialSmoothingSummarizerSpec extends SummarizerSuite {
   }
 
   it should "summarizeWindows correctly" in {
-    init
-    val window = Windows.pastAbsoluteTime("1 day")
+    withTimeType("long", "timestamp") {
+      init()
+      val window = Windows.pastAbsoluteTime("1 day")
 
-    for (
-      smoothingConversion <- Seq("core", "convolution", "legacy");
-      smoothingInterpolation <- Seq("previous", "current", "linear")
-    ) {
-      val summarizer1 = Summarizers.emaHalfLife(
-        "v",
-        "60 minutes",
-        interpolation = smoothingInterpolation,
-        convention = smoothingConversion
-      )
-      val result = price2.summarizeWindows(window, summarizer1)
+      for (
+        smoothingConversion <- Seq("core", "convolution", "legacy");
+        smoothingInterpolation <- Seq("previous", "current", "linear")
+      ) {
+        val summarizer1 = Summarizers.emaHalfLife(
+          "v",
+          "60 minutes",
+          interpolation = smoothingInterpolation,
+          convention = smoothingConversion
+        )
+        val result = price2.summarizeWindows(window, summarizer1)
 
-      result.collect().foreach {
-        row: Row =>
-          val result = row.getAs[Double]("v_ema")
-          val expected = row.getAs[Double](s"expected_${smoothingConversion}_$smoothingInterpolation")
-          if (result.isNaN || expected.isNaN) {
-            assert(result.isNaN)
-            assert(expected.isNaN)
-          } else {
-            assert(result === expected)
-          }
+        result.collect().foreach {
+          row: Row =>
+            val result = row.getAs[Double]("v_ema")
+            val expected = row.getAs[Double](s"expected_${smoothingConversion}_$smoothingInterpolation")
+            if (result.isNaN || expected.isNaN) {
+              assert(result.isNaN)
+              assert(expected.isNaN)
+            } else {
+              assert(result === expected)
+            }
+        }
       }
     }
   }

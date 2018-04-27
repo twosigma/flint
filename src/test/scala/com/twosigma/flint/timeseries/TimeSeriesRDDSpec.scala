@@ -40,25 +40,25 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
   val clockSchema = Schema("time" -> LongType)
 
   val clockData = Array[(Long, Row)](
-    (1000L, new ExternalRow(Array(1000L), clockSchema)),
-    (1100L, new ExternalRow(Array(1100L), clockSchema)),
-    (1200L, new ExternalRow(Array(1200L), clockSchema)),
-    (1300L, new ExternalRow(Array(1300L), clockSchema))
+    (1000000000000L, new ExternalRow(Array(1000000000000L), clockSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L), clockSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L), clockSchema)),
+    (1300000000000L, new ExternalRow(Array(1300000000000L), clockSchema))
   )
 
   val forecastData = Array[(Long, Row)](
-    (1000L, new ExternalRow(Array(1000L, 7, 3.0), forecastSchema)),
-    (1000L, new ExternalRow(Array(1000L, 3, 5.0), forecastSchema)),
-    (1050L, new ExternalRow(Array(1050L, 3, -1.5), forecastSchema)),
-    (1050L, new ExternalRow(Array(1050L, 7, 2.0), forecastSchema)),
-    (1100L, new ExternalRow(Array(1100L, 3, -2.4), forecastSchema)),
-    (1100L, new ExternalRow(Array(1100L, 7, 6.4), forecastSchema)),
-    (1150L, new ExternalRow(Array(1150L, 3, 1.5), forecastSchema)),
-    (1150L, new ExternalRow(Array(1150L, 7, -7.9), forecastSchema)),
-    (1200L, new ExternalRow(Array(1200L, 3, 4.6), forecastSchema)),
-    (1200L, new ExternalRow(Array(1200L, 7, 1.4), forecastSchema)),
-    (1250L, new ExternalRow(Array(1250L, 3, -9.6), forecastSchema)),
-    (1250L, new ExternalRow(Array(1250L, 7, 6.0), forecastSchema))
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 3.0), forecastSchema)),
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 5.0), forecastSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 3, -1.5), forecastSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 2.0), forecastSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 3, -2.4), forecastSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 6.4), forecastSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 1.5), forecastSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 7, -7.9), forecastSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 4.6), forecastSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 1.4), forecastSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 3, -9.6), forecastSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 6.0), forecastSchema))
   )
 
   val forecastSwitchColumnData = forecastData.map {
@@ -70,114 +70,114 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
   }
 
   val priceData = Array[(Long, Row)](
-    (1000L, new ExternalRow(Array(1000L, 7, 0.5), priceSchema)),
-    (1000L, new ExternalRow(Array(1000L, 3, 1.0), priceSchema)),
-    (1050L, new ExternalRow(Array(1050L, 3, 1.5), priceSchema)),
-    (1050L, new ExternalRow(Array(1050L, 7, 2.0), priceSchema)),
-    (1100L, new ExternalRow(Array(1100L, 3, 2.5), priceSchema)),
-    (1100L, new ExternalRow(Array(1100L, 7, 3.0), priceSchema)),
-    (1150L, new ExternalRow(Array(1150L, 3, 3.5), priceSchema)),
-    (1150L, new ExternalRow(Array(1150L, 7, 4.0), priceSchema)),
-    (1200L, new ExternalRow(Array(1200L, 3, 4.5), priceSchema)),
-    (1200L, new ExternalRow(Array(1200L, 7, 5.0), priceSchema)),
-    (1250L, new ExternalRow(Array(1250L, 3, 5.5), priceSchema)),
-    (1250L, new ExternalRow(Array(1250L, 7, 6.0), priceSchema))
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 0.5), priceSchema)),
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 1.0), priceSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 3, 1.5), priceSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 2.0), priceSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 3, 2.5), priceSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 3.0), priceSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 3.5), priceSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 7, 4.0), priceSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 4.5), priceSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 5.0), priceSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 3, 5.5), priceSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 6.0), priceSchema))
   )
 
   val volData = Array[(Long, Row)](
-    (1000L, new ExternalRow(Array(1000L, 7, 100L), volSchema)),
-    (1000L, new ExternalRow(Array(1000L, 3, 200L), volSchema)),
-    (1050L, new ExternalRow(Array(1050L, 3, 300L), volSchema)),
-    (1050L, new ExternalRow(Array(1050L, 7, 400L), volSchema)),
-    (1100L, new ExternalRow(Array(1100L, 3, 500L), volSchema)),
-    (1100L, new ExternalRow(Array(1100L, 7, 600L), volSchema)),
-    (1150L, new ExternalRow(Array(1150L, 3, 700L), volSchema)),
-    (1150L, new ExternalRow(Array(1150L, 7, 800L), volSchema)),
-    (1200L, new ExternalRow(Array(1200L, 3, 900L), volSchema)),
-    (1200L, new ExternalRow(Array(1200L, 7, 1000L), volSchema)),
-    (1250L, new ExternalRow(Array(1250L, 3, 1100L), volSchema)),
-    (1250L, new ExternalRow(Array(1250L, 7, 1200L), volSchema))
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 100L), volSchema)),
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 200L), volSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 3, 300L), volSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 400L), volSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 3, 500L), volSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 600L), volSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 700L), volSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 7, 800L), volSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 900L), volSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 1000L), volSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 3, 1100L), volSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 1200L), volSchema))
   )
 
   val vol2Data = Array[(Long, Row)](
-    (1000L, new ExternalRow(Array(1000L, 7, 100L), volSchema)),
-    (1000L, new ExternalRow(Array(1000L, 7, 100L), volSchema)),
-    (1000L, new ExternalRow(Array(1000L, 3, 200L), volSchema)),
-    (1000L, new ExternalRow(Array(1000L, 3, 200L), volSchema)),
-    (1050L, new ExternalRow(Array(1050L, 3, 300L), volSchema)),
-    (1050L, new ExternalRow(Array(1050L, 3, 300L), volSchema)),
-    (1050L, new ExternalRow(Array(1050L, 7, 400L), volSchema)),
-    (1050L, new ExternalRow(Array(1050L, 7, 400L), volSchema)),
-    (1100L, new ExternalRow(Array(1100L, 3, 500L), volSchema)),
-    (1100L, new ExternalRow(Array(1100L, 7, 600L), volSchema)),
-    (1100L, new ExternalRow(Array(1100L, 3, 500L), volSchema)),
-    (1100L, new ExternalRow(Array(1100L, 7, 600L), volSchema)),
-    (1150L, new ExternalRow(Array(1150L, 3, 700L), volSchema)),
-    (1150L, new ExternalRow(Array(1150L, 7, 800L), volSchema)),
-    (1150L, new ExternalRow(Array(1150L, 3, 700L), volSchema)),
-    (1150L, new ExternalRow(Array(1150L, 7, 800L), volSchema)),
-    (1200L, new ExternalRow(Array(1200L, 3, 900L), volSchema)),
-    (1200L, new ExternalRow(Array(1200L, 7, 1000L), volSchema)),
-    (1200L, new ExternalRow(Array(1200L, 3, 900L), volSchema)),
-    (1200L, new ExternalRow(Array(1200L, 7, 1000L), volSchema)),
-    (1250L, new ExternalRow(Array(1250L, 3, 1100L), volSchema)),
-    (1250L, new ExternalRow(Array(1250L, 7, 1200L), volSchema)),
-    (1250L, new ExternalRow(Array(1250L, 3, 1100L), volSchema)),
-    (1250L, new ExternalRow(Array(1250L, 7, 1200L), volSchema))
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 100L), volSchema)),
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 100L), volSchema)),
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 200L), volSchema)),
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 200L), volSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 3, 300L), volSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 3, 300L), volSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 400L), volSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 400L), volSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 3, 500L), volSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 600L), volSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 3, 500L), volSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 600L), volSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 700L), volSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 7, 800L), volSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 700L), volSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 7, 800L), volSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 900L), volSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 1000L), volSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 900L), volSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 1000L), volSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 3, 1100L), volSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 1200L), volSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 3, 1100L), volSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 1200L), volSchema))
   )
 
   val vol3Data = Array[(Long, Row)](
-    (1000L, new ExternalRow(Array(1000L, 7, 100L), volSchema)),
-    (1000L, new ExternalRow(Array(1000L, 7, 101L), volSchema)),
-    (1000L, new ExternalRow(Array(1000L, 3, 200L), volSchema)),
-    (1000L, new ExternalRow(Array(1000L, 3, 201L), volSchema)),
-    (1050L, new ExternalRow(Array(1050L, 3, 300L), volSchema)),
-    (1050L, new ExternalRow(Array(1050L, 3, 301L), volSchema)),
-    (1050L, new ExternalRow(Array(1050L, 7, 400L), volSchema)),
-    (1050L, new ExternalRow(Array(1050L, 7, 401L), volSchema)),
-    (1100L, new ExternalRow(Array(1100L, 3, 500L), volSchema)),
-    (1100L, new ExternalRow(Array(1100L, 7, 600L), volSchema)),
-    (1100L, new ExternalRow(Array(1100L, 3, 501L), volSchema)),
-    (1100L, new ExternalRow(Array(1100L, 7, 601L), volSchema)),
-    (1150L, new ExternalRow(Array(1150L, 3, 700L), volSchema)),
-    (1150L, new ExternalRow(Array(1150L, 7, 800L), volSchema)),
-    (1150L, new ExternalRow(Array(1150L, 3, 701L), volSchema)),
-    (1150L, new ExternalRow(Array(1150L, 7, 801L), volSchema)),
-    (1200L, new ExternalRow(Array(1200L, 3, 900L), volSchema)),
-    (1200L, new ExternalRow(Array(1200L, 7, 1000L), volSchema)),
-    (1200L, new ExternalRow(Array(1200L, 3, 901L), volSchema)),
-    (1200L, new ExternalRow(Array(1200L, 7, 1001L), volSchema)),
-    (1250L, new ExternalRow(Array(1250L, 3, 1100L), volSchema)),
-    (1250L, new ExternalRow(Array(1250L, 7, 1200L), volSchema)),
-    (1250L, new ExternalRow(Array(1250L, 3, 1101L), volSchema)),
-    (1250L, new ExternalRow(Array(1250L, 7, 1201L), volSchema))
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 100L), volSchema)),
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 101L), volSchema)),
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 200L), volSchema)),
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 201L), volSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 3, 300L), volSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 3, 301L), volSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 400L), volSchema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 401L), volSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 3, 500L), volSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 600L), volSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 3, 501L), volSchema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 601L), volSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 700L), volSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 7, 800L), volSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 701L), volSchema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 7, 801L), volSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 900L), volSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 1000L), volSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 901L), volSchema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 1001L), volSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 3, 1100L), volSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 1200L), volSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 3, 1101L), volSchema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 1201L), volSchema))
   )
 
   val vol4Data = Array[(Long, Row)](
-    (1000L, new ExternalRow(Array(1000L, 7, 100L, 100L), vol4Schema)),
-    (1000L, new ExternalRow(Array(1000L, 7, 101L, 102L), vol4Schema)),
-    (1000L, new ExternalRow(Array(1000L, 3, 200L, 200L), vol4Schema)),
-    (1000L, new ExternalRow(Array(1000L, 3, 201L, 202L), vol4Schema)),
-    (1050L, new ExternalRow(Array(1050L, 3, 300L, 300L), vol4Schema)),
-    (1050L, new ExternalRow(Array(1050L, 3, 301L, 302L), vol4Schema)),
-    (1050L, new ExternalRow(Array(1050L, 7, 400L, 400L), vol4Schema)),
-    (1050L, new ExternalRow(Array(1050L, 7, 401L, 402L), vol4Schema)),
-    (1100L, new ExternalRow(Array(1100L, 3, 500L, 500L), vol4Schema)),
-    (1100L, new ExternalRow(Array(1100L, 7, 600L, 602L), vol4Schema)),
-    (1100L, new ExternalRow(Array(1100L, 3, 501L, 501L), vol4Schema)),
-    (1100L, new ExternalRow(Array(1100L, 7, 601L, 601L), vol4Schema)),
-    (1150L, new ExternalRow(Array(1150L, 3, 700L, 700L), vol4Schema)),
-    (1150L, new ExternalRow(Array(1150L, 7, 800L, 802L), vol4Schema)),
-    (1150L, new ExternalRow(Array(1150L, 3, 701L, 701L), vol4Schema)),
-    (1150L, new ExternalRow(Array(1150L, 7, 801L, 801L), vol4Schema)),
-    (1200L, new ExternalRow(Array(1200L, 3, 900L, 902L), vol4Schema)),
-    (1200L, new ExternalRow(Array(1200L, 7, 1000L, 1000L), vol4Schema)),
-    (1200L, new ExternalRow(Array(1200L, 3, 901L, 901L), vol4Schema)),
-    (1200L, new ExternalRow(Array(1200L, 7, 1001L, 1002L), vol4Schema)),
-    (1250L, new ExternalRow(Array(1250L, 3, 1100L, 1100L), vol4Schema)),
-    (1250L, new ExternalRow(Array(1250L, 7, 1200L, 1202L), vol4Schema)),
-    (1250L, new ExternalRow(Array(1250L, 3, 1101L, 1101L), vol4Schema)),
-    (1250L, new ExternalRow(Array(1250L, 7, 1201L, 1201L), vol4Schema))
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 100L, 100L), vol4Schema)),
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 101L, 102L), vol4Schema)),
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 200L, 200L), vol4Schema)),
+    (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 201L, 202L), vol4Schema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 3, 300L, 300L), vol4Schema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 3, 301L, 302L), vol4Schema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 400L, 400L), vol4Schema)),
+    (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 401L, 402L), vol4Schema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 3, 500L, 500L), vol4Schema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 600L, 602L), vol4Schema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 3, 501L, 501L), vol4Schema)),
+    (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 601L, 601L), vol4Schema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 700L, 700L), vol4Schema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 7, 800L, 802L), vol4Schema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 701L, 701L), vol4Schema)),
+    (1150000000000L, new ExternalRow(Array(1150000000000L, 7, 801L, 801L), vol4Schema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 900L, 902L), vol4Schema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 1000L, 1000L), vol4Schema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 901L, 901L), vol4Schema)),
+    (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 1001L, 1002L), vol4Schema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 3, 1100L, 1100L), vol4Schema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 1200L, 1202L), vol4Schema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 3, 1101L, 1101L), vol4Schema)),
+    (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 1201L, 1201L), vol4Schema))
   )
 
   val defaultNumPartitions = 5
@@ -229,8 +229,8 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
 
   "TimeSeriesRDD" should "`select data between correctly`" in {
     val df = priceTSRdd.toDF
-    val df2 = df.filter(df("time") >= 1000L && df("time") < 1100L)
-    val df3 = TimeSeriesRDD.DFBetween(df, "19700101 00:16:40", "19700101 00:18:20", timeUnit = SECONDS)
+    val df2 = df.filter(df("time") >= 1000000000000L && df("time") < 1100000000000L)
+    val df3 = TimeSeriesRDD.DFBetween(df, Some(1000000000000L), Some(1100000000000L), "time")
 
     assert(df2.collect().deep == df3.collect().deep)
   }
@@ -240,18 +240,18 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
       "id" -> IntegerType, "price" -> DoubleType, "price2" -> DoubleType, "price3" -> DoubleType
     )
     val expectedData = Array[Row](
-      new ExternalRow(Array(1000L, 7, 0.5, 0.5, 1.0), expectedSchema),
-      new ExternalRow(Array(1000L, 3, 1.0, 1.0, 2.0), expectedSchema),
-      new ExternalRow(Array(1050L, 3, 1.5, 1.5, 3.0), expectedSchema),
-      new ExternalRow(Array(1050L, 7, 2.0, 2.0, 4.0), expectedSchema),
-      new ExternalRow(Array(1100L, 3, 2.5, 2.5, 5.0), expectedSchema),
-      new ExternalRow(Array(1100L, 7, 3.0, 3.0, 6.0), expectedSchema),
-      new ExternalRow(Array(1150L, 3, 3.5, 3.5, 7.0), expectedSchema),
-      new ExternalRow(Array(1150L, 7, 4.0, 4.0, 8.0), expectedSchema),
-      new ExternalRow(Array(1200L, 3, 4.5, 4.5, 9.0), expectedSchema),
-      new ExternalRow(Array(1200L, 7, 5.0, 5.0, 10.0), expectedSchema),
-      new ExternalRow(Array(1250L, 3, 5.5, 5.5, 11.0), expectedSchema),
-      new ExternalRow(Array(1250L, 7, 6.0, 6.0, 12.0), expectedSchema)
+      new ExternalRow(Array(1000000000000L, 7, 0.5, 0.5, 1.0), expectedSchema),
+      new ExternalRow(Array(1000000000000L, 3, 1.0, 1.0, 2.0), expectedSchema),
+      new ExternalRow(Array(1050000000000L, 3, 1.5, 1.5, 3.0), expectedSchema),
+      new ExternalRow(Array(1050000000000L, 7, 2.0, 2.0, 4.0), expectedSchema),
+      new ExternalRow(Array(1100000000000L, 3, 2.5, 2.5, 5.0), expectedSchema),
+      new ExternalRow(Array(1100000000000L, 7, 3.0, 3.0, 6.0), expectedSchema),
+      new ExternalRow(Array(1150000000000L, 3, 3.5, 3.5, 7.0), expectedSchema),
+      new ExternalRow(Array(1150000000000L, 7, 4.0, 4.0, 8.0), expectedSchema),
+      new ExternalRow(Array(1200000000000L, 3, 4.5, 4.5, 9.0), expectedSchema),
+      new ExternalRow(Array(1200000000000L, 7, 5.0, 5.0, 10.0), expectedSchema),
+      new ExternalRow(Array(1250000000000L, 3, 5.5, 5.5, 11.0), expectedSchema),
+      new ExternalRow(Array(1250000000000L, 7, 6.0, 6.0, 12.0), expectedSchema)
     )
 
     val expectedSchema2 = Schema(
@@ -259,18 +259,18 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
     )
 
     val expectedData2 = Array[Row](
-      new ExternalRow(Array(1000L, 14, 1.0, 0.5), expectedSchema2),
-      new ExternalRow(Array(1000L, 6, 2.0, 1.0), expectedSchema2),
-      new ExternalRow(Array(1050L, 6, 3.0, 1.5), expectedSchema2),
-      new ExternalRow(Array(1050L, 14, 4.0, 2.0), expectedSchema2),
-      new ExternalRow(Array(1100L, 6, 5.0, 2.5), expectedSchema2),
-      new ExternalRow(Array(1100L, 14, 6.0, 3.0), expectedSchema2),
-      new ExternalRow(Array(1150L, 6, 7.0, 3.5), expectedSchema2),
-      new ExternalRow(Array(1150L, 14, 8.0, 4.0), expectedSchema2),
-      new ExternalRow(Array(1200L, 6, 9.0, 4.5), expectedSchema2),
-      new ExternalRow(Array(1200L, 14, 10.0, 5.0), expectedSchema2),
-      new ExternalRow(Array(1250L, 6, 11.0, 5.5), expectedSchema2),
-      new ExternalRow(Array(1250L, 14, 12.0, 6.0), expectedSchema2)
+      new ExternalRow(Array(1000000000000L, 14, 1.0, 0.5), expectedSchema2),
+      new ExternalRow(Array(1000000000000L, 6, 2.0, 1.0), expectedSchema2),
+      new ExternalRow(Array(1050000000000L, 6, 3.0, 1.5), expectedSchema2),
+      new ExternalRow(Array(1050000000000L, 14, 4.0, 2.0), expectedSchema2),
+      new ExternalRow(Array(1100000000000L, 6, 5.0, 2.5), expectedSchema2),
+      new ExternalRow(Array(1100000000000L, 14, 6.0, 3.0), expectedSchema2),
+      new ExternalRow(Array(1150000000000L, 6, 7.0, 3.5), expectedSchema2),
+      new ExternalRow(Array(1150000000000L, 14, 8.0, 4.0), expectedSchema2),
+      new ExternalRow(Array(1200000000000L, 6, 9.0, 4.5), expectedSchema2),
+      new ExternalRow(Array(1200000000000L, 14, 10.0, 5.0), expectedSchema2),
+      new ExternalRow(Array(1250000000000L, 6, 11.0, 5.5), expectedSchema2),
+      new ExternalRow(Array(1250000000000L, 14, 12.0, 6.0), expectedSchema2)
     )
 
     val result = priceTSRdd.addColumns(
@@ -319,12 +319,12 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
     val rows = volData.map(_._2)
 
     val expectedData = Array[(Long, Row)](
-      (1000L, new ExternalRow(Array(1000L, Array(rows(0), rows(1))), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, Array(rows(2), rows(3))), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, Array(rows(4), rows(5))), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, Array(rows(6), rows(7))), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, Array(rows(8), rows(9))), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, Array(rows(10), rows(11))), expectedSchema))
+      (1000000000000L, new ExternalRow(Array(1000000000000L, Array(rows(0), rows(1))), expectedSchema)),
+      (1050000000000L, new ExternalRow(Array(1050000000000L, Array(rows(2), rows(3))), expectedSchema)),
+      (1100000000000L, new ExternalRow(Array(1100000000000L, Array(rows(4), rows(5))), expectedSchema)),
+      (1150000000000L, new ExternalRow(Array(1150000000000L, Array(rows(6), rows(7))), expectedSchema)),
+      (1200000000000L, new ExternalRow(Array(1200000000000L, Array(rows(8), rows(9))), expectedSchema)),
+      (1250000000000L, new ExternalRow(Array(1250000000000L, Array(rows(10), rows(11))), expectedSchema))
     )
 
     val result = volTSRdd.groupByCycle().collect()
@@ -341,33 +341,33 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
   it should "`addSummaryColumns` correctly" in {
     val expectedSchema = Schema("id" -> IntegerType, "volume" -> LongType, "volume_sum" -> DoubleType)
     val expectedData = Array[(Long, Row)](
-      (1000L, new ExternalRow(Array(1000L, 7, 100, 100.0), expectedSchema)),
-      (1000L, new ExternalRow(Array(1000L, 3, 200, 300.0), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 3, 300, 600.0), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 7, 400, 1000.0), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 3, 500, 1500.0), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 7, 600, 2100.0), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 3, 700, 2800.0), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 7, 800, 3600.0), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 3, 900, 4500.0), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 7, 1000, 5500.0), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 3, 1100, 6600.0), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 7, 1200, 7800.0), expectedSchema))
+      (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 100, 100.0), expectedSchema)),
+      (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 200, 300.0), expectedSchema)),
+      (1050000000000L, new ExternalRow(Array(1050000000000L, 3, 300, 600.0), expectedSchema)),
+      (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 400, 1000.0), expectedSchema)),
+      (1100000000000L, new ExternalRow(Array(1100000000000L, 3, 500, 1500.0), expectedSchema)),
+      (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 600, 2100.0), expectedSchema)),
+      (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 700, 2800.0), expectedSchema)),
+      (1150000000000L, new ExternalRow(Array(1150000000000L, 7, 800, 3600.0), expectedSchema)),
+      (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 900, 4500.0), expectedSchema)),
+      (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 1000, 5500.0), expectedSchema)),
+      (1250000000000L, new ExternalRow(Array(1250000000000L, 3, 1100, 6600.0), expectedSchema)),
+      (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 1200, 7800.0), expectedSchema))
     )
 
     val expectedData2 = Array[(Long, Row)](
-      (1000L, new ExternalRow(Array(1000L, 7, 100, 100.0), expectedSchema)),
-      (1000L, new ExternalRow(Array(1000L, 3, 200, 200.0), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 3, 300, 500.0), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 7, 400, 500.0), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 3, 500, 1000.0), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 7, 600, 1100.0), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 3, 700, 1700.0), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 7, 800, 1900.0), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 3, 900, 2600.0), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 7, 1000, 2900.0), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 3, 1100, 3700.0), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 7, 1200, 4100.0), expectedSchema))
+      (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 100, 100.0), expectedSchema)),
+      (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 200, 200.0), expectedSchema)),
+      (1050000000000L, new ExternalRow(Array(1050000000000L, 3, 300, 500.0), expectedSchema)),
+      (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 400, 500.0), expectedSchema)),
+      (1100000000000L, new ExternalRow(Array(1100000000000L, 3, 500, 1000.0), expectedSchema)),
+      (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 600, 1100.0), expectedSchema)),
+      (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 700, 1700.0), expectedSchema)),
+      (1150000000000L, new ExternalRow(Array(1150000000000L, 7, 800, 1900.0), expectedSchema)),
+      (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 900, 2600.0), expectedSchema)),
+      (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 1000, 2900.0), expectedSchema)),
+      (1250000000000L, new ExternalRow(Array(1250000000000L, 3, 1100, 3700.0), expectedSchema)),
+      (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 1200, 4100.0), expectedSchema))
     )
 
     val result1 = volTSRdd.addSummaryColumns(Summarizers.sum("volume"))
@@ -384,7 +384,7 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
 
   it should "`addWindows` correctly" in {
 
-    val windowLength = "50ns"
+    val windowLength = "50s"
     val windowColumnName = s"window_past_$windowLength"
 
     val innerRowSchema = Schema("id" -> IntegerType, "volume" -> LongType)
@@ -395,19 +395,30 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
     val rows = volData.map(_._2)
 
     val expectedData = Array[(Long, Row)](
-      (1000L, new ExternalRow(Array(1000L, 7, 100, Array(rows(0), rows(1))), expectedSchema)),
-      (1000L, new ExternalRow(Array(1000L, 3, 200, Array(rows(0), rows(1))), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 3, 300, Array(rows(0), rows(1), rows(2), rows(3))), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 7, 400, Array(rows(0), rows(1), rows(2), rows(3))), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 3, 500, Array(rows(2), rows(3), rows(4), rows(5))), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 7, 600, Array(rows(2), rows(3), rows(4), rows(5))), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 3, 700, Array(rows(4), rows(5), rows(6), rows(7))), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 7, 800, Array(rows(4), rows(5), rows(6), rows(7))), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 3, 900, Array(rows(6), rows(7), rows(8), rows(9))), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 7, 1000, Array(rows(6), rows(7), rows(8), rows(9))), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 3, 1100, Array(rows(8), rows(9), rows(10), rows(11))), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 7, 1200, Array(rows(8), rows(9), rows(10), rows(11))), expectedSchema))
+      (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 100, Array(rows(0), rows(1))), expectedSchema)),
+      (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 200, Array(rows(0), rows(1))), expectedSchema)),
+      (1050000000000L,
+        new ExternalRow(Array(1050000000000L, 3, 300, Array(rows(0), rows(1), rows(2), rows(3))), expectedSchema)),
+      (1050000000000L,
+        new ExternalRow(Array(1050000000000L, 7, 400, Array(rows(0), rows(1), rows(2), rows(3))), expectedSchema)),
+      (1100000000000L,
+        new ExternalRow(Array(1100000000000L, 3, 500, Array(rows(2), rows(3), rows(4), rows(5))), expectedSchema)),
+      (1100000000000L,
+        new ExternalRow(Array(1100000000000L, 7, 600, Array(rows(2), rows(3), rows(4), rows(5))), expectedSchema)),
+      (1150000000000L,
+        new ExternalRow(Array(1150000000000L, 3, 700, Array(rows(4), rows(5), rows(6), rows(7))), expectedSchema)),
+      (1150000000000L,
+        new ExternalRow(Array(1150000000000L, 7, 800, Array(rows(4), rows(5), rows(6), rows(7))), expectedSchema)),
+      (1200000000000L,
+        new ExternalRow(Array(1200000000000L, 3, 900, Array(rows(6), rows(7), rows(8), rows(9))), expectedSchema)),
+      (1200000000000L,
+        new ExternalRow(Array(1200000000000L, 7, 1000, Array(rows(6), rows(7), rows(8), rows(9))), expectedSchema)),
+      (1250000000000L,
+        new ExternalRow(Array(1250000000000L, 3, 1100, Array(rows(8), rows(9), rows(10), rows(11))), expectedSchema)),
+      (1250000000000L,
+        new ExternalRow(Array(1250000000000L, 7, 1200, Array(rows(8), rows(9), rows(10), rows(11))), expectedSchema))
     )
+
     val result1 = volTSRdd.addWindows(Windows.pastAbsoluteTime(windowLength)).collect()
     val expectedResult = expectedData.map(_._2)
 
@@ -421,7 +432,7 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
 
   it should "`addWindows` correctly with secondary key" in {
     val lookback = 99
-    val windowLength = s"${lookback}ns"
+    val windowLength = s"${lookback}s"
     val windowColumnName = s"window_past_${windowLength}"
 
     val resultWindows = forecastTSRdd.addWindows(
@@ -436,7 +447,8 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
           windowRow =>
             val windowRowTime = windowRow.getAs[Long]("time")
             val windowRowKey = windowRow.getAs[Int]("id")
-            rowTime - lookback <= windowRowTime && windowRowTime <= rowTime && windowRowKey == rowKey
+            rowTime - lookback * 1000000000L <= windowRowTime &&
+              windowRowTime <= rowTime && windowRowKey == rowKey
         }
     }
 
@@ -464,30 +476,30 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
   it should "`keepColumns` correctly" in {
     val expectedSchema = Schema("id" -> IntegerType, "volume.1" -> IntegerType)
     val expectedData = Array[(Long, Row)](
-      (1000L, new ExternalRow(Array(1000L, 7, 100L), expectedSchema)),
-      (1000L, new ExternalRow(Array(1000L, 7, 102L), expectedSchema)),
-      (1000L, new ExternalRow(Array(1000L, 3, 200L), expectedSchema)),
-      (1000L, new ExternalRow(Array(1000L, 3, 202L), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 3, 300L), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 3, 302L), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 7, 400L), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 7, 402L), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 3, 500L), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 7, 602L), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 3, 501L), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 7, 601L), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 3, 700L), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 7, 802L), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 3, 701L), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 7, 801L), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 3, 902L), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 7, 1000L), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 3, 901L), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 7, 1002L), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 3, 1100L), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 7, 1202L), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 3, 1101L), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 7, 1201L), expectedSchema))
+      (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 100L), expectedSchema)),
+      (1000000000000L, new ExternalRow(Array(1000000000000L, 7, 102L), expectedSchema)),
+      (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 200L), expectedSchema)),
+      (1000000000000L, new ExternalRow(Array(1000000000000L, 3, 202L), expectedSchema)),
+      (1050000000000L, new ExternalRow(Array(1050000000000L, 3, 300L), expectedSchema)),
+      (1050000000000L, new ExternalRow(Array(1050000000000L, 3, 302L), expectedSchema)),
+      (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 400L), expectedSchema)),
+      (1050000000000L, new ExternalRow(Array(1050000000000L, 7, 402L), expectedSchema)),
+      (1100000000000L, new ExternalRow(Array(1100000000000L, 3, 500L), expectedSchema)),
+      (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 602L), expectedSchema)),
+      (1100000000000L, new ExternalRow(Array(1100000000000L, 3, 501L), expectedSchema)),
+      (1100000000000L, new ExternalRow(Array(1100000000000L, 7, 601L), expectedSchema)),
+      (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 700L), expectedSchema)),
+      (1150000000000L, new ExternalRow(Array(1150000000000L, 7, 802L), expectedSchema)),
+      (1150000000000L, new ExternalRow(Array(1150000000000L, 3, 701L), expectedSchema)),
+      (1150000000000L, new ExternalRow(Array(1150000000000L, 7, 801L), expectedSchema)),
+      (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 902L), expectedSchema)),
+      (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 1000L), expectedSchema)),
+      (1200000000000L, new ExternalRow(Array(1200000000000L, 3, 901L), expectedSchema)),
+      (1200000000000L, new ExternalRow(Array(1200000000000L, 7, 1002L), expectedSchema)),
+      (1250000000000L, new ExternalRow(Array(1250000000000L, 3, 1100L), expectedSchema)),
+      (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 1202L), expectedSchema)),
+      (1250000000000L, new ExternalRow(Array(1250000000000L, 3, 1101L), expectedSchema)),
+      (1250000000000L, new ExternalRow(Array(1250000000000L, 7, 1201L), expectedSchema))
     )
 
     var result = vol4TSRdd.keepColumns("id", "volume.1")
@@ -525,18 +537,18 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
         StructField("id", IntegerType) :: Nil
     )
     val expectedData = Array[(Long, Row)](
-      (1000L, new ExternalRow(Array(1000L, 7), expectedSchema)),
-      (1000L, new ExternalRow(Array(1000L, 3), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 3), expectedSchema)),
-      (1050L, new ExternalRow(Array(1050L, 7), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 3), expectedSchema)),
-      (1100L, new ExternalRow(Array(1100L, 7), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 3), expectedSchema)),
-      (1150L, new ExternalRow(Array(1150L, 7), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 3), expectedSchema)),
-      (1200L, new ExternalRow(Array(1200L, 7), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 3), expectedSchema)),
-      (1250L, new ExternalRow(Array(1250L, 7), expectedSchema))
+      (1000000000000L, new ExternalRow(Array(1000000000000L, 7), expectedSchema)),
+      (1000000000000L, new ExternalRow(Array(1000000000000L, 3), expectedSchema)),
+      (1050000000000L, new ExternalRow(Array(1050000000000L, 3), expectedSchema)),
+      (1050000000000L, new ExternalRow(Array(1050000000000L, 7), expectedSchema)),
+      (1100000000000L, new ExternalRow(Array(1100000000000L, 3), expectedSchema)),
+      (1100000000000L, new ExternalRow(Array(1100000000000L, 7), expectedSchema)),
+      (1150000000000L, new ExternalRow(Array(1150000000000L, 3), expectedSchema)),
+      (1150000000000L, new ExternalRow(Array(1150000000000L, 7), expectedSchema)),
+      (1200000000000L, new ExternalRow(Array(1200000000000L, 3), expectedSchema)),
+      (1200000000000L, new ExternalRow(Array(1200000000000L, 7), expectedSchema)),
+      (1250000000000L, new ExternalRow(Array(1250000000000L, 3), expectedSchema)),
+      (1250000000000L, new ExternalRow(Array(1250000000000L, 7), expectedSchema))
     )
 
     val result = volTSRdd.deleteColumns("volume")
@@ -551,22 +563,22 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
   }
 
   it should "`lookBackwardClock` correctly" in {
-    val result = priceTSRdd.lookBackwardClock("1000ns")
+    val result = priceTSRdd.lookBackwardClock("1000s")
     val expectedData = priceTSRdd.collect().map {
       r =>
         val values = r.toSeq.toArray
-        values(0) = r.getLong(0) - 1000L
+        values(0) = r.getLong(0) - 1000000000000L
         new ExternalRow(values, r.schema): Row
     }
     assert(result.collect().deep == expectedData.deep)
   }
 
   it should "`lookForwardClock` correctly" in {
-    val result = priceTSRdd.lookForwardClock("1000ns")
+    val result = priceTSRdd.lookForwardClock("1000s")
     val expectedData = priceTSRdd.collect().map {
       r =>
         val values = r.toSeq.toArray
-        values(0) = r.getLong(0) + 1000L
+        values(0) = r.getLong(0) + 1000000000000L
         new ExternalRow(values, r.schema): Row
     }
     assert(result.collect().deep == expectedData.deep)
@@ -595,18 +607,18 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
   it should "set time and return an ordered rdd" in {
     val updatedRdd = clockTSRdd.setTime {
       row: Row =>
-        val time = row.getAs[Long]("time") / 100
-        if (time % 2 == 1) {
+        val time = row.getAs[Long]("time")
+        if (time % 200000000000L != 0) {
           time * 2
         } else {
           time
         }
     }.collect()
 
-    assert(updatedRdd(0).getAs[Long]("time") === 10)
-    assert(updatedRdd(1).getAs[Long]("time") === 12)
-    assert(updatedRdd(2).getAs[Long]("time") === 22)
-    assert(updatedRdd(3).getAs[Long]("time") === 26)
+    assert(updatedRdd(0).getAs[Long]("time") === 1000000000000L)
+    assert(updatedRdd(1).getAs[Long]("time") === 1200000000000L)
+    assert(updatedRdd(2).getAs[Long]("time") === 2200000000000L)
+    assert(updatedRdd(3).getAs[Long]("time") === 2600000000000L)
   }
 
   it should "support adding nested data types" in {
@@ -632,10 +644,10 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
   }
 
   // This test is temporarily tagged as "Slow" so that scalatest runner could exclude this test optionally.
-  it should "read parquet files" taggedAs (Slow) ignore {
+  it should "read parquet files" taggedAs (Slow) in {
     withResource("/timeseries/parquet/PriceWithHeader.parquet") { source =>
       val expectedSchema = Schema("id" -> IntegerType, "price" -> DoubleType, "info" -> StringType)
-      val tsrdd = TimeSeriesRDD.fromParquet(sc, "file://" + source + "/*")(true, NANOSECONDS)
+      val tsrdd = TimeSeriesRDD.fromParquet(sc, "file://" + source)(true, NANOSECONDS)
       val rows = tsrdd.collect()
 
       assert(tsrdd.schema == expectedSchema)
@@ -648,9 +660,9 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
   }
 
   // This test is temporarily tagged as "Slow" so that scalatest runner could exclude this test optionally.
-  it should "not modify original rows during conversions/modifications" taggedAs (Slow) ignore {
+  it should "not modify original rows during conversions/modifications" taggedAs (Slow) in {
     withResource("/timeseries/parquet/PriceWithHeader.parquet") { source =>
-      val tsrdd = TimeSeriesRDD.fromParquet(sc, "file://" + source + "/*")(true, NANOSECONDS)
+      val tsrdd = TimeSeriesRDD.fromParquet(sc, "file://" + source)(true, NANOSECONDS)
       // fromParquet outputs UnsafeRows. Recording the initial state.
       val rows = tsrdd.collect()
 

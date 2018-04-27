@@ -75,7 +75,9 @@ case class ExponentialSmoothingSummarizer(
   exponentialSmoothingType: ExponentialSmoothingInterpolation.Value,
   exponentialSmoothingConvention: ExponentialSmoothingConvention.Value
 ) extends FlippableSummarizer
-  with FilterNullInput {
+  with FilterNullInput
+  with TimeAwareSummarizer {
+
   private val Sequence(Seq(xColumn, timeColumn)) = requiredColumns
   private val xColumnId = inputSchema.fieldIndex(xColumn)
   private val timeColumnId = inputSchema.fieldIndex(timeColumn)
@@ -97,10 +99,12 @@ case class ExponentialSmoothingSummarizer(
 
   override val schema: StructType = Schema.of(s"${xColumn}_ema" -> DoubleType)
 
-  override def toT(r: InternalRow): SmoothingRow = SmoothingRow(
-    time = r.getLong(timeColumnId),
-    x = xExtractor(r)
-  )
+  override def toT(r: InternalRow): SmoothingRow = {
+    SmoothingRow(
+      time = getTimeNanos(r, timeColumnId),
+      x = xExtractor(r)
+    )
+  }
 
   override def fromV(o: ExponentialSmoothingOutput): GenericInternalRow = {
     new GenericInternalRow(

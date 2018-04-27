@@ -14,16 +14,26 @@
  *  limitations under the License.
  */
 
-package com.twosigma.flint
+package com.twosigma.flint.timeseries
 
-private[flint] object FlintConf {
-  // Max batch size in summarizeWindowsBatch
-  val WINDOW_BATCH_MAXSIZE_CONF = "flint.window.batch.maxSize"
-  // TODO: Fine tune this.
-  val WINDOW_BATCH_MAXSIZE_DEFAULT = "500000"
+import com.twosigma.flint.FlintConf
+import org.apache.spark.sql.SparkSession
 
-  // Whether to use nanos or timestamp for the time column
-  // Supported value: long or timestamp
-  val TIME_TYPE_CONF = "flint.timetype"
-  val TIME_TYPE_DEFAULT = "long"
+trait TimeTypeSuite {
+  def withTimeType[T](conf: String*)(block: => Unit): Unit = {
+    val spark = SparkSession.builder().getOrCreate()
+
+    val savedConf = spark.conf.getOption(FlintConf.TIME_TYPE_CONF)
+
+    conf.foreach {
+      conf =>
+        spark.conf.set(FlintConf.TIME_TYPE_CONF, conf)
+        block
+    }
+
+    savedConf match {
+      case None => spark.conf.unset(FlintConf.TIME_TYPE_CONF)
+      case Some(conf) => spark.conf.set(FlintConf.TIME_TYPE_CONF, conf)
+    }
+  }
 }

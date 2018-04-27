@@ -26,6 +26,7 @@ import com.twosigma.flint.timeseries.row.{ InternalRowUtils, Schema }
 import com.twosigma.flint.timeseries.summarize.{ ColumnList, OverlappableSummarizer, OverlappableSummarizerFactory, SummarizerFactory }
 import com.twosigma.flint.timeseries.time.TimeFormat
 import com.twosigma.flint.timeseries.window.summarizer.ArrowWindowBatchSummarizer
+import com.twosigma.flint.timeseries.time.types.TimeType
 import com.twosigma.flint.timeseries.window.{ ShiftTimeWindow, TimeWindow, Window }
 import org.apache.arrow.memory.RootAllocator
 import org.apache.spark.annotation.Experimental
@@ -34,11 +35,12 @@ import org.apache.spark.{ Dependency, OneToOneDependency, SparkContext, TaskCont
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, GenericRow, GenericRowWithSchema => ERow }
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.functions._
+import org.apache.spark.sql.functions.{ udf, _ }
 import org.apache.spark.sql.types._
 import org.apache.spark.storage.StorageLevel
 
 import scala.concurrent.duration._
+import org.apache.spark.sql.SQLImplicits
 
 object TimeSeriesRDD {
   /**
@@ -54,7 +56,7 @@ object TimeSeriesRDD {
   /**
    * Checks if the schema is legal.
    */
-  private def requireSchema(schema: StructType): Unit = {
+  private[flint] def requireSchema(schema: StructType): Unit = {
     require(
       schema.length == schema.fieldNames.toSet.size,
       s"Schema $schema contains duplicate field names"
@@ -62,6 +64,7 @@ object TimeSeriesRDD {
     require(
       schema.exists {
         case StructField("time", LongType, _, _) => true
+        case StructField("time", TimestampType, _, _) => true
         case _ => false
       },
       s"Schema $schema doesn't contain a valid time column"
@@ -101,17 +104,43 @@ object TimeSeriesRDD {
     }
   }
 
-  private[flint] def convertDfTimestamps(
-    dataFrame: DataFrame,
-    timeUnit: TimeUnit
-  ): DataFrame = {
-    if (timeUnit == NANOSECONDS) {
-      dataFrame
-    } else {
-      val converter: Long => Long = TimeUnit.NANOSECONDS.convert(_, timeUnit)
-      val udfConverter = udf(converter)
+  /**
+   * Canonize time column of the DataFrame to be the specified type.
+   *
+   * Specified type can be either long (nanoseconds) or timestamp, defined by spark config.
+   */
+  @PythonApi
+  def canonizeTime(dataFrame: DataFrame, timeUnit: TimeUnit): DataFrame = {
+    val targetTimeType = TimeType(dataFrame.sparkSession.conf.get(
+      FlintConf.TIME_TYPE_CONF, FlintConf.TIME_TYPE_DEFAULT
+    ))
 
-      dataFrame.withColumn(timeColumnName, udfConverter(col(timeColumnName)))
+    val inputTimeDataType = dataFrame.schema(timeColumnName).dataType
+
+    (inputTimeDataType, targetTimeType) match {
+      case (LongType, TimeType.LongType) =>
+        if (timeUnit == NANOSECONDS) {
+          dataFrame
+        } else {
+          val converter: Long => Long = TimeUnit.NANOSECONDS.convert(_, timeUnit)
+          val udfConverter = udf(converter)
+          dataFrame.withColumn(timeColumnName, udfConverter(col(timeColumnName)))
+        }
+      case (LongType, TimeType.TimestampType) =>
+        // When casting a long to timestamp, the long is treated as seconds
+        val converter: Long => Long = TimeUnit.SECONDS.convert(_, timeUnit)
+        val udfConverter = udf(converter)
+        dataFrame.withColumn(timeColumnName, udfConverter(col(timeColumnName)).cast(TimestampType))
+      case (TimestampType, TimeType.LongType) =>
+        // When casting from timestamp to long type, Spark will return the value in seconds
+        val converter: Long => Long = TimeUnit.NANOSECONDS.convert(_, SECONDS)
+        val udfConverter = udf(converter)
+        dataFrame.withColumn(timeColumnName, udfConverter(col(timeColumnName).cast(LongType)))
+      case (TimestampType, TimeType.TimestampType) =>
+        dataFrame
+      case _ => throw new IllegalArgumentException(
+        s"Unsupported types. inputTimeType: $inputTimeDataType timeType: $targetTimeType"
+      )
     }
   }
 
@@ -123,6 +152,7 @@ object TimeSeriesRDD {
     numSlices: Int = 1
   ): TimeSeriesRDD = {
     requireSchema(schema)
+
     val timeIndex = schema.fieldIndex(timeColumnName)
     val rdd = sc.parallelize(
       rows.map { row => (row.getLong(timeIndex), row) }, numSlices
@@ -145,32 +175,6 @@ object TimeSeriesRDD {
     TimeSeriesRDD.fromInternalOrderedRDD(rdd.mapValues {
       case (_, row) => converter(row)
     }, schema)
-  }
-
-  /**
-   * Filter a [[org.apache.spark.sql.DataFrame]] to contain data within a time range
-   *
-   * @param dataFrame  A [[org.apache.spark.sql.DataFrame]].
-   * @param begin      Optional begin time of the returned [[DataFrame]], inclusive
-   * @param end        Optional end time of the returned [[DataFrame]], exclusive
-   * @param timeUnit   Optional. The time unit under time column which could be
-   *                   [[scala.concurrent.duration.NANOSECONDS]],[[scala.concurrent.duration.MILLISECONDS]], etc.
-   * @param timeColumn Optional. The name of column in `df` that specifies the column name for time. Default: "time"
-   * @return a [[org.apache.spark.sql.DataFrame]].
-   */
-  @deprecated("0.3.4", "No longer used by Python bindings")
-  @PythonApi
-  private[flint] def DFBetween(
-    dataFrame: DataFrame,
-    @Nullable begin: String,
-    @Nullable end: String,
-    timeUnit: TimeUnit = NANOSECONDS,
-    timeColumn: String = timeColumnName
-  ): DataFrame = {
-    val beginNanos = Option(begin).map(TimeFormat.parse(_, timeUnit = timeUnit))
-    val endNanos = Option(end).map(TimeFormat.parse(_, timeUnit = timeUnit))
-
-    DFBetween(dataFrame, beginNanos, endNanos, timeColumn = timeColumn)
   }
 
   /**
@@ -213,8 +217,6 @@ object TimeSeriesRDD {
    * @param timeUnit      The time unit under time column which could be [[scala.concurrent.duration.NANOSECONDS]],
    *                      [[scala.concurrent.duration.MILLISECONDS]], etc.
    * @param timeColumn    Optional. The name of column in `df` that specifies the column name for time.
-   * @param isNormalized  Whether the `rdd` is normalized (it means sorted and partitioned in a such way that
-   *                      all rows with timestamp `ts` (for each ts) belong to one partition).
    * @return a [[TimeSeriesRDD]].
    * @example
    * {{{
@@ -235,18 +237,11 @@ object TimeSeriesRDD {
   )(
     isSorted: Boolean,
     timeUnit: TimeUnit,
-    timeColumn: String = timeColumnName,
-    isNormalized: Boolean = false
+    timeColumn: String = timeColumnName
   ): TimeSeriesRDD = {
-    val newSchema = Schema.rename(schema, Seq(timeColumn -> timeColumnName))
-    requireSchema(newSchema)
-    val converter = getExternalRowConverter(newSchema, timeUnit)
-    val pairRdd = rdd.map(converter)
-    // TODO We should use KeyPartitioningType for the TimeSeriesRDD level APIs as well.
-    TimeSeriesRDD.fromInternalOrderedRDD(
-      OrderedRDD.fromRDD(pairRdd, KeyPartitioningType(isSorted, isNormalized)),
-      newSchema
-    )
+    val sparkSession = SparkSession.builder().getOrCreate()
+    val df = sparkSession.createDataFrame(rdd, schema)
+    fromDF(df)(isSorted, timeUnit, timeColumn)
   }
 
   /**
@@ -287,9 +282,9 @@ object TimeSeriesRDD {
    * Prepare [[DataFrame]] for conversion to [[TimeSeriesRDD]]. The list of requirements:
    * 1) Time column should exist, and it should be named `time`.
    * 2) [[DataFrame]] should be sorted by `time`.
-   * 3) Timestamps should be converted to nanoseconds.
-   * 4) `time` should be the first column.
-   * We try to avoid overwriting or renaming `time` column, because these operations change it's attribute id, and
+   * 3) Time column should be converted to nanoseconds or timestamp, depending on time type.
+   * 4) Time column should be the first column.
+   * We try to avoid overwriting or renaming time` column, because these operations change it's attribute id, and
    * Catalyst partitioning metadata no longer matches the attribute, causing issues in TimeSeriesStore.isNormalized:
    * {{{
    * df("time").expr                             // time#25L
@@ -310,6 +305,7 @@ object TimeSeriesRDD {
       !dataFrame.columns.contains(timeColumnName) || timeColumn == timeColumnName,
       "Cannot use another column as timeColumn while a column with name `time` exists"
     )
+
     val df = if (timeColumn == timeColumnName) {
       dataFrame
     } else {
@@ -317,8 +313,8 @@ object TimeSeriesRDD {
     }
     requireSchema(df.schema)
 
-    val convertedDf = convertDfTimestamps(df, timeUnit)
-    // we want to keep time column first, but no code should rely on that
+    val convertedDf = canonizeTime(df, timeUnit)
+
     val timeFirstDf = if (convertedDf.schema.fieldIndex(timeColumnName) == 0) {
       convertedDf
     } else {
@@ -1459,19 +1455,6 @@ class TimeSeriesRDDImpl private[timeseries] (
 
   def groupByCycle(key: Seq[String] = Seq.empty): TimeSeriesRDD = summarizeCycles(Summarizers.rows("rows"), key)
 
-  // For python compatibility. Do not use this.
-  @PythonApi(until = "0.4.0")
-  private[flint] def groupByInterval(
-    clock: TimeSeriesRDD,
-    key: Seq[String],
-    beginInclusive: Boolean
-  ): TimeSeriesRDD =
-    if (beginInclusive) {
-      groupByInterval(clock, key, "begin", "begin")
-    } else {
-      groupByInterval(clock, key, "end", "end")
-    }
-
   def groupByInterval(
     clock: TimeSeriesRDD,
     key: Seq[String] = Seq.empty,
@@ -1570,21 +1553,6 @@ class TimeSeriesRDDImpl private[timeseries] (
         },
       newSchema
     )
-  }
-
-  // For python compatibility. Do not use this.
-  @PythonApi(until = "0.4.0")
-  private[flint] def summarizeIntervals(
-    clock: TimeSeriesRDD,
-    summarizer: SummarizerFactory,
-    key: Seq[String],
-    beginInclusive: Boolean
-  ): TimeSeriesRDD = {
-    if (beginInclusive) {
-      summarizeIntervals(clock, summarizer, key, "begin", "begin")
-    } else {
-      summarizeIntervals(clock, summarizer, key, "end", "end")
-    }
   }
 
   def summarizeIntervals(
@@ -1844,8 +1812,13 @@ class TimeSeriesRDDImpl private[timeseries] (
     // table = table.withColumn('col3', udf(...)(table.col2))
     // table.select("col1").distinct().show()
     // The first and second show has different results, "col1" seems to be corrupted
+
+    val timeType = TimeType(this.sparkSession.conf.get(
+      FlintConf.TIME_TYPE_CONF, FlintConf.TIME_TYPE_DEFAULT
+    ))
+
     val newRdd = orderedRdd.shift(window.shift).mapValues {
-      case (t, iRow) => InternalRowUtils.update(iRow, schema, timeIndex -> t)
+      case (t, iRow) => InternalRowUtils.update(iRow, schema, timeIndex -> timeType.nanosToInternal(t))
     }
 
     TimeSeriesRDD.fromInternalOrderedRDD(newRdd, schema)

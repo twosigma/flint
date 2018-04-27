@@ -139,7 +139,7 @@ private[flint] trait TimeSeriesTestData {
       case index =>
         CloseOpen(index * intervalWitdh, Some((index + 1) * intervalWitdh))
     }
-    TimeSeriesRDD.fromDFWithRanges(DFConverter.toDataFrame(sqlContext, df.schema, rdd), ranges)
+    TimeSeriesRDD.fromDFWithRanges(DFConverter.toDataFrame(rdd, df.schema), ranges)
   }
 }
 

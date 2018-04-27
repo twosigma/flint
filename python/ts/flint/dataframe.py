@@ -121,13 +121,13 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         self._is_sorted = is_sorted
         self._tsrdd_part_info = tsrdd_part_info
 
-        self._jdf = df._jdf
         self._lazy_tsrdd = None
-
+        self._jdf = df._jdf
         super().__init__(self._jdf, sql_ctx)
 
         self._jpkg = java.Packages(self._sc)
         self._junit = utils.junit(self._sc, unit) if isinstance(unit,str) else unit
+        self._jdf = self._jpkg.TimeSeriesRDD.canonizeTime(self._jdf, self._junit)
 
         if tsrdd_part_info:
             if not is_sorted:

@@ -31,12 +31,15 @@ object DFConverter {
     new DataFrame(df.sparkSession, df.logicalPlan, RowEncoder(df.schema))
   }
 
-  def toDataFrame(sqlContext: SQLContext, schema: StructType, rdd: OrderedRDD[Long, InternalRow]): DataFrame = {
+  def toDataFrame(rdd: OrderedRDD[Long, InternalRow], schema: StructType): DataFrame = {
+    val spark = SparkSession.builder().getOrCreate()
     val internalRows = rdd.values
-
-    sqlContext.internalCreateDataFrame(internalRows, schema)
+    spark.internalCreateDataFrame(internalRows, schema)
   }
 
-  def toDataFrame(sqlContext: SQLContext, schema: StructType, rdd: RDD[InternalRow]): DataFrame =
-    sqlContext.internalCreateDataFrame(rdd, schema)
+  def toDataFrame(rdd: RDD[InternalRow], schema: StructType): DataFrame = {
+    val spark = SparkSession.builder().getOrCreate()
+    spark.internalCreateDataFrame(rdd, schema)
+  }
+
 }

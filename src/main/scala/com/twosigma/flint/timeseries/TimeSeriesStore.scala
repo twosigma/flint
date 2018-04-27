@@ -17,6 +17,7 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD, RangeSplit }
+import com.twosigma.flint.timeseries.time.types.TimeType
 import org.apache.spark.{ Dependency, OneToOneDependency }
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
@@ -24,7 +25,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{ Ascending, AttributeReference, SortOrder }
 import org.apache.spark.sql.catalyst.plans.physical.{ ClusteredDistribution, OrderedDistribution }
 import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{ LongType, StructType, TimestampType }
 import org.apache.spark.storage.StorageLevel
 
 /**
@@ -37,9 +38,9 @@ private[timeseries] object TimeSeriesStore {
   /**
    * Convert a [[org.apache.spark.sql.DataFrame]] to a [[TimeSeriesStore]].
    *
-   * @param dataFrame    A [[org.apache.spark.sql.DataFrame]] with `time` column, and sorted by time value.
-   * @param partInfoOpt  This parameter should be either empty, or correctly represent partitioning of
-   *                     the given DataFrame.
+   * @param dataFrame   A [[org.apache.spark.sql.DataFrame]] with `time` column, and sorted by time value.
+   * @param partInfoOpt This parameter should be either empty, or correctly represent partitioning of
+   *                    the given DataFrame.
    * @return a [[TimeSeriesStore]].
    */
   def apply(dataFrame: DataFrame, partInfoOpt: Option[PartitionInfo]): TimeSeriesStore = partInfoOpt match {
@@ -56,8 +57,8 @@ private[timeseries] object TimeSeriesStore {
       // Ideally, we may use dataFrame.select("time").queryExecution.toRdd to build the `keyRdd`.
       // This may allow us push down column pruning and thus reduce IO. However, there is no guarantee that
       // DataFrame.sort("time").select("time") preserves partitioning as DataFrame.sort("time").
-      val timeColumnIndex = schema.fieldIndex(TimeSeriesRDD.timeColumnName)
-      val keyRdd = internalRows.mapPartitions { rows => rows.map(_.getLong(timeColumnIndex)) }
+      // val keyRdd = internalRows.mapPartitions { rows => rows.map(_.getLong(timeColumnIndex)) }
+      val keyRdd = pairRdd.mapPartitions { tuples => tuples.map(_._1) }
 
       // The input DataFrame is sorted already, along with clustered distribution it's normalized
       val isNormalized = isClustered(dataFrame.queryExecution.executedPlan)
@@ -78,9 +79,7 @@ private[timeseries] object TimeSeriesStore {
    * @return a [[TimeSeriesStore]].
    */
   def apply(orderedRdd: OrderedRDD[Long, InternalRow], schema: StructType): TimeSeriesStore = {
-    val sc = orderedRdd.sparkContext
-    val sqlContext = SQLContext.getOrCreate(sc)
-    val df = DFConverter.toDataFrame(sqlContext, schema, orderedRdd)
+    val df = DFConverter.toDataFrame(orderedRdd, schema)
 
     require(
       orderedRdd.getNumPartitions == 0 || orderedRdd.partitions(0).index == 0,
@@ -107,11 +106,12 @@ private[timeseries] object TimeSeriesStore {
     requireCopy: Boolean
   ): InternalRow => (Long, InternalRow) = {
     val timeColumnIndex = schema.fieldIndex(TimeSeriesRDD.timeColumnName)
+    val timeType = TimeType(schema(timeColumnIndex).dataType)
 
     if (requireCopy) {
-      (internalRow: InternalRow) => (internalRow.getLong(timeColumnIndex), internalRow.copy())
+      (row: InternalRow) => (timeType.internalToNanos(row.getLong(timeColumnIndex)), row.copy())
     } else {
-      (internalRow: InternalRow) => (internalRow.getLong(timeColumnIndex), internalRow)
+      (row: InternalRow) => (timeType.internalToNanos(row.getLong(timeColumnIndex)), row)
     }
   }
 
@@ -268,4 +268,8 @@ private[timeseries] class NormalizedDataFrameStore(
 private[timeseries] case class PartitionInfo(
   splits: Seq[RangeSplit[Long]],
   deps: Seq[Dependency[_]]
-) extends Serializable {}
+) extends Serializable {
+  // TODO: Add checks to make sure partition boundary is at least second resolution here.
+  //       This is currently not done because Smooth even size partitioning strategy will
+  //       give nanoseconds resolution.
+}

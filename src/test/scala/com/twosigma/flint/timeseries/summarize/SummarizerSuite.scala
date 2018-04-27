@@ -71,6 +71,7 @@ class SummarizerSuite extends TimeSeriesSuite {
       numSlices = defaultPartitionParallelism,
       seed = 31415926L
     ).generate(),
+
     new TimeSeriesGenerator(
       sc,
       begin = 0L,
