@@ -2403,3 +2403,7 @@ def test_groupedData(tests_utils, price):
 
 def test_preview(tests_utils, price):
     tests_utils.assert_same(price.limit(10).toPandas(), price.preview())
+
+def test_column_selections(tests_utils, price):
+    tests_utils.assert_same(price.select('price').toPandas(), price.toPandas()[['price']])
+    tests_utils.assert_same(price.select('time').toPandas(), price.toPandas()[['time']])

@@ -126,8 +126,13 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         super().__init__(self._jdf, sql_ctx)
 
         self._jpkg = java.Packages(self._sc)
-        self._junit = utils.junit(self._sc, unit) if isinstance(unit,str) else unit
-        self._jdf = self._jpkg.TimeSeriesRDD.canonizeTime(self._jdf, self._junit)
+        self._junit = utils.junit(self._sc, unit) if isinstance(unit, str) else unit
+
+        # Only canonizeTime if the time column exists
+        # If time column exists but is not in the expected type, canonizeTime will
+        # throw exception
+        if time_column in df.columns:
+            self._jdf = self._jpkg.TimeSeriesRDD.canonizeTime(self._jdf, self._junit)
 
         if tsrdd_part_info:
             if not is_sorted:
