@@ -20,7 +20,7 @@ import py4j
 import pyspark
 from pyspark import SparkContext
 from pyspark.sql.functions import UserDefinedFunction
-from pyspark.sql.types import StringType, DataType
+from pyspark.sql.types import DoubleType, DataType
 
 from .udf import _wrap_data_types
 
@@ -72,7 +72,7 @@ class FlintUserDefinedFunction(UserDefinedFunction):
 
         return udf_col
 
-def udf(f=None, returnType=StringType()):
+def udf(f=None, returnType=DoubleType()):
     # Modified from
     # https://github.com/apache/spark/blob/master/python/pyspark/sql/functions.py
     # to add additional supports for Flint
@@ -119,6 +119,8 @@ def udf(f=None, returnType=StringType()):
        :class:`~pyspark.sql.DataFrame` is needed to specify the input,
        for instance, ``df[['v', 'w']]``.
 
+       Default return type is DoubleType.
+
        Example:
 
        Takes :class:`pandas.Series`, returns a scalar
@@ -152,7 +154,7 @@ def udf(f=None, returnType=StringType()):
        .. seealso::
        :meth:`ts.flint.TimeSeriesDataFrame.summarizeCycles`
     '''
-    def _udf(f, returnType=StringType()):
+    def _udf(f, returnType=DoubleType()):
         return FlintUserDefinedFunction(f, returnType)
 
     # decorator @udf, @udf(), @udf(dataType()) or @udf((dataType(), dataType()))
