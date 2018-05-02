@@ -16,8 +16,11 @@
 import collections.abc
 
 import pandas as pd
+
 from pyspark import traceback_utils
 from pyspark.sql import DataFrame
+from pyspark.sql.functions import lit
+from pyspark.sql.types import LongType, TimestampType
 from pyspark.sql.readwriter import DataFrameReader, DataFrameWriter
 
 from . import java
@@ -47,6 +50,14 @@ class TSDataFrameReader(object):
         self._jpkg = java.Packages(self._sc)
         self._reader = self._jpkg.new_reader()
         self._parameters = self._reader.parameters()
+
+    def _df_between(self, df, begin_nanos, end_nanos, time_column):
+        """Filter a Python dataframe to contain data between begin (inclusive) and end (exclusive)
+
+        :return: :class:`pyspark.sql.DataFrame`
+        """
+        return DataFrame(
+            self._jpkg.TimeSeriesRDD.DFBetween(df._jdf, begin_nanos, end_nanos, time_column), self._sqlContext)
 
     def option(self, key, value):
         """
@@ -230,19 +241,6 @@ class TSDataFrameReader(object):
             is_sorted=is_sorted,
             unit=self._parameters.timeUnitString())
 
-    def _df_between(self, df, begin_nanos, end_nanos, time_column):
-        """Filter a Python dataframe to contain data between begin (inclusive) and end (exclusive)
-
-        :return: :class:`pyspark.sql.DataFrame`
-        """
-        if begin_nanos:
-            df = df.filter(df[time_column] >= begin_nanos)
-
-        if end_nanos:
-            df = df.filter(df[time_column] < end_nanos)
-
-        return df
-
     def dataframe(self, df, begin=None, end=None, *,
                   timezone='UTC',
                   is_sorted=None,
@@ -310,8 +308,7 @@ class TSDataFrameReader(object):
         end_nanos = self._parameters.range().endNanosOrNull()
         is_sorted = self._get_bool_option("isSorted", True)
 
-        if begin_nanos or end_nanos:
-            df = self._df_between(df, begin_nanos, end_nanos, time_column)
+        df = self._df_between(df, begin_nanos, end_nanos, time_column)
 
         return TimeSeriesDataFrame._from_df(
             df,

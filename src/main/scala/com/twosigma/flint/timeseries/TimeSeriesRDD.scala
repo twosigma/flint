@@ -177,6 +177,16 @@ object TimeSeriesRDD {
     }, schema)
   }
 
+  @PythonApi
+  def DFBetween(
+    dataframe: DataFrame,
+    beginNanos: java.lang.Long,
+    endNanos: java.lang.Long,
+    timeColumn: String
+  ): DataFrame = {
+    DFBetween(dataframe, Option(beginNanos).map(_.toLong), Option(endNanos).map(_.toLong), timeColumn)
+  }
+
   /**
    *
    * @param dataFrame     A [[org.apache.spark.sql.DataFrame]].
@@ -192,15 +202,29 @@ object TimeSeriesRDD {
     timeColumn: String
   ): DataFrame = {
     var df = dataFrame
+    val nanoToSec = 1000000000
 
-    df = beginNanosOpt match {
-      case Some(nanos) => df.filter(df(timeColumn) >= nanos)
-      case None => df
-    }
-
-    df = endNanosOpt match {
-      case Some(nanos) => df.filter(df(timeColumn) < nanos)
-      case None => df
+    dataFrame.schema(timeColumn).dataType match {
+      case TimestampType =>
+        df = beginNanosOpt match {
+          case Some(nanos) => df.filter(df(timeColumn) >= lit(nanos / nanoToSec).cast(TimestampType))
+          case None => df
+        }
+        df = endNanosOpt match {
+          case Some(nanos) => df.filter(df(timeColumn) < lit(nanos / nanoToSec).cast(TimestampType))
+          case None => df
+        }
+      case LongType =>
+        df = beginNanosOpt match {
+          case Some(nanos) => df.filter(df(timeColumn) >= nanos)
+          case None => df
+        }
+        df = endNanosOpt match {
+          case Some(nanos) => df.filter(df(timeColumn) < nanos)
+          case None => df
+        }
+      case t => throw new IllegalArgumentException(s"Unsupported data type for time column: ${t}. " +
+        s"Only TimestampType and LongType are supported.")
     }
 
     df

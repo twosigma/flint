@@ -146,3 +146,18 @@ def test_shiftTime(tests_utils, data):
 def test_toPandas(data, data_timestamp):
     assert data.toPandas().time[0].tz_localize(None) == pd.Timestamp('1970-01-01 00:16:40')
     assert data_timestamp.toPandas().time[0].tz_localize(None) == pd.Timestamp('1970-01-01 00:16:40')
+
+def test_read_range(sqlContext, flintContext, tests_utils):
+    from datetime import datetime
+    from pyspark.sql.types import TimestampType
+    df = sqlContext.createDataFrame(
+        [datetime(2016, 1, 1), datetime(2017, 1, 1), datetime(2018, 1, 1)], schema=TimestampType()).toDF('time')
+
+    flint_df = flintContext.read.range(20170101, 20180101).dataframe(df)
+    tests_utils.assert_same(flint_df.toPandas(), df.toPandas().iloc[1:2,].reset_index(drop=True))
+    flint_df = flintContext.read.range(20170101).dataframe(df)
+    tests_utils.assert_same(flint_df.toPandas(), df.toPandas().iloc[1:,].reset_index(drop=True))
+    flint_df = flintContext.read.range(end=20170101).dataframe(df)
+    tests_utils.assert_same(flint_df.toPandas(), df.toPandas().iloc[:1,].reset_index(drop=True))
+    flint_df = flintContext.read.dataframe(df)
+    tests_utils.assert_same(flint_df.toPandas(), df.toPandas())
