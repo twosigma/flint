@@ -16,6 +16,7 @@
 
 import pyarrow as pa
 import io
+import collections
 
 def arrowfile_to_dataframe(file_format):
     ''' Arrow file format to Pandas DataFrame
@@ -32,3 +33,13 @@ def dataframe_to_arrowfile(df):
     writer.write_batch(batch)
     writer.close()
     return sink.getvalue()
+
+def arrowfile_to_numpy(file_format, column_index):
+    ''' Arrow file format to a numpy ndarray or a list of numpy ndarray
+    '''
+    df = pa.RecordBatchFileReader(pa.BufferReader(file_format)).read_all().to_pandas()
+
+    if isinstance(column_index, str):
+        return df[column_index].values
+    else:
+        return [df[k].values for k in column_index]

@@ -21,9 +21,10 @@ import inspect
 import json
 import types
 import uuid
-
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+
 import pyspark
 from pyspark import traceback_utils
 import pyspark.sql
@@ -40,7 +41,7 @@ from . import utils
 from .group import TimeSeriesGroupedData
 from .error import FlintError
 from .readwriter import TSDataFrameWriter
-from .serializer import arrowfile_to_dataframe, dataframe_to_arrowfile
+from .serializer import arrowfile_to_dataframe, dataframe_to_arrowfile, arrowfile_to_numpy
 from .udf import _unwrap_data_types
 from .windows import WindowsFactoryBase
 
@@ -466,6 +467,10 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         for i, (col_name, udf_column) in enumerate(columns.items()):
             fn, col_t = udf._fn_and_type(udf_column)
             column_indices = udf_column.column_indices
+            arg_type = udf_column.arg_type
+
+            if arg_type != 'pandas':
+                raise ValueError('Only arg_type == pandas is supported')
 
             if isinstance(col_name, str):
                 col_name = (col_name,)
@@ -892,6 +897,10 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         for i, (col_name, udf_column) in enumerate(columns.items()):
             fn, t = udf._fn_and_type(udf_column)
             column_indices = udf_column.column_indices
+            arg_type = udf_column.arg_type
+
+            if arg_type != 'pandas':
+                raise ValueError('Only arg_type == pandas is supported')
 
             def _fn(arrow_bytes):
                 pdf = arrowfile_to_dataframe(arrow_bytes)
@@ -1245,6 +1254,36 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
            ...    key='id'
            ... )
 
+           Use numpy user-defined function to compute rank:
+
+           >>> from scipy import stats
+           >>> @udf(DoubleType(), arg_type='numpy')
+           >>> def rank_np(v):
+           >>>     # v is a numpy.ndarray
+           >>>     return stats.percentileofscore(v, v[-1], kind='rank') / 100.0
+           >>>
+           >>> df.summarizeWindows(
+           ...     windows.past_absolute_time('7days'),
+           ...     {
+           ...       'rank': rank_np(df['v']),
+           ...     },
+           ...     key='id'
+           ... )
+
+           Use numpy user-defined function to compute weighted mean:
+
+           >>> @udf(DoubleType(), arg_type='numpy')
+           >>> def weighted_mean_np(window):
+           >>>     # window is a list of numpy.ndarray
+           >>>     return np.average(window[0], weights=window[1])
+           >>> df.summarizeWindows(
+           ...    windows.past_absolute_time('7days'),
+           ...    {
+           ...       'weighted_mean': weighted_mean_np(df[['v', 'w']])
+           ...    },
+           ...    key='id'
+           ... )
+
         :param window: A window that specifies which rows to add to
             the new column. Lists of windows can be found in
             :mod:`.windows`.
@@ -1351,6 +1390,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         for i, (col_name, udf_column) in enumerate(columns.items()):
             fn, col_t = udf._fn_and_type(udf_column)
             column_indices = udf_column.column_indices
+            arg_type = udf_column.arg_type
 
             if isinstance(col_name, str):
                 col_name = (col_name,)
@@ -1367,8 +1407,53 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             schema_col_names.append(schema_col_name)
             data_col_names.append(data_col_name)
 
-            def _fn(left_batch, right_batch, indices):
-                import pyarrow as pa
+            def _fn_numpy(left_batch, right_batch, indices):
+
+                if indices:
+                    # left_table and right_table can be either a np.ndarray or dict of a list
+                    # of np.ndarray, depending on the column indices
+                    if len(column_indices) == 1:
+                        left_column_index = None
+                        left_table = None
+                        right_column_index = column_indices[0]
+                        right_table = arrowfile_to_numpy(right_batch, right_column_index)
+                    elif len(column_indices) == 2:
+                        left_column_index = column_indices[0]
+                        left_table = arrowfile_to_numpy(left_batch, left_column_index)
+                        right_column_index = column_indices[1]
+                        right_table = arrowfile_to_numpy(right_batch, right_column_index)
+                    else:
+                        raise ValueError('Too many column indices: {}'.format(column_indices))
+
+                    indices_df = arrowfile_to_dataframe(indices)
+                    begin_index = indices_df.ix[:,0].values
+                    end_index = indices_df.ix[:,1].values
+                    batch_num = len(begin_index)
+
+                    if left_table is None:
+                        if isinstance(right_column_index, str):
+                            data = [fn(right_table[begin_index[i]: end_index[i]].copy())
+                                    for i in range(batch_num)]
+                        else:
+                            data = \
+                                [fn([v[begin_index[i]: end_index[i]].copy() for v in right_table])
+                                for i in range(batch_num)]
+                    else:
+                        if isinstance(left_column_index, str):
+                            data = [fn(left_table[i], [v[begin_index[i]: end_index[i]].copy() for v in right_table])
+                                    for i in range(batch_num)]
+                        else:
+                            data = \
+                                [fn([v[i] for v in left_table],
+                                    [v[begin_index[i]: end_index[i]].copy() for v in right_table])
+                                 for i in range(batch_num)]
+
+                    df = pd.DataFrame(data, columns=col_name)
+                    return dataframe_to_arrowfile(df)
+                else:
+                    return None
+
+            def _fn_pandas(left_batch, right_batch, indices):
 
                 if indices:
                     # left_table and right_table can be either a pd.Series or pd.DataFrame
@@ -1390,7 +1475,11 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
                     data = []
 
-                    if left_table is not None:
+                    if left_table is None:
+                        for (begin, end) in indices_df.itertuples(index=False):
+                            right = right_table.take(np.arange(begin, end))
+                            data.append(fn(right))
+                    else:
                         assert len(left_table) == len(indices_df)
                         if isinstance(left_column_index, str):
                             for (i, begin, end) in indices_df.itertuples():
@@ -1403,10 +1492,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                                 end = indices_df.iloc[i,1]
                                 right = right_table.take(np.arange(begin, end))
                                 data.append(fn(left, right))
-                    else:
-                        for (begin, end) in indices_df.itertuples(index=False):
-                            right = right_table.take(np.arange(begin, end))
-                            data.append(fn(right))
 
                     df = pd.DataFrame(data, columns=col_name)
 
@@ -1423,9 +1508,16 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                 schema_col_name,
                 F.udf(lambda : None,col_schema)())
 
+            if arg_type == "pandas":
+                _fn = _fn_pandas
+            elif arg_type == "numpy":
+                _fn = _fn_numpy
+            else:
+                raise ValueError("Unsupported arg type {}".format(arg_type))
+
             windowed = windowed.withColumn(
                 data_col_name,
-                F.udf(_fn,pyspark_types.BinaryType())(
+                F.udf(_fn, pyspark_types.BinaryType())(
                     windowed[left_batch_col_name],
                     windowed[right_batch_col_name],
                     windowed[indices_col_name]))

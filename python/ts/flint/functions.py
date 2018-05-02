@@ -32,8 +32,9 @@ class FlintUserDefinedFunction(UserDefinedFunction):
     # A subclass of UserDefinedFunction with modification to the
     # __call__ methods to support Flint functions.
 
-    def __init__(self, func, returnType, name=None):
+    def __init__(self, func, returnType, name=None, arg_type="pandas"):
         super(FlintUserDefinedFunction, self).__init__(func, returnType, name)
+        self.arg_type = arg_type
 
     def __call__(self, *cols):
         # pyspark UserDefinedFunction takes only `Column`. This
@@ -69,10 +70,11 @@ class FlintUserDefinedFunction(UserDefinedFunction):
 
         udf_col = super(FlintUserDefinedFunction, self).__call__(*pyspark_cols)
         udf_col.column_indices = column_indices
+        udf_col.arg_type = self.arg_type
 
         return udf_col
 
-def udf(f=None, returnType=DoubleType()):
+def udf(f=None, returnType=DoubleType(), arg_type="pandas"):
     # Modified from
     # https://github.com/apache/spark/blob/master/python/pyspark/sql/functions.py
     # to add additional supports for Flint
@@ -105,9 +107,9 @@ def udf(f=None, returnType=DoubleType()):
            ...     return v+1
            >>> col = plus_one(df['v'])
 
-    2. Columnar udf
+    2. Pandas Columnar udf
 
-       A columnar udf takes one or more :class:`pandas.Series` or
+       A pandas columnar udf takes one or more :class:`pandas.Series` or
        :class:`pandas.DataFrame` as input, and returns either a scalar
        value or a :class:`pandas.Series` as output.
 
@@ -151,11 +153,36 @@ def udf(f=None, returnType=DoubleType()):
        * :meth:`ts.flint.TimeSeriesDataFrame.summarizeCycles` takes a
          columnar udf that returns a scalar value.
 
+    3. Numpy Columnar udf
+
+       Numpy columnar udf is similar to pandas columnar udf. The main difference is
+       numpy udf expects the function input to be numpy data structure and types, i.e.,
+       numpy.ndarray or numpy.flaat64. When a named input is expected, the input to
+       the udf would be a python ordered dict from str to numpy.ndarray or numpy primitive
+       type.
+
+       Numpy columnar udf is faster than pandas columnar udf, particularly in summarizeWindows,
+       where the overhead of creating pandas.Series and pandas.DataFrame for each window can be
+       large. Therefore, user should try to use numpy columnar udf with summarizeWindows.
+
+       Examples:
+
+           >>> @udf(DoubleType(), arg_type='numpy')
+           >>> def mean_udf(v):
+           ...     # v is numpy.ndarray
+           ...     return v.mean()
+           >>> col = mean_udf(df['v'])
+
        .. seealso::
-       :meth:`ts.flint.TimeSeriesDataFrame.summarizeCycles`
+
+          :meth:`ts.flint.TimeSeriesDataFrame.summarizeCycles`
+          :meth:`ts.flint.TimeSeriesDataFrame.addColumnsForCycles`
+          :meth:`ts.flint.TimeSeriesDataFrame.summarizeIntervals`
+          :meth:`ts.flint.TimeSeriesDataFrame.summarizeWindows`
+
     '''
-    def _udf(f, returnType=DoubleType()):
-        return FlintUserDefinedFunction(f, returnType)
+    def _udf(f, returnType=DoubleType(), arg_type="pandas"):
+        return FlintUserDefinedFunction(f, returnType, arg_type=arg_type)
 
     # decorator @udf, @udf(), @udf(dataType()) or @udf((dataType(), dataType()))
     if f is None or isinstance(f, (str, tuple, DataType)):
@@ -163,7 +190,7 @@ def udf(f=None, returnType=DoubleType()):
         # for decorator use it as a returnType
         return_type = f or returnType
         return_type = _wrap_data_types(return_type)
-        return functools.partial(_udf, returnType=return_type)
+        return functools.partial(_udf, returnType=return_type, arg_type=arg_type)
     else:
         return_type = _wrap_data_types(returnType)
-        return _udf(f=f, returnType=return_type)
+        return _udf(f=f, returnType=return_type, arg_type=arg_type)

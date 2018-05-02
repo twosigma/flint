@@ -1005,6 +1005,181 @@ def test_summarizeWindows_udf(flintContext, tests_utils, windows, vol):
 
     tests_utils.assert_same(result8, expected8)
 
+def test_summarizeWindows_numpy_udf(flintContext, tests_utils, windows, vol):
+    from ts.flint.functions import udf
+    from pyspark.sql.types import DoubleType, LongType
+
+    df = flintContext.read.pandas(make_pdf([
+        (1000, 3, 10.0),
+        (1000, 7, 20.0),
+        (1050, 3, 30.0),
+        (1050, 7, 40.0),
+        (1100, 3, 50.0),
+        (1150, 3, 60.0),
+        (1150, 7, 70.0),
+        (1200, 3, 80.0),
+        (1200, 7, 90.0),
+        (1250, 7, 100.0),
+    ], ['time', 'id', 'v']))
+
+    @udf(DoubleType(), arg_type='numpy')
+    def mean_np(v):
+        assert isinstance(v, np.ndarray)
+        return v.mean()
+
+    @udf((DoubleType(), LongType()), arg_type='numpy')
+    def mean_and_sum_np(v):
+        assert isinstance(v, np.ndarray)
+        return v.mean(), v.sum()
+
+    @udf(DoubleType(), arg_type='numpy')
+    def mean_np_df(window):
+        assert isinstance(window, list)
+        assert isinstance(window[-1], np.ndarray)
+        return window[-1].mean()
+
+    @udf(DoubleType(), arg_type='numpy')
+    def mean_np_2(v, window):
+        assert isinstance(v, np.float64)
+        assert isinstance(window, list)
+        assert isinstance(window[-1], np.ndarray)
+        return v + window[-1].mean()
+
+    @udf(DoubleType(), arg_type='numpy')
+    def mean_np_df_2(left, window):
+        assert isinstance(left, list)
+        assert isinstance(left[0], np.float64)
+        assert isinstance(window, list)
+        assert isinstance(window[-1], np.ndarray)
+        return window[-1].mean()
+
+    w = windows.past_absolute_time('99ns')
+
+    result1 = vol.summarizeWindows(
+        w,
+        {'mean': mean_np(vol['volume'])}
+    ).toPandas()
+    expected1 = make_pdf([
+        (1000, 7, 100, 150.0),
+        (1000, 3, 200, 150.0),
+        (1050, 3, 300, 250.0),
+        (1050, 7, 400, 250.0),
+        (1100, 3, 500, 450.0),
+        (1100, 7, 600, 450.0),
+        (1150, 3, 700, 650.0),
+        (1150, 7, 800, 650.0),
+        (1200, 3, 900, 850.0),
+        (1200, 7, 1000, 850.0),
+        (1250, 3, 1100, 1050.0),
+        (1250, 7, 1200, 1050.0),
+    ], ['time', 'id', 'volume', 'mean'])
+    tests_utils.assert_same(result1, expected1)
+
+    result2 = vol.summarizeWindows(
+        w,
+        {'mean': mean_np(vol['volume'])},
+        key = 'id'
+    ).toPandas()
+    expected2 = make_pdf([
+        (1000, 7, 100, 100.0),
+        (1000, 3, 200, 200.0),
+        (1050, 3, 300, 250.0),
+        (1050, 7, 400, 250.0),
+        (1100, 3, 500, 400.0),
+        (1100, 7, 600, 500.0),
+        (1150, 3, 700, 600.0),
+        (1150, 7, 800, 700.0),
+        (1200, 3, 900, 800.0),
+        (1200, 7, 1000, 900.0),
+        (1250, 3, 1100, 1000.0),
+        (1250, 7, 1200, 1100.0),
+    ], ['time', 'id', 'volume', 'mean'])
+    tests_utils.assert_same(result2, expected2)
+
+    result3 = vol.summarizeWindows(
+        w,
+        {'mean': mean_np_df(vol[['volume']])},
+    ).toPandas()
+    expected3 = expected1
+    tests_utils.assert_same(result3, expected3)
+
+    result4 = vol.summarizeWindows(
+        w,
+        {'mean': mean_np_df(vol[['time', 'volume']])},
+    ).toPandas()
+    expected4 = expected1
+    tests_utils.assert_same(result4, expected4)
+
+    result5 = df.summarizeWindows(
+        w,
+        {'mean': mean_np_2(df['v'], vol[['time', 'volume']])},
+        other = vol,
+        key ='id'
+    ).toPandas()
+    expected5 = make_pdf([
+        (1000, 3, 10.0, 210.0),
+        (1000, 7, 20.0, 120.0),
+        (1050, 3, 30.0, 280.0),
+        (1050, 7, 40.0, 290.0),
+        (1100, 3, 50.0, 450.0),
+        (1150, 3, 60.0, 660.0),
+        (1150, 7, 70.0, 770.0),
+        (1200, 3, 80.0, 880.0),
+        (1200, 7, 90.0, 990.0),
+        (1250, 7, 100.0, 1200.0),
+    ], ['time', 'id', 'v', 'mean'])
+    tests_utils.assert_same(result5, expected5)
+
+    result6 = df.summarizeWindows(
+        w,
+        {'mean': mean_np_df_2(df[['v']], vol[['time', 'volume']])},
+        other = vol,
+        key ='id'
+    ).toPandas()
+    expected6 = result6
+    tests_utils.assert_same(result6, expected6)
+
+    result7 = df.summarizeWindows(
+         w,
+         {'mean': mean_np_df(vol[['time', 'volume']])},
+         other = vol,
+         key ='id'
+    ).toPandas()
+    expected7 = make_pdf([
+        (1000, 3, 10.0, 200.0),
+        (1000, 7, 20.0, 100.0),
+        (1050, 3, 30.0, 250.0),
+        (1050, 7, 40.0, 250.0),
+        (1100, 3, 50.0, 400.0),
+        (1150, 3, 60.0, 600.0),
+        (1150, 7, 70.0, 700.0),
+        (1200, 3, 80.0, 800.0),
+        (1200, 7, 90.0, 900.0),
+        (1250, 7, 100.0, 1100.0),
+    ], ['time', 'id', 'v', 'mean'])
+    tests_utils.assert_same(result7, expected7)
+
+    result8 = vol.summarizeWindows(
+        w,
+        {('mean', 'sum'): mean_and_sum_np(vol['volume'])},
+        key = 'id'
+    ).toPandas()
+    expected8 = make_pdf([
+        (1000, 7, 100, 100.0, 100),
+        (1000, 3, 200, 200.0, 200),
+        (1050, 3, 300, 250.0, 500),
+        (1050, 7, 400, 250.0, 500),
+        (1100, 3, 500, 400.0, 800),
+        (1100, 7, 600, 500.0, 1000),
+        (1150, 3, 700, 600.0, 1200),
+        (1150, 7, 800, 700.0, 1400),
+        (1200, 3, 900, 800.0, 1600),
+        (1200, 7, 1000, 900.0, 1800),
+        (1250, 3, 1100, 1000.0, 2000),
+        (1250, 7, 1200, 1100.0, 2200),
+    ], ['time', 'id', 'volume', 'mean', 'sum'])
+    tests_utils.assert_same(result8, expected8)
+
 
 @pytest.mark.net
 def test_summarizeWindows_trading_time(flintContext, tests_utils, windows, summarizers):
@@ -2401,8 +2576,10 @@ def test_groupedData(tests_utils, price):
     expected5 = DataFrame.groupBy(price, 'time').mean('price').toPandas()
     tests_utils.assert_same(result5, expected5)
 
+
 def test_preview(tests_utils, price):
     tests_utils.assert_same(price.limit(10).toPandas(), price.preview())
+
 
 def test_column_selections(tests_utils, price):
     tests_utils.assert_same(price.select('price').toPandas(), price.toPandas()[['price']])
