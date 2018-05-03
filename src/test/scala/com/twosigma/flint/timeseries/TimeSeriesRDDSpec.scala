@@ -24,13 +24,15 @@ import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 import com.twosigma.flint.timeseries.TimeSeriesRDD.timeColumnName
 import org.apache.spark.sql.functions.{ col, udf }
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ExternalRow }
+import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, GenericRow, GenericRowWithSchema => ExternalRow }
 
 import scala.collection.mutable
 import scala.concurrent.duration._
 
-class TimeSeriesRDDSpec extends TimeSeriesSuite {
+class TimeSeriesRDDSpec extends TimeSeriesSuite with TimeTypeSuite {
 
   val priceSchema = Schema("time" -> LongType, "id" -> IntegerType, "price" -> DoubleType)
   val forecastSchema = Schema("time" -> LongType, "id" -> IntegerType, "forecast" -> DoubleType)
@@ -183,6 +185,7 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
   val defaultNumPartitions = 5
 
   var priceTSRdd: TimeSeriesRDD = _
+  var priceTSRdd2: TimeSeriesRDD = _
   var forecastTSRdd: TimeSeriesRDD = _
   var forecastSwitchColumnTSRdd: TimeSeriesRDD = _
   var volTSRdd: TimeSeriesRDD = _
@@ -582,6 +585,51 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite {
         new ExternalRow(values, r.schema): Row
     }
     assert(result.collect().deep == expectedData.deep)
+  }
+
+  it should "shiftTime correctly with timestamp type" in {
+    withTimeType("timestamp") {
+      val data = TimeSeriesRDD.fromDF(priceTSRdd.toDF)(true, NANOSECONDS)
+      val result = data.shift(Windows.futureAbsoluteTime("1ns")) // This should be no-op
+      val expected = data
+      assertIdentical(expected, result)
+
+      val result2 = data.shift(Windows.futureAbsoluteTime("1s"))
+      val expected2 = TimeSeriesRDD.fromDF(
+        data.toDF.withColumn("time", (col("time").cast("long") + 1).cast("timestamp"))
+      )(true, NANOSECONDS)
+      assertIdentical(expected2, result2)
+
+      val result3 = data.shift(Windows.pastAbsoluteTime("1ns")) // This is same as shift back 1 micro
+      val expected3 = data.shift(Windows.pastAbsoluteTime("1micro"))
+
+      assertIdentical(expected3, result3)
+    }
+  }
+
+  it should "shiftTime correctly with long type" in {
+    withTimeType("long") {
+      val data = TimeSeriesRDD.fromDF(priceTSRdd.toDF)(true, NANOSECONDS)
+      val result = data.shift(Windows.futureAbsoluteTime("1ns"))
+      val expected = TimeSeriesRDD.fromDF(
+        data.toDF.withColumn("time", col("time") + 1)
+      )(true, NANOSECONDS)
+      assertIdentical(expected, result)
+
+      val result2 = data.shift(Windows.futureAbsoluteTime("1s"))
+      val expected2 = TimeSeriesRDD.fromDF(
+        data.toDF.withColumn("time", col("time") + 1000000000)
+      )(true, NANOSECONDS)
+
+      assertIdentical(expected2, result2)
+
+      val result3 = data.shift(Windows.pastAbsoluteTime("1ns"))
+      val expected3 = TimeSeriesRDD.fromDF(
+        data.toDF.withColumn("time", col("time") - 1)
+      )(true, NANOSECONDS)
+
+      assertIdentical(expected3, result3)
+    }
   }
 
   it should "cast columns correctly" in {

@@ -1606,12 +1606,16 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def shiftTime(self, shift, *, backwards=False):
-        """Returns a :class: `TimeSeriesDataFrame` by shifting all timestamps by giving ammount
+        """Returns a :class: `TimeSeriesDataFrame` by shifting all timestamps by given amount.
+
+           When time type is timestamp:
+             If shift forward amount is less than 1 microsecond, then this is a no op.
+             If shift backward amount if less than 1 microsecond, then this will shift back 1 microsecond.
 
         Example:
 
-            >>> tsdf.shiftTime('100ns')
-            >>> tsdf.shiftTime(pandas.Timedelta(nanoseconds=100))
+            >>> tsdf.shiftTime('100s')
+            >>> tsdf.shiftTime(pandas.Timedelta(seconds=100))
             >>> tsdf.shiftTime(windows.futureTradingTime('1day', 'US'))
 
         :param shift: Amount to shift the dataframe time column, shift can be a ``pandas.Timedelta`` or a string that can be

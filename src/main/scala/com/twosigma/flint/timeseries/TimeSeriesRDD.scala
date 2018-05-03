@@ -277,7 +277,8 @@ object TimeSeriesRDD {
    *                   their time column. If a given [[DataFrame]] is already sorted, and Catalyst knows about it,
    *                   then the flag will be ignored.
    * @param timeUnit   The time unit under time column which could be [[scala.concurrent.duration.NANOSECONDS]],
-   *                   [[scala.concurrent.duration.MILLISECONDS]], etc.
+   *                   [[scala.concurrent.duration.MILLISECONDS]], etc. This is ignored if data type of time column
+   *                   of the input DataFrame is timestamp type.
    * @param timeColumn Optional. The name of column in `df` that specifies the column name for time.
    * @return a [[TimeSeriesRDD]].
    * @example
@@ -1282,7 +1283,11 @@ trait TimeSeriesRDD extends Serializable {
   def setTime(fn: Row => Long, window: String = null): TimeSeriesRDD
 
   /**
-   * Shift the timestamp of each row by a length defined a [[ShiftTimeWindow]].
+   * Shift the timestamp of each row by amount defined a [[ShiftTimeWindow]].
+   *
+   * When time type is timestamp
+   * - If shift forward amount is less than 1 microsecond, then this is a no op.
+   * - If shift backward amount if less than 1 microsecond, then this will shift back 1 microsecond.
    *
    * @example
    * {{{
@@ -1841,7 +1846,9 @@ class TimeSeriesRDDImpl private[timeseries] (
       FlintConf.TIME_TYPE_CONF, FlintConf.TIME_TYPE_DEFAULT
     ))
 
-    val newRdd = orderedRdd.shift(window.shift).mapValues {
+    val shiftFn: Long => Long = t => timeType.roundDownPrecision(window.shift(t))
+
+    val newRdd = orderedRdd.shift(shiftFn).mapValues {
       case (t, iRow) => InternalRowUtils.update(iRow, schema, timeIndex -> timeType.nanosToInternal(t))
     }
 

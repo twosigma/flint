@@ -31,18 +31,26 @@ trait TimeType {
    * same as the input nanoseconds since epoch.
    */
   def nanosToInternal(nanosSinceEpoch: Long): Long
+
+  /**
+   * round nanoseconds to the closest value in the past that is
+   * supported by this time type's precision.
+   */
+  def roundDownPrecision(nanosSinceEpoch: Long): Long
 }
 
 object TimeType {
   case object LongType extends TimeType {
     override def internalToNanos(value: Long): Long = value
     override def nanosToInternal(nanos: Long): Long = nanos
+    override def roundDownPrecision(nanos: Long): Long = nanos
   }
 
   // Spark sql represents timestamp as microseconds internally
   case object TimestampType extends TimeType {
     override def internalToNanos(value: Long): Long = value * 1000
     override def nanosToInternal(nanos: Long): Long = nanos / 1000
+    override def roundDownPrecision(nanos: Long): Long = nanos - nanos % 1000
   }
 
   def apply(timeType: String): TimeType = {
