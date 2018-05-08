@@ -17,6 +17,7 @@
 package com.twosigma.flint.timeseries.row
 
 import com.twosigma.flint.timeseries.TimeSeriesRDD
+import com.twosigma.flint.timeseries.time.types.TimeType
 import org.apache.spark.sql.types._
 
 private[timeseries] object Schema {
@@ -82,8 +83,8 @@ private[timeseries] object Schema {
    * @param keyFields The other possible fields expected to append.
    * @return a new schema with the appended time column etc.
    */
-  def prependTimeAndKey(schema: StructType, keyFields: Seq[StructField]): StructType = {
-    val newSchema = StructType((TimeSeriesRDD.timeField +: keyFields) ++ schema.fields)
+  def prependTimeAndKey(schema: StructType, keyFields: Seq[StructField], timeType: TimeType): StructType = {
+    val newSchema = StructType((TimeSeriesRDD.timeField(timeType) +: keyFields) ++ schema.fields)
     requireUniqueColumnNames(newSchema)
     newSchema
   }

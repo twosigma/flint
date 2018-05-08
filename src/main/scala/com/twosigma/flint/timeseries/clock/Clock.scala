@@ -173,7 +173,8 @@ class UniformClock(
 
 /**
  * Clock with unevenly distributed intervals/ticks. Intervals between two sequential ticks
- * are uniformly distributed in the range of [1, `frequency`].
+ * are uniformly distributed in the range of [1, `frequency`] and rounded up to the closest
+ * microseconds.
  */
 class RandomClock(
   @transient override val sc: SparkContext,
@@ -185,7 +186,11 @@ class RandomClock(
 ) extends Clock(sc, begin, end, frequency, offset) {
   private val rand = new Random(seed)
 
-  override def nextTick(t: Long): Long = t + Math.abs(rand.nextLong()) % frequency + 1L
+  override def nextTick(t: Long): Long = {
+    val rawTick = (t + Math.abs(rand.nextLong()) % frequency + 1L)
+    val tick = rawTick - rawTick % 1000 + 1000
+    tick
+  }
 
   def this(
     sc: SparkContext,

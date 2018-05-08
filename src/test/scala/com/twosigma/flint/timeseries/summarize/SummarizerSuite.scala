@@ -36,7 +36,7 @@ class SummarizerSuite extends TimeSeriesSuite {
 
   private val cycles = 10000L
 
-  private val frequency = 100L
+  private val frequency = 100000L
 
   lazy val AllData = Seq(
     new TimeSeriesGenerator(

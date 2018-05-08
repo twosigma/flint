@@ -39,7 +39,8 @@ import com.twosigma.flint.timeseries.ArrowTestUtils.fileFormatToRows
 
 class SummarizeWindowBatchesSpec extends MultiPartitionSuite
   with TimeSeriesTestData
-  with PropertyChecks {
+  with PropertyChecks
+  with TimeTypeSuite {
 
   override val defaultResourceDir: String = "/timeseries/summarizewindows"
 
@@ -170,12 +171,12 @@ class SummarizeWindowBatchesSpec extends MultiPartitionSuite
     val leftBatch1 = result1.first().getAs[Array[Byte]](leftBatchColumnName)
     assert(leftBatch1 != null)
     val rightRow1 = fileFormatToRows(result1.first().getAs[Array[Byte]](rightBatchColumnName)).head
-    assert(rightRow1 == new GenericRowWithSchema(Array(1000, 1, 100), rightSchema1))
+    assert(rightRow1 == new GenericRowWithSchema(Array(1000000000000L, 1, 100), rightSchema1))
 
     val result2 = v1.summarizeWindowBatches(window, Seq("time", "v1"))
     val rightSchema2 = StructType(Seq(StructField("time", LongType), StructField("v1", IntegerType)))
     val rightRow2 = fileFormatToRows(result2.first().getAs[Array[Byte]](rightBatchColumnName)).head
-    assert(rightRow2 == new GenericRowWithSchema(Array(1000, 100), rightSchema2))
+    assert(rightRow2 == new GenericRowWithSchema(Array(1000000000000L, 100), rightSchema2))
 
     val result3 = v1.summarizeWindowBatches(window, Seq("v1"))
     val rightSchema3 = StructType(Seq(StructField("v1", IntegerType)))

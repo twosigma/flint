@@ -16,6 +16,7 @@
 
 package com.twosigma.flint.timeseries
 
+import java.sql.Timestamp
 import java.util.concurrent.TimeUnit
 
 import com.twosigma.flint.FlintSuite
@@ -131,6 +132,10 @@ trait TimeSeriesSuite extends FlintSuite {
           assert(
             thisRow.getAs[mutable.WrappedArray[String]](col.name).deep ==
               thatRow.getAs[mutable.WrappedArray[String]](col.name).deep
+          )
+        case TimestampType =>
+          assert(
+            thisRow.getAs[Timestamp](col.name) == thatRow.getAs[Timestamp](col.name)
           )
         case dataType =>
           assert(

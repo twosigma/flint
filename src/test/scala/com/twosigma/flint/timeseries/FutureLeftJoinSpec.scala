@@ -22,20 +22,20 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 import org.scalatest.tagobjects.Slow
 
-class FutureLeftJoinSpec extends MultiPartitionSuite with TimeSeriesTestData {
+class FutureLeftJoinSpec extends MultiPartitionSuite with TimeSeriesTestData with TimeTypeSuite {
 
   override val defaultResourceDir: String = "/timeseries/futureleftjoin"
 
   private var priceTSRdd: TimeSeriesRDD = _
   private var volumeTSRdd: TimeSeriesRDD = _
+  private var volumeTSRddRowFiltered: TimeSeriesRDD = _
   private var priceTSRddWithGroup: TimeSeriesRDD = _
   private var volumeTSRddWithGroup: TimeSeriesRDD = _
 
-  private lazy val init = {
+  private def init: Unit = {
     priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType)).addColumns(
-      "time2" -> LongType -> { _.getAs[Long](TimeSeriesRDD.timeColumnName) }
-    )
+    volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+    volumeTSRddRowFiltered = fromCSV("VolumeWithRowFiltered.csv", Schema("id" -> IntegerType, "volume" -> LongType))
     priceTSRddWithGroup = fromCSV(
       "PriceWithIndustryGroup.csv",
       Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType)
@@ -47,133 +47,147 @@ class FutureLeftJoinSpec extends MultiPartitionSuite with TimeSeriesTestData {
   }
 
   "FutureLeftJoin" should "join on time" in {
-    init
-    val resultsTSRdd = fromCSV(
-      "JoinOnTime.results",
-      Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType, "time2" -> LongType)
-    )
-
-    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
-      val joinedTSRdd = rdd1.futureLeftJoin(
-        right = rdd2.deleteColumns("id"),
-        tolerance = "100ns"
+    withAllTimeType {
+      init
+      val resultsTSRdd = fromCSV(
+        "JoinOnTime.results",
+        Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
       )
-      assertEquals(joinedTSRdd, resultsTSRdd)
-    }
 
-    withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+      def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+        val joinedTSRdd = rdd1.futureLeftJoin(
+          right = rdd2.deleteColumns("id"),
+          tolerance = "100s"
+        )
+        assertEquals(joinedTSRdd, resultsTSRdd)
+      }
+
+      withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "join on time and key" in {
-    init
-    val resultsTSRdd = fromCSV(
-      "JoinOnTimeAndKey.results",
-      Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType, "time2" -> LongType)
-    )
-
-    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
-      val joinedTSRdd = rdd1.futureLeftJoin(
-        right = rdd2,
-        tolerance = "100ns",
-        key = Seq("id")
+    withAllTimeType {
+      init
+      val resultsTSRdd = fromCSV(
+        "JoinOnTimeAndKey.results",
+        Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
       )
-      assertEquals(joinedTSRdd, resultsTSRdd)
-    }
 
-    withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+      def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+        val joinedTSRdd = rdd1.futureLeftJoin(
+          right = rdd2,
+          tolerance = "100s",
+          key = Seq("id")
+        )
+        assertEquals(joinedTSRdd, resultsTSRdd)
+      }
+
+      withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "join on time and key with strictLookahead" in {
-    init
-    val resultsTSRdd = fromCSV(
-      "JoinOnTimeStrictLookahead.results",
-      Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType, "time2" -> LongType)
-    )
-
-    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
-      val joinedTSRdd = rdd1.futureLeftJoin(
-        right = rdd2,
-        tolerance = "100ns",
-        key = Seq("id"),
-        strictLookahead = true
+    withAllTimeType {
+      init
+      val resultsTSRdd = fromCSV(
+        "JoinOnTimeStrictLookahead.results",
+        Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
       )
-      assertEquals(joinedTSRdd, resultsTSRdd)
-    }
 
-    withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+      def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+        val joinedTSRdd = rdd1.futureLeftJoin(
+          right = rdd2,
+          tolerance = "100s",
+          key = Seq("id"),
+          strictLookahead = true
+        )
+        assertEquals(joinedTSRdd, resultsTSRdd)
+      }
+
+      withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "join on time and key with right table shifted" in {
-    init
-    val resultsTSRdd = fromCSV(
-      "JoinOnTimeRightShifted.results",
-      Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType, "time2" -> LongType)
-    )
-
-    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
-      val joinedTSRdd = rdd1.futureLeftJoin(
-        right = rdd2.shift(Windows.futureAbsoluteTime("200ns")),
-        tolerance = "100ns",
-        key = Seq("id")
+    withAllTimeType {
+      init
+      val resultsTSRdd = fromCSV(
+        "JoinOnTimeRightShifted.results",
+        Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
       )
-      assertEquals(joinedTSRdd, resultsTSRdd)
-    }
 
-    withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+      def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+        val joinedTSRdd = rdd1.futureLeftJoin(
+          right = rdd2.shift(Windows.futureAbsoluteTime("200s")),
+          tolerance = "100s",
+          key = Seq("id")
+        )
+        assertEquals(joinedTSRdd, resultsTSRdd)
+      }
+
+      withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "join on time and key with column filtered" in {
-    init
-    val resultsTSRdd = fromCSV(
-      "JoinOnTimeAndKeyColumnFiltered.results",
-      Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType, "time2" -> LongType)
-    )
-
-    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
-      val joinedTSRdd = rdd1.futureLeftJoin(
-        right = rdd2.keepRows{ r: Row => r.getAs[Int]("id") == 3 },
-        tolerance = "50ns",
-        key = Seq("id")
+    withAllTimeType {
+      init
+      val resultsTSRdd = fromCSV(
+        "JoinOnTimeAndKeyColumnFiltered.results",
+        Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
       )
-      assertEquals(joinedTSRdd, resultsTSRdd)
-    }
 
-    withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+      def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+        val joinedTSRdd = rdd1.futureLeftJoin(
+          right = rdd2.keepRows { r: Row => r.getAs[Int]("id") == 3 },
+          tolerance = "50s",
+          key = Seq("id")
+        )
+        assertEquals(joinedTSRdd, resultsTSRdd)
+      }
+
+      withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "join on time and key with row filtered" in {
-    init
-    val resultsTSRdd = fromCSV(
-      "JoinOnTimeAndKeyRowFiltered.results",
-      Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType, "time2" -> LongType)
-    )
-
-    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
-      val joinedTSRdd = rdd1.futureLeftJoin(
-        right = rdd2.keepRows{ row: Row => row.getAs[Long]("time") == 1050L || row.getAs[Long]("time") == 1250L },
-        tolerance = "50ns",
-        key = Seq("id")
+    withAllTimeType {
+      init
+      val resultsTSRdd = fromCSV(
+        "JoinOnTimeAndKeyRowFiltered.results",
+        Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
       )
-      assertEquals(joinedTSRdd, resultsTSRdd)
-    }
 
-    withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+      def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+        val joinedTSRdd = rdd1.futureLeftJoin(
+          right = rdd2,
+          tolerance = "50s",
+          key = Seq("id")
+        )
+
+        assertEquals(joinedTSRdd, resultsTSRdd)
+      }
+
+      withPartitionStrategy(priceTSRdd, volumeTSRddRowFiltered)(DEFAULT)(test)
+    }
   }
 
   it should "pass `JoinOnTimeAndMultipleKeys` test." in {
-    init
-    val resultsTSRdd = fromCSV(
-      "JoinOnTimeAndMultipleKeys.results",
-      Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
-    )
+    withAllTimeType {
+      init
+      val resultsTSRdd = fromCSV(
+        "JoinOnTimeAndMultipleKeys.results",
+        Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
+      )
 
-    def test(priceTSRdd: TimeSeriesRDD, volumeTSRdd: TimeSeriesRDD): Unit = {
-      val joinedTSRdd = priceTSRdd.leftJoin(volumeTSRdd, "0ns", Seq("id", "group"))
-      assertEquals(joinedTSRdd, resultsTSRdd)
+      def test(priceTSRdd: TimeSeriesRDD, volumeTSRdd: TimeSeriesRDD): Unit = {
+        val joinedTSRdd = priceTSRdd.leftJoin(volumeTSRdd, "0ns", Seq("id", "group"))
+        assertEquals(joinedTSRdd, resultsTSRdd)
+      }
+
+      withPartitionStrategy(priceTSRddWithGroup, volumeTSRddWithGroup)(DEFAULT)(test)
     }
-
-    withPartitionStrategy(priceTSRddWithGroup, volumeTSRddWithGroup)(DEFAULT)(test)
-
   }
 
   it should "pass cycle data property test" taggedAs Slow in {

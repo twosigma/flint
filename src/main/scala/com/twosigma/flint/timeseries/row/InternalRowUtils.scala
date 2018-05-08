@@ -16,6 +16,7 @@
 
 package com.twosigma.flint.timeseries.row
 
+import com.twosigma.flint.timeseries.time.types.TimeType
 import org.apache.arrow.memory.BufferAllocator
 import org.apache.arrow.vector.ipc.ArrowFileReader
 import org.apache.arrow.vector.util.ByteArrayReadableSeekableByteChannel
@@ -286,7 +287,8 @@ private[timeseries] object InternalRowUtils {
     arrowBatches: Seq[Array[Byte]],
     timeColumnIndex: Int,
     numBaseRowColumns: Int,
-    numArrowColumns: Int
+    numArrowColumns: Int,
+    timeType: TimeType
   ): Array[(Long, InternalRow)] = {
 
     val totalColumns = numBaseRowColumns + numArrowColumns
@@ -325,7 +327,7 @@ private[timeseries] object InternalRowUtils {
 
       val newRow = new GenericInternalRow(data)
       // Because this is appending, the time column index in base row is the same as in new row
-      newRowsWithTime(i) = (newRow.getLong(timeColumnIndex), newRow)
+      newRowsWithTime(i) = (timeType.internalToNanos(newRow.getLong(timeColumnIndex)), newRow)
       i += 1
     }
 

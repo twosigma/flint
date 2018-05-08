@@ -22,116 +22,122 @@ import com.twosigma.flint.timeseries.row.{ DuplicateColumnsException, Schema }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
-class AddColumnsForCycleSpec extends MultiPartitionSuite {
+class AddColumnsForCycleSpec extends MultiPartitionSuite with TimeTypeSuite {
 
   override val defaultResourceDir: String = "/timeseries/addcolumnsforcycle"
 
   "AddColumnsForCycle" should "pass `AddAdjustedPrice` test" in {
-    val resultTSRdd = fromCSV(
-      "AddAdjustedPrice.results",
-      Schema("id" -> IntegerType, "price" -> DoubleType, "adjustedPrice" -> DoubleType)
-    )
+    withAllTimeType {
+      val resultTSRdd = fromCSV(
+        "AddAdjustedPrice.results",
+        Schema("id" -> IntegerType, "price" -> DoubleType, "adjustedPrice" -> DoubleType)
+      )
 
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val adjustedPriceTSRdd = rdd.addColumnsForCycle(
-        "adjustedPrice" -> DoubleType ->
-          { rows: Seq[Row] =>
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val adjustedPriceTSRdd = rdd.addColumnsForCycle(
+          "adjustedPrice" -> DoubleType -> { rows: Seq[Row] =>
             val size = rows.size
             rows.map { row => row -> row.getDouble(2) * size }.toMap
           }
-      )
-      assert(adjustedPriceTSRdd.schema == resultTSRdd.schema)
-      assert(adjustedPriceTSRdd.collect().deep == resultTSRdd.collect().deep)
-    }
+        )
+        assert(adjustedPriceTSRdd.schema == resultTSRdd.schema)
+        assert(adjustedPriceTSRdd.collect().deep == resultTSRdd.collect().deep)
+      }
 
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    withPartitionStrategy(priceTSRdd)(DEFAULT)(test)
+      val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+      withPartitionStrategy(priceTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "support non-primitive types" in {
-    val resultTSRdd = fromCSV(
-      "AddAdjustedPrice.results",
-      Schema("id" -> IntegerType, "price" -> DoubleType, "adjustedPrice" -> StringType)
-    )
+    withAllTimeType {
+      val resultTSRdd = fromCSV(
+        "AddAdjustedPrice.results",
+        Schema("id" -> IntegerType, "price" -> DoubleType, "adjustedPrice" -> StringType)
+      )
 
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val adjustedPriceTSRdd = rdd.addColumnsForCycle(
-        "adjustedPrice" -> StringType ->
-          { rows: Seq[Row] =>
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val adjustedPriceTSRdd = rdd.addColumnsForCycle(
+          "adjustedPrice" -> StringType -> { rows: Seq[Row] =>
             val size = rows.size
             rows.map { row => row -> (row.getDouble(2) * size).toString }.toMap
           }
-      )
-      assert(adjustedPriceTSRdd.schema == resultTSRdd.schema)
-      assert(adjustedPriceTSRdd.collect().deep == resultTSRdd.collect().deep)
-    }
+        )
+        assert(adjustedPriceTSRdd.schema == resultTSRdd.schema)
+        assert(adjustedPriceTSRdd.collect().deep == resultTSRdd.collect().deep)
+      }
 
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    withPartitionStrategy(priceTSRdd)(DEFAULT)(test)
+      val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+      withPartitionStrategy(priceTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "pass `AddTotalVolumePerKey` test, i.e. with additional a single key. " in {
-    val resultTSRdd = fromCSV(
-      "AddTotalVolumePerKey.results",
-      Schema("id" -> IntegerType, "volume" -> LongType, "totalVolume" -> LongType)
-    )
-
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val totalVolumeTSRdd = rdd.addColumnsForCycle(
-        Seq(
-          "totalVolume" -> LongType -> { rows: Seq[Row] =>
-            val sum = rows.map(_.getAs[Long]("volume")).sum
-            rows.zipWithIndex.map { case (row, idx) => row -> (idx + sum) }.toMap
-          }
-        ),
-        Seq("id")
+    withAllTimeType {
+      val resultTSRdd = fromCSV(
+        "AddTotalVolumePerKey.results",
+        Schema("id" -> IntegerType, "volume" -> LongType, "totalVolume" -> LongType)
       )
-      totalVolumeTSRdd.collect().deep == resultTSRdd.collect().deep
-    }
 
-    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
-    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val totalVolumeTSRdd = rdd.addColumnsForCycle(
+          Seq(
+            "totalVolume" -> LongType -> { rows: Seq[Row] =>
+              val sum = rows.map(_.getAs[Long]("volume")).sum
+              rows.zipWithIndex.map { case (row, idx) => row -> (idx + sum) }.toMap
+            }
+          ),
+          Seq("id")
+        )
+        totalVolumeTSRdd.collect().deep == resultTSRdd.collect().deep
+      }
+
+      val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "pass `AddTotalVolumePerSeqOfKeys` test, i.e. with additional a sequence of keys." in {
-    val resultTSRdd = fromCSV(
-      "AddTotalVolumePerSeqOfKeys.results",
-      Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "totalVolume" -> LongType)
-    )
-
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val totalVolumeTSRdd = rdd.addColumnsForCycle(
-        Seq(
-          "totalVolume" -> LongType -> { rows: Seq[Row] =>
-            val sum = rows.map(_.getAs[Long]("volume")).sum
-            rows.zipWithIndex.map { case (row, idx) => row -> (idx + sum) }.toMap
-          }
-        ),
-        Seq("id", "group")
+    withAllTimeType {
+      val resultTSRdd = fromCSV(
+        "AddTotalVolumePerSeqOfKeys.results",
+        Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "totalVolume" -> LongType)
       )
 
-      assert(totalVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
-    }
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val totalVolumeTSRdd = rdd.addColumnsForCycle(
+          Seq(
+            "totalVolume" -> LongType -> { rows: Seq[Row] =>
+              val sum = rows.map(_.getAs[Long]("volume")).sum
+              rows.zipWithIndex.map { case (row, idx) => row -> (idx + sum) }.toMap
+            }
+          ),
+          Seq("id", "group")
+        )
 
-    val volumeTSRdd = fromCSV(
-      "VolumeWithIndustryGroup.csv",
-      Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
-    )
-    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+        assert(totalVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
+      }
+
+      val volumeTSRdd = fromCSV(
+        "VolumeWithIndustryGroup.csv",
+        Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
+      )
+      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "not accept duplicate column names" in {
-    val emptyTsRdd = TimeSeriesRDD.fromDF(
-      sqlContext.createDataFrame(sc.parallelize[Row](Seq(
-        Row(1L, 1.0)
-      )), Schema("time" -> LongType, "value" -> DoubleType))
-    )(isSorted = true, TimeUnit.NANOSECONDS)
+    withAllTimeType {
+      val emptyTsRdd = TimeSeriesRDD.fromDF(
+        sqlContext.createDataFrame(sc.parallelize[Row](Seq()), Schema("time" -> LongType, "value" -> DoubleType))
+      )(isSorted = true, TimeUnit.NANOSECONDS)
 
-    intercept[DuplicateColumnsException] {
-      emptyTsRdd.addColumnsForCycle(
-        "newCol" -> DoubleType -> { rows: Seq[Row] => rows.map(_ => 1.0) },
-        "newCol" -> DoubleType -> { rows: Seq[Row] => rows.map(_ => 2.0) }
-      )
+      intercept[DuplicateColumnsException] {
+        emptyTsRdd.addColumnsForCycle(
+          "newCol" -> DoubleType -> { rows: Seq[Row] => rows.map(_ => 1.0) },
+          "newCol" -> DoubleType -> { rows: Seq[Row] => rows.map(_ => 2.0) }
+        )
+      }
     }
   }
 }

@@ -20,79 +20,85 @@ import com.twosigma.flint.timeseries.PartitionStrategy.{ MultiTimestampNormalize
 import com.twosigma.flint.timeseries.row.Schema
 import org.apache.spark.sql.types.{ DoubleType, IntegerType, LongType }
 
-class LeftJoinSpec extends MultiPartitionSuite with TimeSeriesTestData {
+class LeftJoinSpec extends MultiPartitionSuite with TimeSeriesTestData with TimeTypeSuite {
   override val defaultResourceDir: String = "/timeseries/leftjoin"
 
   "LeftJoin" should "pass `JoinOnTime` test." in {
-    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
-    val resultsTSRdd = fromCSV(
-      "JoinOnTime.results", Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
-    )
+    withAllTimeType {
+      val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+      val resultsTSRdd = fromCSV(
+        "JoinOnTime.results", Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
+      )
 
-    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
-      assertEquals(rdd1.leftJoin(volumeTSRdd, "0ns", Seq("id")), resultsTSRdd)
+      def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+        assertEquals(rdd1.leftJoin(volumeTSRdd, "0ns", Seq("id")), resultsTSRdd)
+      }
+
+      val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+      withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
     }
-
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
   }
 
   it should "pass `JoinOnTime` with tolerance test" in {
-    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
-    val resultsTSRdd = fromCSV(
-      "JoinOnTimeWithTolerance.results", Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
-    )
-
-    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
-      assertEquals(
-        rdd1.leftJoin(volumeTSRdd.shift(Windows.futureAbsoluteTime("1ns")), "1000ns", Seq("id")),
-        resultsTSRdd
+    withAllTimeType {
+      val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+      val resultsTSRdd = fromCSV(
+        "JoinOnTimeWithTolerance.results", Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
       )
-    }
 
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+      def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+        assertEquals(
+          rdd1.leftJoin(volumeTSRdd.shift(Windows.futureAbsoluteTime("1 micro")), "1000 s", Seq("id")),
+          resultsTSRdd
+        )
+      }
+
+      val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+      withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "pass `JoinOnTimeWithMissingMatching` test." in {
-    val resultsTSRdd = fromCSV(
-      "JoinOnTimeWithMissingMatching.results",
-      Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
-    )
-
-    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
-      val joinedTSRdd = rdd1.leftJoin(
-        rdd2.deleteRows(row => row.getAs[Long]("time") == 1050L), "0ns", Seq("id")
+    withAllTimeType {
+      val resultsTSRdd = fromCSV(
+        "JoinOnTimeWithMissingMatching.results",
+        Schema("id" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
       )
-      assertEquals(joinedTSRdd, resultsTSRdd)
-    }
 
-    val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
-    val volumeTSRdd = fromCSV("Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType))
-    withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+      def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+        val joinedTSRdd = rdd1.leftJoin(rdd2, "0s", Seq("id"))
+        assertEquals(joinedTSRdd, resultsTSRdd)
+      }
+
+      val priceTSRdd = fromCSV("Price.csv", Schema("id" -> IntegerType, "price" -> DoubleType))
+      val volumeTSRdd = fromCSV("VolumeWithMissingMatching.csv", Schema("id" -> IntegerType, "volume" -> LongType))
+      withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+    }
   }
 
   it should "pass `JoinOnTimeAndMultipleKeys` test." in {
-    val resultsTSRdd = fromCSV(
-      "JoinOnTimeAndMultipleKeys.results",
-      Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
-    )
-
-    def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
-      val joinedTSRdd = rdd1.leftJoin(rdd2, "0ns", Seq("id", "group"))
-      assertEquals(joinedTSRdd, resultsTSRdd)
-    }
-
-    {
-      val priceTSRdd = fromCSV(
-        "PriceWithIndustryGroup.csv",
-        Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType)
+    withAllTimeType {
+      val resultsTSRdd = fromCSV(
+        "JoinOnTimeAndMultipleKeys.results",
+        Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType, "volume" -> LongType)
       )
-      val volumeTSRdd = fromCSV(
-        "VolumeWithIndustryGroup.csv",
-        Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
-      )
-      withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+
+      def test(rdd1: TimeSeriesRDD, rdd2: TimeSeriesRDD): Unit = {
+        val joinedTSRdd = rdd1.leftJoin(rdd2, "0s", Seq("id", "group"))
+        assertEquals(joinedTSRdd, resultsTSRdd)
+      }
+
+      {
+        val priceTSRdd = fromCSV(
+          "PriceWithIndustryGroup.csv",
+          Schema("id" -> IntegerType, "group" -> IntegerType, "price" -> DoubleType)
+        )
+        val volumeTSRdd = fromCSV(
+          "VolumeWithIndustryGroup.csv",
+          Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType)
+        )
+        withPartitionStrategy(priceTSRdd, volumeTSRdd)(DEFAULT)(test)
+      }
     }
   }
 

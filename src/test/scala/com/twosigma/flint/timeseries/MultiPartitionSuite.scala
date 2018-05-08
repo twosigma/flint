@@ -17,6 +17,7 @@
 package com.twosigma.flint.timeseries
 
 import com.twosigma.flint.rdd._
+import com.twosigma.flint.timeseries.time.types.TimeType
 import org.apache.spark.NarrowDependency
 import org.apache.spark.sql.catalyst.InternalRow
 import org.scalatest.prop.PropertyChecks
@@ -69,23 +70,35 @@ private[flint] object PartitionStrategy {
   }
 
   /**
-   * One timestamp per partition with the range [t, t+1) for each partition (t is
-   * the timestamp of the rows in the partition)
+   * One timestamp per partition with the range [t, t + 1000) (if timestamp type) or [t, t + 1) (if long type)
+   * for each partition (t is the timestamp of the rows in the partition)
    */
   case object OneTimestampTightBound extends PartitionStrategy {
     override def repartition(rdd: TimeSeriesRDD): TimeSeriesRDD = {
+
+      val timeType = TimeType.get()
+
+      val expandEnd = timeType match {
+        case TimeType.LongType => (t: Long) => t + 1
+        case TimeType.TimestampType => (t: Long) => t + 1000
+      }
+
       val timeIndex = rdd.schema.fieldIndex("time")
       val rowGroupMap = TreeMap(rdd.toDF.queryExecution.executedPlan.executeCollect().groupBy{
-        r => r.getLong(timeIndex)
+        r => timeType.internalToNanos(r.getLong(timeIndex))
       }.toArray: _*)
       val rowGroupArray = rowGroupMap.values.toArray
 
       val rangeSplits = rowGroupMap.zipWithIndex.map {
-        case ((time: Long, rows), index) => RangeSplit(OrderedRDDPartition(index), CloseOpen(time, Some(time + 1)))
+        case ((time: Long, rows), index) => RangeSplit(
+          OrderedRDDPartition(index), CloseOpen(time, Some(expandEnd(time)))
+        )
       }.toSeq
 
       val orderedRdd = new OrderedRDD[Long, InternalRow](rdd.orderedRdd.sparkContext, rangeSplits, Nil)(
-        (part, context) => rowGroupArray(part.index).map{ row => (row.getLong(timeIndex), row) }.toIterator
+        (part, context) => rowGroupArray(part.index).map{ row =>
+          (timeType.internalToNanos(row.getLong(timeIndex)), row)
+        }.toIterator
       )
 
       new TimeSeriesRDDImpl(TimeSeriesStore(orderedRdd, rdd.schema))
@@ -206,10 +219,18 @@ private[flint] object PartitionStrategy {
    */
   case object MultiTimestampNormalized extends PartitionStrategy {
     override def repartition(rdd: TimeSeriesRDD): TimeSeriesRDD = {
+
+      val timeType = TimeType.get()
+      val expandEnd = timeType match {
+        case TimeType.LongType => (t: Long) => t + 1
+        case TimeType.TimestampType => (t: Long) => t + 1000
+      }
+
       val timeIndex = rdd.schema.fieldIndex("time")
       val rows = rdd.toDF.queryExecution.sparkPlan.executeCollect()
 
-      val groupedRows = SortedMap[Long, Array[InternalRow]]() ++ rows.groupBy(_.getLong(timeIndex))
+      val groupedRows = SortedMap[Long, Array[InternalRow]]() ++
+        rows.groupBy(row => timeType.internalToNanos(row.getLong(timeIndex)))
 
       val count = groupedRows.size
       val targetPartitionNumber = math.sqrt(count).toLong
@@ -220,7 +241,7 @@ private[flint] object PartitionStrategy {
       val rangeSplits = partitionedRows.zipWithIndex.map{
         case (timestampToRows, index) =>
           val begin = timestampToRows.keys.min
-          val end = timestampToRows.keys.max + 1
+          val end = expandEnd(timestampToRows.keys.max)
           RangeSplit(
             OrderedRDDPartition(index),
             CloseOpen(begin, Some(end))
@@ -354,8 +375,8 @@ class MultiPartitionSuite extends TimeSeriesSuite with PropertyChecks {
     test: TimeSeriesRDD => Unit
   ): Unit = {
     for (s <- strategies) {
-      // info(s"PartitionStrategy: ${s}")
-      // info(s"Range: ${s.partition(rdd).partInfo.get.splits}")
+      // println(s"PartitionStrategy: ${s}")
+      // println(s"Range: ${s.repartition(rdd).partInfo.get.splits}")
       test(s.repartitionEnsureValid(rdd))
     }
   }

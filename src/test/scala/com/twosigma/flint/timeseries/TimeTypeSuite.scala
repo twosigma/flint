@@ -37,4 +37,8 @@ trait TimeTypeSuite {
         }
     }
   }
+
+  def withAllTimeType(block: => Unit): Unit = {
+    withTimeType("long", "timestamp")(block)
+  }
 }

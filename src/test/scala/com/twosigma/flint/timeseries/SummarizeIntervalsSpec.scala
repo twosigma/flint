@@ -19,73 +19,82 @@ package com.twosigma.flint.timeseries
 import com.twosigma.flint.timeseries.row.Schema
 import org.apache.spark.sql.types.{ DoubleType, LongType, IntegerType }
 
-class SummarizeIntervalsSpec extends MultiPartitionSuite with TimeSeriesTestData {
+class SummarizeIntervalsSpec extends MultiPartitionSuite with TimeSeriesTestData with TimeTypeSuite {
 
   override val defaultResourceDir: String = "/timeseries/summarizeintervals"
 
   "SummarizeInterval" should "pass `SummarizeSingleColumn` test." in {
-    val volumeTSRdd = fromCSV(
-      "Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
-    )
+    withAllTimeType {
+      val volumeTSRdd = fromCSV(
+        "Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
+      )
 
-    val clockTSRdd = fromCSV("Clock.csv", Schema())
-    val resultTSRdd = fromCSV("SummarizeSingleColumn.results", Schema("volume_sum" -> DoubleType))
+      volumeTSRdd.toDF.show()
 
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val summarizedVolumeTSRdd = rdd.summarizeIntervals(clockTSRdd, Summarizers.sum("volume"))
-      assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
+      val clockTSRdd = fromCSV("Clock.csv", Schema())
+      val resultTSRdd = fromCSV("SummarizeSingleColumn.results", Schema("volume_sum" -> DoubleType))
+
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val summarizedVolumeTSRdd = rdd.summarizeIntervals(clockTSRdd, Summarizers.sum("volume"))
+        summarizedVolumeTSRdd.toDF.show()
+        assert(summarizedVolumeTSRdd.collect().deep == resultTSRdd.collect().deep)
+      }
+
+      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
     }
-
-    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 
   it should "pass `SummarizeSingleColumnPerKey` test, i.e. with additional a single key." in {
-    val volumeTSRdd = fromCSV(
-      "Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
-    )
+    withAllTimeType {
+      val volumeTSRdd = fromCSV(
+        "Volume.csv", Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
+      )
 
-    val clockTSRdd = fromCSV("Clock.csv", Schema())
-    val resultTSRdd = fromCSV(
-      "SummarizeSingleColumnPerKey.results",
-      Schema("id" -> IntegerType, "volume_sum" -> DoubleType)
-    )
+      val clockTSRdd = fromCSV("Clock.csv", Schema())
+      val resultTSRdd = fromCSV(
+        "SummarizeSingleColumnPerKey.results",
+        Schema("id" -> IntegerType, "volume_sum" -> DoubleType)
+      )
 
-    val result2TSRdd = fromCSV(
-      "SummarizeV2PerKey.results",
-      Schema("id" -> IntegerType, "v2_sum" -> DoubleType)
-    )
+      val result2TSRdd = fromCSV(
+        "SummarizeV2PerKey.results",
+        Schema("id" -> IntegerType, "v2_sum" -> DoubleType)
+      )
 
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val summarizedVolumeTSRdd = rdd.summarizeIntervals(clockTSRdd, Summarizers.sum("volume"), Seq("id"))
-      assertEquals(summarizedVolumeTSRdd, resultTSRdd)
-      val summarizedV2TSRdd = rdd.summarizeIntervals(clockTSRdd, Summarizers.sum("v2"), Seq("id"))
-      assertEquals(summarizedV2TSRdd, result2TSRdd)
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val summarizedVolumeTSRdd = rdd.summarizeIntervals(clockTSRdd, Summarizers.sum("volume"), Seq("id"))
+        assertEquals(summarizedVolumeTSRdd, resultTSRdd)
+        val summarizedV2TSRdd = rdd.summarizeIntervals(clockTSRdd, Summarizers.sum("v2"), Seq("id"))
+        assertEquals(summarizedV2TSRdd, result2TSRdd)
+      }
+
+      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
     }
-
-    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 
   it should "pass `SummarizeSingleColumnPerSeqOfKeys` test, i.e. with additional a sequence of keys." in {
-    val volumeTSRdd = fromCSV(
-      "VolumeWithIndustryGroup.csv",
-      Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
-    )
-
-    val clockTSRdd = fromCSV("Clock.csv", Schema())
-    val resultTSRdd = fromCSV(
-      "SummarizeSingleColumnPerSeqOfKeys.results",
-      Schema("id" -> IntegerType, "group" -> IntegerType, "volume_sum" -> DoubleType)
-    )
-
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val summarizedVolumeTSRdd = rdd.summarizeIntervals(
-        clockTSRdd,
-        Summarizers.sum("volume"),
-        Seq("id", "group")
+    withAllTimeType {
+      val volumeTSRdd = fromCSV(
+        "VolumeWithIndustryGroup.csv",
+        Schema("id" -> IntegerType, "group" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
       )
-      assertEquals(summarizedVolumeTSRdd, resultTSRdd)
-    }
 
-    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+      val clockTSRdd = fromCSV("Clock.csv", Schema())
+      val resultTSRdd = fromCSV(
+        "SummarizeSingleColumnPerSeqOfKeys.results",
+        Schema("id" -> IntegerType, "group" -> IntegerType, "volume_sum" -> DoubleType)
+      )
+
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val summarizedVolumeTSRdd = rdd.summarizeIntervals(
+          clockTSRdd,
+          Summarizers.sum("volume"),
+          Seq("id", "group")
+        )
+        assertEquals(summarizedVolumeTSRdd, resultTSRdd)
+      }
+
+      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+    }
   }
 }

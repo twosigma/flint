@@ -51,7 +51,12 @@ object TimeSeriesRDD {
   /**
    * The field for the time column.
    */
-  private[flint] val timeField: StructField = StructField(timeColumnName, LongType)
+  private[flint] def timeField(timeType: TimeType) = {
+    timeType match {
+      case TimeType.LongType => StructField(timeColumnName, LongType)
+      case TimeType.TimestampType => StructField(timeColumnName, TimestampType)
+    }
+  }
 
   /**
    * Checks if the schema is legal.
@@ -153,9 +158,10 @@ object TimeSeriesRDD {
   ): TimeSeriesRDD = {
     requireSchema(schema)
 
+    val timeType = TimeType.get()
     val timeIndex = schema.fieldIndex(timeColumnName)
     val rdd = sc.parallelize(
-      rows.map { row => (row.getLong(timeIndex), row) }, numSlices
+      rows.map { row => (timeType.internalToNanos(row.getLong(timeIndex)), row) }, numSlices
     )
     TimeSeriesRDD.fromInternalOrderedRDD(Conversion.fromSortedRDD(rdd), schema)
   }
@@ -1572,13 +1578,17 @@ class TimeSeriesRDDImpl private[timeseries] (
 
     val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns, key)
     val sum = summarizer(pruned.schema)
-    val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)))
+
+    val timeType = TimeType.get()
+    val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)), timeType)
     val numColumns = newSchema.length
 
     TimeSeriesRDD.fromInternalOrderedRDD(
       pruned.orderedRdd.summarizeByKey(pruned.safeGetAsAny(key), sum)
         .mapValues { (k, v) =>
-          InternalRowUtils.concatTimeWithValues(k, numColumns, v._1, v._2.toSeq(pruned.schema))
+          InternalRowUtils.concatTimeWithValues(
+            timeType.nanosToInternal(k), numColumns, v._1, v._2.toSeq(pruned.schema)
+          )
         },
       newSchema
     )
@@ -1596,17 +1606,20 @@ class TimeSeriesRDDImpl private[timeseries] (
 
     val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns, key)
     val sum = summarizer(pruned.schema)
-    val clockLocal = clock.toDF.select("time").as[(Long)].collect()
+    val clockLocal = clock.orderedRdd.map(_._1).collect()
     val intervalized = pruned.orderedRdd.intervalize(clockLocal, inclusion, rounding).mapValues {
       case (_, v) => v._2
     }
 
-    val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)))
+    val timeType = TimeType.get()
+    val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)), timeType)
     val numColumns = newSchema.length
     TimeSeriesRDD.fromInternalOrderedRDD(
       intervalized.summarizeByKey(pruned.safeGetAsAny(key), sum)
         .mapValues { (k, v) =>
-          InternalRowUtils.concatTimeWithValues(k, numColumns, v._1, v._2.toSeq(pruned.schema))
+          InternalRowUtils.concatTimeWithValues(
+            timeType.nanosToInternal(k), numColumns, v._1, v._2.toSeq(pruned.schema)
+          )
         },
       newSchema
     )
@@ -1766,7 +1779,9 @@ class TimeSeriesRDDImpl private[timeseries] (
       case (keyValues, row) => InternalRowUtils.prepend(row, summarizer.outputSchema, 0L +: keyValues: _*)
     }
 
-    val newSchema = Schema.prependTimeAndKey(summarizer.outputSchema, key.map(pruned.schema(_)))
+    val timeType = TimeType.get()
+
+    val newSchema = Schema.prependTimeAndKey(summarizer.outputSchema, key.map(pruned.schema(_)), timeType)
     TimeSeriesRDD.fromSeq(pruned.orderedRdd.sc, rows.toSeq, newSchema, true, 1)
   }
 
@@ -1842,9 +1857,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     // table.select("col1").distinct().show()
     // The first and second show has different results, "col1" seems to be corrupted
 
-    val timeType = TimeType(this.sparkSession.conf.get(
-      FlintConf.TIME_TYPE_CONF, FlintConf.TIME_TYPE_DEFAULT
-    ))
+    val timeType = TimeType.get()
 
     val shiftFn: Long => Long = t => timeType.roundDownPrecision(window.shift(t))
 
@@ -1864,12 +1877,12 @@ class TimeSeriesRDDImpl private[timeseries] (
   def validate(): Unit = {
     val ranges = orderedRdd.rangeSplits.map { _.range }
 
-    rdd.mapPartitionsWithIndex {
+    orderedRdd.mapPartitionsWithIndex {
       case (index, rows) =>
         val range = ranges(index)
         var lastTimestamp = Long.MinValue
         for (row <- rows) {
-          val timestamp = row.getAs[Long](timeColumnName)
+          val timestamp = row._1
           assert(
             range.contains(timestamp),
             s"Timestamp $timestamp is not in range $range of partition $index"
@@ -1925,6 +1938,8 @@ class TimeSeriesRDDImpl private[timeseries] (
         s"Cannot parse schema for base rows. Schema: ${schema(baseRowsColumnName)}"
       )
     }
+
+    val timeType = TimeType.get()
     val timeColumnIndex = schema.fieldIndex(timeColumnName)
 
     val schemas = schemaColumNames.map(schema(_).dataType.asInstanceOf[StructType])
@@ -1952,7 +1967,8 @@ class TimeSeriesRDDImpl private[timeseries] (
               arrowColumns,
               timeColumnIndex,
               baseRowSchema.length,
-              newSchema.length - baseRowSchema.length
+              newSchema.length - baseRowSchema.length,
+              timeType
             )
         }
     }

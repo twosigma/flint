@@ -45,7 +45,6 @@ from . import utils
 original_environ = dict(os.environ)
 original_sys_path = list(sys.path)
 
-
 def reset_env():
     cleaned_env = dict(original_environ)
     # pytest sets some env vars it expects to still be there, but if we delete
@@ -69,7 +68,8 @@ def launcher_params():
                              # pyarrow 0.6 doesn't work with
                              # list<struct>, which is needed for a few
                              # tests
-                             'spark.sql.execution.arrow.enable': 'false'},
+                             'spark.sql.execution.arrow.enable': 'false',
+                             'flint.timetype': 'timestamp'},
               'executor_memory': (1*1024**3),
               'driver_memory': (4*1024**3)}
 
@@ -167,9 +167,20 @@ def make_pdf(data, schema, dtypes=None):
         df = df.astype(dict(zip(schema, dtypes)))
 
     if 'time' in df.columns:
-        df = df.assign(time=pd.to_datetime(df['time'], unit='ns'))
+        df = df.assign(time=pd.to_datetime(df['time'], unit='s'))
+
+    # Hacky way of converting long to timestamps for nested DataFrame
+    # Assuming (1) sub rows are presented as tuples (2) time is the first column and is long
+    for col in list(df.columns):
+        for i in range(len(df[col])):
+            cell = df[col][i]
+            if isinstance(cell, list) and len(cell) > 0 and isinstance(cell[0], tuple):
+                df[col].at[i] = [((pd.to_datetime(r[0], unit='s'),) + r[1:]) for r in cell]
 
     return df
+
+def make_timestamp(seconds):
+    return pd.to_datetime(seconds, unit='s')
 
 intervals_data = [
     (1000,),
@@ -339,8 +350,8 @@ def test_py4j(flint, tests_utils, sc):
 
 
 def test_merge(pyspark_types, tests_utils, price):
-    price1 = price.filter(price.time > 1100)
-    price2 = price.filter(price.time <= 1100)
+    price1 = price.filter(price.time > make_timestamp(1100))
+    price2 = price.filter(price.time <= make_timestamp(1100))
     assert price1.count() > 0
     assert price2.count() > 0
     assert price1.count() < price.count()
@@ -384,32 +395,32 @@ def test_leftJoin(pyspark_types, tests_utils, price, vol):
         (1250, 7, 6.0, 1200),
     ], ["time", "id", "price", "volume"])
 
-    new_pdf = price.leftJoin(vol.filter(vol.time != 1050), key="id").toPandas()
+    new_pdf = price.leftJoin(vol.filter(vol.time != make_timestamp(1050)), key="id").toPandas()
     tests_utils.assert_same(new_pdf, expected_pdf)
 
 
 def test_futureLeftJoin(pyspark_types, tests_utils, price, vol):
     expected_pdf = make_pdf([
-        (1000, 7, 0.5, 400, 1050),
-        (1000, 3, 1.0, 300, 1050),
-        (1050, 3, 1.5, 500, 1100),
-        (1050, 7, 2.0, 600, 1100),
-        (1100, 3, 2.5, 700, 1150),
-        (1100, 7, 3.0, 800, 1150),
-        (1150, 3, 3.5, 900, 1200),
-        (1150, 7, 4.0, 1000, 1200),
-        (1200, 3, 4.5, 1100, 1250),
-        (1200, 7, 5.0, 1200, 1250),
-        (1250, 3, 5.5, None, None),
-        (1250, 7, 6.0, None, None),
-    ], ["time", "id", "price", "volume", "time2"])
+        (1000, 7, 0.5, 400),
+        (1000, 3, 1.0, 300),
+        (1050, 3, 1.5, 500),
+        (1050, 7, 2.0, 600),
+        (1100, 3, 2.5, 700),
+        (1100, 7, 3.0, 800),
+        (1150, 3, 3.5, 900),
+        (1150, 7, 4.0, 1000),
+        (1200, 3, 4.5, 1100),
+        (1200, 7, 5.0, 1200),
+        (1250, 3, 5.5, None),
+        (1250, 7, 6.0, None),
+    ], ["time", "id", "price", "volume"])
 
-    new_pdf = price.futureLeftJoin(vol.withColumn("time2", vol.time.cast(pyspark_types.LongType())),
-                                   tolerance=pd.Timedelta("100ns"),
-                                   key=["id"], strict_lookahead=True).toPandas()
-    new_pdf1 = price.futureLeftJoin(vol.withColumn("time2", vol.time.cast(pyspark_types.LongType())),
-                                    tolerance=pd.Timedelta("100ns"),
-                                    key="id", strict_lookahead=True).toPandas()
+    new_pdf = price.futureLeftJoin(
+        vol, tolerance=pd.Timedelta("100s"),
+        key=["id"], strict_lookahead=True).toPandas()
+    new_pdf1 = price.futureLeftJoin(
+        vol, tolerance=pd.Timedelta("100s"),
+        key="id", strict_lookahead=True).toPandas()
     tests_utils.assert_same(new_pdf, new_pdf1)
     tests_utils.assert_same(new_pdf, expected_pdf)
 
@@ -426,34 +437,6 @@ def test_groupByCycle(tests_utils, vol):
 
     new_pdf1 = vol.groupByCycle().toPandas()
     tests_utils.assert_same(new_pdf1, expected_pdf1)
-
-
-def test_groupByInterval(tests_utils, vol, intervals):
-    id = vol.collect()
-
-    expected_pdf = make_pdf([
-        (1000, 7, [id[0], id[3]]),
-        (1000, 3, [id[1], id[2]]),
-        (1100, 7, [id[5], id[7]]),
-        (1100, 3, [id[4], id[6]]),
-        (1200, 7, [id[9], id[11]]),
-        (1200, 3, [id[8], id[10]]),
-    ], ["time", "id", "rows"])
-
-    new_pdf = vol.groupByInterval(intervals, key=["id"]).toPandas()
-    new_pdf1 = vol.groupByInterval(intervals, key="id").toPandas()
-    tests_utils.assert_same(new_pdf, new_pdf1)
-
-    # XXX: should just do tests_utils.assert_same(new_pdf, expected_pdf)
-    # once https://gitlab.twosigma.com/analytics/huohua/issues/26 gets resolved.
-    tests_utils.assert_same(
-        new_pdf[new_pdf['id'] == 3].reset_index(drop=True),
-        expected_pdf[expected_pdf['id'] == 3].reset_index(drop=True),
-    )
-    tests_utils.assert_same(
-        new_pdf[new_pdf['id'] == 7].reset_index(drop=True),
-        expected_pdf[expected_pdf['id'] == 7].reset_index(drop=True),
-    )
 
 
 def test_summarizeCycles(summarizers, tests_utils, vol, vol2):
@@ -632,6 +615,7 @@ def test_groupByInterval(flintContext, tests_utils, vol):
     ], ["time", "rows"])
 
     new_pdf1 = vol.groupByInterval(clock).toPandas()
+
     tests_utils.assert_same(new_pdf1, expected_pdf1)
 
 
@@ -768,7 +752,9 @@ def test_summarizeIntervals_udf(flintContext, tests_utils, vol):
 
 
 def test_summarizeWindows(flintContext, tests_utils, windows, summarizers, vol):
-    new_pdf1 = vol.summarizeWindows(windows.past_absolute_time('99ns'), summarizers.sum("volume")).toPandas()
+    w = windows.past_absolute_time('99s')
+
+    new_pdf1 = vol.summarizeWindows(w, summarizers.sum("volume")).toPandas()
     expected_pdf1 = make_pdf([
         (1000, 7, 100, 300.0),
         (1000, 3, 200, 300.0),
@@ -785,7 +771,7 @@ def test_summarizeWindows(flintContext, tests_utils, windows, summarizers, vol):
     ], ["time", "id", "volume", "volume_sum"])
     tests_utils.assert_same(new_pdf1, expected_pdf1)
 
-    new_pdf2 = (vol.summarizeWindows(windows.past_absolute_time('99ns'),
+    new_pdf2 = (vol.summarizeWindows(w,
                                      summarizers.sum("volume"),
                                      key="id").toPandas())
     expected_pdf2 = make_pdf([
@@ -817,10 +803,10 @@ def test_summarizeWindows(flintContext, tests_utils, windows, summarizers, vol):
         (1250, 7),
     ], ["time", "id"]))
 
-    new_pdf3 = (interval_with_id.summarizeWindows(windows.past_absolute_time('99ns'),
-                                                   summarizers.sum("volume"),
-                                                   key="id",
-                                                   other=vol).toPandas())
+    new_pdf3 = (interval_with_id.summarizeWindows(w,
+                                                  summarizers.sum("volume"),
+                                                  key="id",
+                                                  other=vol).toPandas())
     expected_pdf3 = make_pdf([
         (1000, 3, 200.0),
         (1000, 7, 100.0),
@@ -841,6 +827,8 @@ def test_summarizeWindows_udf(flintContext, tests_utils, windows, vol):
     from collections import OrderedDict
     from pyspark.sql.types import DoubleType, LongType
 
+    w = windows.past_absolute_time('99s')
+
     df = flintContext.read.pandas(make_pdf([
         (1000, 3, 10.0),
         (1000, 7, 20.0),
@@ -855,7 +843,7 @@ def test_summarizeWindows_udf(flintContext, tests_utils, windows, vol):
     ], ['time', 'id', 'v']))
 
     result1 = df.summarizeWindows(
-        windows.past_absolute_time('99ns'),
+        w,
         OrderedDict([
             ('mean', udf(lambda time, window: window.mean(), DoubleType())(df['time'], vol['volume']))
         ]),
@@ -876,7 +864,7 @@ def test_summarizeWindows_udf(flintContext, tests_utils, windows, vol):
     tests_utils.assert_same(result1, expected1)
 
     result2 = df.summarizeWindows(
-        windows.past_absolute_time('99ns'),
+        w,
         OrderedDict([
             ('mean', udf(lambda window: window.mean(), DoubleType())(vol['volume']))
         ]),
@@ -886,7 +874,7 @@ def test_summarizeWindows_udf(flintContext, tests_utils, windows, vol):
     tests_utils.assert_same(result2, expected2)
 
     result3 = df.summarizeWindows(
-        windows.past_absolute_time('99ns'),
+        w,
         OrderedDict([
             ('mean', udf(lambda window: window.mean(), DoubleType())(vol['volume'])),
             ('count', udf(lambda time, window: len(window), LongType())(df['time'], vol['volume']))
@@ -907,36 +895,42 @@ def test_summarizeWindows_udf(flintContext, tests_utils, windows, vol):
     ], ['time', 'id', 'v', 'mean', 'count'])
     tests_utils.assert_same(result3, expected3)
 
+    @udf('double')
+    def window_udf(time, window):
+        return (time - window.time).mean().seconds + window.volume.mean()
+
     result4 = df.summarizeWindows(
-        windows.past_absolute_time('99ns'),
+        w,
         OrderedDict([
-            ('mean',
-             udf(lambda time, window: (window.time - time).mean() + window.volume.mean(),
-                 DoubleType())(df['time'], vol[['time', 'volume']])),
+            ('mean', window_udf(df['time'], vol[['time', 'volume']])),
         ]),
         key='id',
         other=vol).toPandas()
+
+    df.show()
+    vol.show()
+
     expected4 = make_pdf([
         (1000, 3, 10.0, 200.0),
         (1000, 7, 20.0, 100.0),
-        (1050, 3, 30.0, 225.0),
-        (1050, 7, 40.0, 225.0),
-        (1100, 3, 50.0, 375.0),
-        (1150, 3, 60.0, 575.0),
-        (1150, 7, 70.0, 675.0),
-        (1200, 3, 80.0, 775.0),
-        (1200, 7, 90.0, 875.0),
-        (1250, 7, 100.0, 1075.0),
+        (1050, 3, 30.0, 275.0),
+        (1050, 7, 40.0, 275.0),
+        (1100, 3, 50.0, 425.0),
+        (1150, 3, 60.0, 625.0),
+        (1150, 7, 70.0, 725.0),
+        (1200, 3, 80.0, 825.0),
+        (1200, 7, 90.0, 925.0),
+        (1250, 7, 100.0, 1125.0),
     ], ['time', 'id', 'v', 'mean'])
     tests_utils.assert_same(result4, expected4)
 
 
     @udf(DoubleType())
     def foo5(row, window):
-        return (window.time - row.time).mean() + window.volume.mean()
+        return (row[0] - window.time).mean().seconds + window.volume.mean()
 
     result5 = df.summarizeWindows(
-        windows.past_absolute_time('99ns'),
+        w,
         OrderedDict([
             ('mean', foo5(df[['time', 'v']], vol[['time', 'volume']])),
         ]),
@@ -947,10 +941,10 @@ def test_summarizeWindows_udf(flintContext, tests_utils, windows, vol):
 
     @udf((DoubleType(), LongType()))
     def mean_and_count(v):
-        return (v.mean(), len(v))
+        return v.mean(), len(v)
 
     result6 = df.summarizeWindows(
-        windows.past_absolute_time('99ns'),
+        w,
         OrderedDict([
             [('mean', 'count'), mean_and_count(vol['volume'])]
         ]),
@@ -963,7 +957,7 @@ def test_summarizeWindows_udf(flintContext, tests_utils, windows, vol):
     def mean(v):
         return v.mean()
     result7 = vol.summarizeWindows(
-        windows.past_absolute_time('99ns'),
+        w,
         {'mean': mean(vol['volume'])},
         key='id'
     ).toPandas()
@@ -985,7 +979,7 @@ def test_summarizeWindows_udf(flintContext, tests_utils, windows, vol):
     tests_utils.assert_same(result7, expected7)
 
     result8 = vol.summarizeWindows(
-        windows.past_absolute_time('99ns'),
+        w,
         {'mean': mean(vol['volume'])}
     ).toPandas()
     expected8 = make_pdf([
@@ -1053,7 +1047,7 @@ def test_summarizeWindows_numpy_udf(flintContext, tests_utils, windows, vol):
         assert isinstance(window[-1], np.ndarray)
         return window[-1].mean()
 
-    w = windows.past_absolute_time('99ns')
+    w = windows.past_absolute_time('99s')
 
     result1 = vol.summarizeWindows(
         w,
@@ -1184,13 +1178,13 @@ def test_summarizeWindows_numpy_udf(flintContext, tests_utils, windows, vol):
 @pytest.mark.net
 def test_summarizeWindows_trading_time(flintContext, tests_utils, windows, summarizers):
 
-    def to_nanos(dt):
-        return int(dt.timestamp() * 1e9)
+    def to_seconds(dt):
+        return int(dt.timestamp())
 
-    friday = to_nanos(datetime.datetime(2001, 11, 9, 15, 0))
-    monday = to_nanos(datetime.datetime(2001, 11, 12, 15, 0))
-    tuesday = to_nanos(datetime.datetime(2001, 11, 13, 15, 0))
-    wednesday = to_nanos(datetime.datetime(2001, 11, 14, 15, 0))
+    friday = to_seconds(datetime.datetime(2001, 11, 9, 15, 0))
+    monday = to_seconds(datetime.datetime(2001, 11, 12, 15, 0))
+    tuesday = to_seconds(datetime.datetime(2001, 11, 13, 15, 0))
+    wednesday = to_seconds(datetime.datetime(2001, 11, 14, 15, 0))
 
     data_with_weekend = flintContext.read.pandas(make_pdf([
         (friday, 1, 100.0),
@@ -1732,7 +1726,7 @@ def test_addColumnsForCycle_percentile_rank_with_null_filtered(
     import pyspark.sql.functions as F
 
     # Remove data at timestamp 1050
-    data = (price.leftJoin(vol.filter(vol.time != 1050), key="id")
+    data = (price.leftJoin(vol.filter(vol.time != make_timestamp(1050)), key="id")
         .withColumn('volume', F.col('volume').cast('double')))
 
     new_pdf = data.addColumnsForCycle({
@@ -1881,7 +1875,12 @@ def test_addColumnsForCycle_unsupported_columns(rankers, pyspark, price2):
 
 
 def test_addWindows(tests_utils, windows, vol):
-    id = vol.collect()
+    from pyspark.sql import Row
+
+    VolRow = Row('time', 'id', 'volume')
+
+    id = [VolRow(int(r['time'].strftime('%s')), r['id'], r['volume'])
+          for r in vol.collect()]
 
     expected_pdf = make_pdf([
         (1000, 7, 100, [id[0], id[1]]),
@@ -1896,14 +1895,14 @@ def test_addWindows(tests_utils, windows, vol):
         (1200, 7, 1000, [id[6], id[7], id[8], id[9]]),
         (1250, 3, 1100, [id[8], id[9], id[10], id[11]]),
         (1250, 7, 1200, [id[8], id[9], id[10], id[11]]),
-    ], ["time", "id", "volume", "window_past_50ns"])
+    ], ["time", "id", "volume", "window_past_50s"])
 
-    new_pdf = vol.addWindows(windows.past_absolute_time("50ns")).toPandas()
+    new_pdf = vol.addWindows(windows.past_absolute_time("50s")).toPandas()
     tests_utils.assert_same(new_pdf, expected_pdf)
 
 
 def test_shiftTime(tests_utils, price):
-    delta = pd.Timedelta('1000ns')
+    delta = pd.Timedelta('1000s')
     expected_pdf = price.toPandas()
     expected_pdf.time += delta
     new_pdf = price.shiftTime(delta).toPandas()
@@ -1917,15 +1916,12 @@ def test_shiftTime(tests_utils, price):
 
 def test_shiftTime_windows(flintContext, tests_utils, windows):
 
-    def to_nanos(dt):
-        return int(dt.timestamp() * 1e9)
-
-    friday = to_nanos(datetime.datetime(2001, 11, 9, 15, 0))
-    saturday = to_nanos(datetime.datetime(2001, 11, 10, 15, 0))
-    monday = to_nanos(datetime.datetime(2001, 11, 12, 15, 0))
-    tuesday = to_nanos(datetime.datetime(2001, 11, 13, 15, 0))
-    wednesday = to_nanos(datetime.datetime(2001, 11, 14, 15, 0))
-    thrusday = to_nanos(datetime.datetime(2001, 11, 15, 15, 0))
+    friday = datetime.datetime(2001, 11, 9, 15, 0).timestamp()
+    saturday = datetime.datetime(2001, 11, 10, 15, 0).timestamp()
+    monday = datetime.datetime(2001, 11, 12, 15, 0).timestamp()
+    tuesday = datetime.datetime(2001, 11, 13, 15, 0).timestamp()
+    wednesday = datetime.datetime(2001, 11, 14, 15, 0).timestamp()
+    thrusday = datetime.datetime(2001, 11, 15, 15, 0).timestamp()
 
     dates = flintContext.read.pandas(make_pdf([
         (friday,),
@@ -1957,11 +1953,13 @@ def test_shiftTime_windows(flintContext, tests_utils, windows):
 @pytest.mark.human
 @pytest.mark.net
 def test_addXrefColumn(flintContext, tests_utils):
-    from pyspark.sql.types import StructType, StructField, LongType, IntegerType
-    pdf = make_pdf([(1451606400000000000, 64106)], ["time", "tid"])
-    input_df = flintContext.read.pandas(pdf, StructType([StructField("time", LongType(), True), StructField("tid", IntegerType(), True)]))
+    from pyspark.sql.types import StructType, StructField, LongType, IntegerType, TimestampType
+    pdf = make_pdf([(1451606400, 64106)], ["time", "tid"])
+    input_df = flintContext.read.pandas(
+        pdf,
+        StructType([StructField("time", TimestampType(), True), StructField("tid", IntegerType(), True)]))
     output = input_df.addXrefColumn(('TICKER')).toPandas()
-    expected_pdf = make_pdf([(1451606400000000000, 64106, "CAB")], ["time", "tid", "TICKER"],
+    expected_pdf = make_pdf([(1451606400, 64106, "CAB")], ["time", "tid", "TICKER"],
                             dtypes=[np.int64, np.int32, np.str])
     tests_utils.assert_same(output, expected_pdf)
 
@@ -1970,10 +1968,10 @@ def test_addXrefColumn(flintContext, tests_utils):
 @pytest.mark.human
 @pytest.mark.net
 def test_addTidColumn(flintContext, tests_utils):
-    input_df = flintContext.read.pandas(make_pdf([(1451606400000000000, "CAB")], ["time", "ticker"]))
+    input_df = flintContext.read.pandas(make_pdf([(1451606400, "CAB")], ["time", "ticker"]))
     output = input_df.addTidColumn('ticker', 'ACTIVE_3000_US').toPandas()
 
-    expected_pdf = make_pdf([(1451606400000000000, "CAB", 64106)], ["time", "ticker", "tid"],
+    expected_pdf = make_pdf([(1451606400, "CAB", 64106)], ["time", "ticker", "tid"],
                             dtypes=[np.int64, np.str, np.int32])
     tests_utils.assert_same(output, expected_pdf)
 
@@ -1983,11 +1981,11 @@ def test_addTidColumn(flintContext, tests_utils):
 @pytest.mark.net
 def test_shiftToNextClosestTradingTime(flintContext, tests_utils):
     # 12/25/2016, 2:00:00 AM
-    input_df = flintContext.read.pandas(make_pdf([(1482649200000000000, 64106)], ["time", "id"]))
+    input_df = flintContext.read.pandas(make_pdf([(1482649200, 64106)], ["time", "id"]))
     output = input_df.shiftToNextClosestTradingTime('US').toPandas()
 
     # 12/27/2016 9:30:00AM ET - US stock exchanges opened on Tuesday after Christmas
-    expected_pdf = make_pdf([(1482849000000000000, 64106)], ["time", "id"])
+    expected_pdf = make_pdf([(1482849000, 64106)], ["time", "id"])
     tests_utils.assert_same(output, expected_pdf)
 
 
@@ -2022,12 +2020,15 @@ def test_read_uri(flintContext):
 @pytest.mark.human
 @pytest.mark.net
 def test_read_parquet(sqlContext, flintContext, tests_utils):
+    from pyspark.sql.functions import col
+
     columns = ['time', 'id', 'value']
     data_unsorted = [(3000, 1, 'a'),
                      (4000, 2, 'b'),
                      (2000, 3, 'c'),
                      (1000, 4, 'd')]
-    df_unsorted = sqlContext.createDataFrame(data_unsorted, columns)
+    df_unsorted = sqlContext.createDataFrame(data_unsorted, columns) \
+        .withColumn('time', col('time').cast('timestamp'))
 
     path = "flint/test/parquet/{}".format(pd.Timestamp.now().value)
     # Write unsorted dataframe Parquet file for testing
@@ -2217,7 +2218,8 @@ def test_read_dataframe_begin_end(sqlContext, flintContext, tests_utils):
     begin_nanos, end_nanos = 1100, 1200
 
     df = flintContext.read.range(begin_nanos, end_nanos).dataframe(df)
-    expected_df = df.filter(df.time >= begin_nanos).filter(df.time < end_nanos)
+    expected_df = df.filter(df.time >= make_timestamp(begin_nanos)) \
+        .filter(df.time < make_timestamp(end_nanos))
     expected = expected_df.count()
     assert(df.count() == expected)
 
@@ -2268,7 +2270,7 @@ def test_uniform_clocks(sqlContext, clocks):
     df = clocks.uniform(sqlContext, '1d', '0s', '2016-11-07', '2016-11-17')
     assert(df.count() == 11)
     # the last timestamp should be 17 Nov 2016 00:00:00 GMT
-    assert(df.collect()[-1]['time'] == 1479340800000000000)
+    assert(df.collect()[-1]['time'] == make_timestamp(1479340800))
 
 
 def test_from_tsrdd(sqlContext, flintContext, flint):
@@ -2420,10 +2422,10 @@ def test_withColumn_time(flintContext, tests_utils):
 
     pdf = make_pdf(forecast_data, ["time", "id", "forecast"])
     df = flintContext.read.pandas(pdf)
-    df = df.withColumn("time", df.time * 2)
+    df = df.withColumn("time", df.time)
     assert(not isinstance(df, TimeSeriesDataFrame))
     assert(isinstance(df, DataFrame))
-    expected = pdf.assign(time=pdf['time'].astype(np.int64) * 2)
+    expected = pdf.assign(time=pdf['time'])
     tests_utils.assert_same(df.toPandas(), expected)
 
 
@@ -2436,19 +2438,21 @@ def test_describe(flintContext):
 
 
 def test_empty_df(sc, sqlContext, flintContext, summarizers):
-    from pyspark.sql.types import LongType, StructType, StructField
+    from pyspark.sql.types import LongType, TimestampType, StructType, StructField
     df = sqlContext.createDataFrame(
         sc.emptyRDD(),
-        schema=StructType([StructField('time', LongType())]))
+        schema=StructType([StructField('time', TimestampType())]))
     df2 = flintContext.read.dataframe(df)
     df3 = df2.summarize(summarizers.count())
     assert(df2.count() == 0)
     assert(df3.count() == 0)
-    assert(df2.schema == StructType([StructField('time', LongType())]))
-    assert(df3.schema == StructType([StructField('time', LongType()), StructField('count', LongType())]))
+    assert(df2.schema == StructType([StructField('time', TimestampType())]))
+    assert(df3.schema == StructType([StructField('time', TimestampType()), StructField('count', LongType())]))
 
 
 def shared_test_partition_preserving(flintContext, func, preserve, create = None):
+    from pyspark.sql.functions import month
+
     def create_dataframe():
         return flintContext.read.pandas(make_pdf(forecast_data, ["time", "id", "forecast"]))
 
@@ -2473,7 +2477,7 @@ def shared_test_partition_preserving(flintContext, func, preserve, create = None
         lambda df: df,
         lambda df: df.withColumn("f2", df.forecast * 2),
         lambda df: df.select("time", "id", "forecast"),
-        lambda df: df.filter(df.time % 1000 == 0)
+        lambda df: df.filter(month(df.time) == 1)
     ]
 
     order_preserving_input_tranforms = [

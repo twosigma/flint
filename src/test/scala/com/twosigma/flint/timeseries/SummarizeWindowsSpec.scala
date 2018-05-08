@@ -29,7 +29,7 @@ import org.scalatest.prop.PropertyChecks
 
 import scala.util.Random
 
-class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData with PropertyChecks {
+class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData with PropertyChecks with TimeTypeSuite {
 
   override val defaultResourceDir: String = "/timeseries/summarizewindows"
 
@@ -50,77 +50,104 @@ class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData w
   }
 
   "SummarizeWindows" should "pass `SummarizeSingleColumn` test." in {
-    val resultsTSRdd = fromCSV(
-      "SummarizeSingleColumn.results",
-      Schema.append(volumeSchema, "volume_sum" -> DoubleType)
-    )
+    withAllTimeType {
+      val resultsTSRdd = fromCSV(
+        "SummarizeSingleColumn.results",
+        Schema.append(volumeSchema, "volume_sum" -> DoubleType)
+      )
 
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val summarizedTSRdd = rdd.summarizeWindows(Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"))
-      assertEquals(summarizedTSRdd, resultsTSRdd)
-    }
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val summarizedTSRdd = rdd.summarizeWindows(Windows.pastAbsoluteTime("100s"), Summarizers.sum("volume"))
+        assertEquals(summarizedTSRdd, resultsTSRdd)
+      }
 
-    {
-      val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
-      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+      {
+        val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
+        withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+      }
     }
   }
 
   it should "pass `SummarizeSingleColumnPerKey` test." in {
-    val resultsTSRdd = fromCSV(
-      "SummarizeSingleColumnPerKey.results",
-      Schema.append(volumeSchema, "volume_sum" -> DoubleType)
-    )
-
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val summarizedTSRdd = rdd.summarizeWindows(
-        Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"), Seq("id")
+    withAllTimeType {
+      val resultsTSRdd = fromCSV(
+        "SummarizeSingleColumnPerKey.results",
+        Schema.append(volumeSchema, "volume_sum" -> DoubleType)
       )
-      assertEquals(summarizedTSRdd, resultsTSRdd)
-    }
 
-    {
-      val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
-      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val summarizedTSRdd = rdd.summarizeWindows(
+          Windows.pastAbsoluteTime("100s"), Summarizers.sum("volume"), Seq("id")
+        )
+        assertEquals(summarizedTSRdd, resultsTSRdd)
+      }
+
+      {
+        val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
+        withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
+      }
     }
   }
 
   it should "pass `SummarizeSingleColumnPerSeqOfKeys` test." in {
-    val resultsTSRdd = fromCSV(
-      "SummarizeSingleColumnPerSeqOfKeys.results",
-      Schema.append(volumeWithGroupSchema, "volume_sum" -> DoubleType)
-    )
-
-    def test(volumeTSRdd: TimeSeriesRDD): Unit = {
-      val summarizedTSRdd = volumeTSRdd.summarizeWindows(
-        Windows.pastAbsoluteTime("100ns"), Summarizers.sum("volume"), Seq("id", "group")
+    withAllTimeType {
+      val resultsTSRdd = fromCSV(
+        "SummarizeSingleColumnPerSeqOfKeys.results",
+        Schema.append(volumeWithGroupSchema, "volume_sum" -> DoubleType)
       )
-      assertEquals(summarizedTSRdd, resultsTSRdd)
-    }
 
-    {
-      val volumeTSRdd = fromCSV("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
-      withPartitionStrategy(volumeTSRdd)(NONE)(test)
+      def test(volumeTSRdd: TimeSeriesRDD): Unit = {
+        val summarizedTSRdd = volumeTSRdd.summarizeWindows(
+          Windows.pastAbsoluteTime("100s"), Summarizers.sum("volume"), Seq("id", "group")
+        )
+        assertEquals(summarizedTSRdd, resultsTSRdd)
+      }
+
+      {
+        val volumeTSRdd = fromCSV("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
+        withPartitionStrategy(volumeTSRdd)(NONE)(test)
+      }
+    }
+  }
+
+  it should "pass `SummarizeWindowCountOverSingleTimeSeries` test." in {
+    withAllTimeType {
+      val resultsTSRdd = fromCSV(
+        "SummarizeWindowCountOverSingleTimeSeries.results",
+        Schema("count" -> LongType)
+      )
+
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val summarizedTSRdd = rdd.summarizeWindows(Windows.pastAbsoluteTime("5s"), Summarizers.count())
+        assertEquals(summarizedTSRdd, resultsTSRdd)
+      }
+
+      {
+        val clock = fromCSV("Clock.csv", Schema())
+        withPartitionStrategy(clock)(DEFAULT)(test)
+      }
     }
   }
 
   it should "pass `SummarizeWindowSumOverSingleTimeSeries` test." in {
-    val resultsTSRdd = fromCSV(
-      "SummarizeWindowSumOverSingleTimeSeries.results",
-      Schema.append(valueSchema, "lagSum" -> DoubleType, "sum" -> DoubleType)
-    )
-
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val summarizedTSRdd = rdd.summarizeWindows(
-        Windows.pastAbsoluteTime("3ns"),
-        LagSumSummarizerFactory("value", "3ns")
+    withAllTimeType {
+      val resultsTSRdd = fromCSV(
+        "SummarizeWindowSumOverSingleTimeSeries.results",
+        Schema.append(valueSchema, "lagSum" -> DoubleType, "sum" -> DoubleType)
       )
-      assertEquals(summarizedTSRdd, resultsTSRdd)
-    }
 
-    {
-      val valueTSRDD = fromCSV("Value.csv", valueSchema)
-      withPartitionStrategy(valueTSRDD)(DEFAULT)(test)
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val summarizedTSRdd = rdd.summarizeWindows(
+          Windows.pastAbsoluteTime("3s"),
+          LagSumSummarizerFactory("value", "3s")
+        )
+        assertEquals(summarizedTSRdd, resultsTSRdd)
+      }
+
+      {
+        val valueTSRDD = fromCSV("Value.csv", valueSchema)
+        withPartitionStrategy(valueTSRDD)(DEFAULT)(test)
+      }
     }
   }
 
@@ -167,5 +194,6 @@ class SummarizeWindowsSpec extends MultiPartitionSuite with TimeSeriesTestData w
     def gen(): TimeSeriesRDD = cycleData1
 
     withPartitionStrategyAndParams(gen)("addWindows")(DEFAULT)(params)(addWindows)
+
   }
 }

@@ -19,7 +19,7 @@ package com.twosigma.flint.timeseries
 import com.twosigma.flint.timeseries.row.Schema
 import org.apache.spark.sql.types.{ DoubleType, IntegerType, LongType }
 
-class SummarizeCyclesSpec extends MultiPartitionSuite with TimeSeriesTestData {
+class SummarizeCyclesSpec extends MultiPartitionSuite with TimeSeriesTestData with TimeTypeSuite {
 
   override val defaultResourceDir: String = "/timeseries/summarizecycles"
   private val volumeSchema = Schema("id" -> IntegerType, "volume" -> LongType, "v2" -> DoubleType)
@@ -29,48 +29,55 @@ class SummarizeCyclesSpec extends MultiPartitionSuite with TimeSeriesTestData {
   )
 
   "SummarizeCycles" should "pass `SummarizeSingleColumn` test." in {
-    val resultTSRdd = fromCSV("SummarizeSingleColumn.results", Schema("volume_sum" -> DoubleType))
+    withAllTimeType {
+      val resultTSRdd = fromCSV("SummarizeSingleColumn.results", Schema("volume_sum" -> DoubleType))
 
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val summarizedVolumeTSRdd = rdd.summarizeCycles(Summarizers.sum("volume"))
-      assertEquals(summarizedVolumeTSRdd, resultTSRdd)
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val summarizedVolumeTSRdd = rdd.summarizeCycles(Summarizers.sum("volume"))
+        assertEquals(summarizedVolumeTSRdd, resultTSRdd)
+      }
+
+      val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
+      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
     }
-
-    val volumeTSRdd = fromCSV("Volume.csv", volumeSchema)
-    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 
   it should "pass `SummarizeSingleColumnPerKey` test, i.e. with additional a single key." in {
-    val resultTSRdd = fromCSV(
-      "SummarizeSingleColumnPerKey.results",
-      Schema("id" -> IntegerType, "volume_sum" -> DoubleType)
-    )
+    withAllTimeType {
+      val resultTSRdd = fromCSV(
+        "SummarizeSingleColumnPerKey.results",
+        Schema("id" -> IntegerType, "volume_sum" -> DoubleType)
+      )
 
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val summarizedVolumeTSRdd = rdd.summarizeCycles(Summarizers.sum("volume"), Seq("id"))
-      assertEquals(summarizedVolumeTSRdd, resultTSRdd)
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val summarizedVolumeTSRdd = rdd.summarizeCycles(Summarizers.sum("volume"), Seq("id"))
+        assertEquals(summarizedVolumeTSRdd, resultTSRdd)
+      }
+
+      val volumeTSRdd = fromCSV("Volume2.csv", volume2Schema)
+      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
     }
-
-    val volumeTSRdd = fromCSV("Volume2.csv", volume2Schema)
-    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 
   it should "pass `SummarizeSingleColumnPerSeqOfKeys` test, i.e. with additional a sequence of keys." in {
-    val resultTSRdd = fromCSV(
-      "SummarizeSingleColumnPerSeqOfKeys.results",
-      Schema("id" -> IntegerType, "group" -> IntegerType, "volume_sum" -> DoubleType)
-    )
+    withAllTimeType {
+      val resultTSRdd = fromCSV(
+        "SummarizeSingleColumnPerSeqOfKeys.results",
+        Schema("id" -> IntegerType, "group" -> IntegerType, "volume_sum" -> DoubleType)
+      )
 
-    def test(rdd: TimeSeriesRDD): Unit = {
-      val summarizedVolumeTSRdd = rdd.summarizeCycles(Summarizers.sum("volume"), Seq("id", "group"))
-      assertEquals(summarizedVolumeTSRdd, resultTSRdd)
+      def test(rdd: TimeSeriesRDD): Unit = {
+        val summarizedVolumeTSRdd = rdd.summarizeCycles(Summarizers.sum("volume"), Seq("id", "group"))
+        assertEquals(summarizedVolumeTSRdd, resultTSRdd)
+      }
+
+      val volumeTSRdd = fromCSV("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
+      withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
     }
-
-    val volumeTSRdd = fromCSV("VolumeWithIndustryGroup.csv", volumeWithGroupSchema)
-    withPartitionStrategy(volumeTSRdd)(DEFAULT)(test)
   }
 
   it should "pass generated cycle data test" in {
+    // TODO: The way cycleData works now doesn't support changing time type.
     val testData = cycleData1
 
     def sum(rdd: TimeSeriesRDD): TimeSeriesRDD = {
