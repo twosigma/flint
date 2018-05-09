@@ -23,9 +23,9 @@ import org.apache.spark.sql.types.{ DoubleType, IntegerType, LongType }
 import scala.collection.mutable
 
 class TimeSeriesGeneratorSpec extends TimeSeriesSuite {
-  private val begin = 1000L
-  private val end = 2000L
-  private val frequency = 10L
+  private val begin = 1000000L
+  private val end = 2000000L
+  private val frequency = 10000L
   private val schema = Schema(
     "time" -> LongType,
     "id" -> IntegerType,

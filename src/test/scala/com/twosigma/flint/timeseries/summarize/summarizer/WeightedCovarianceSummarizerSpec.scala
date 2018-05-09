@@ -24,7 +24,7 @@ class WeightedCovarianceSummarizerSpec extends SummarizerSuite {
 
   private[this] val cycles = 10000L
 
-  private[this] val frequency = 100L
+  private[this] val frequency = 1000L
 
   private[this] lazy val data = {
     val _data = new TimeSeriesGenerator(
@@ -65,12 +65,29 @@ class WeightedCovarianceSummarizerSpec extends SummarizerSuite {
   }
 
   "WeightedCovarianceSummarize" should "compute unweighted covariance correctly" in {
+    /*
+    Verified using the following code
+
+    def m(x, w):
+        """Weighted Mean"""
+        return np.sum(x * w) / np.sum(w)
+
+    def cov(x, y, w):
+        """Weighted Covariance"""
+        return np.sum(w * (x - m(x, w)) * (y - m(y, w))) / np.sum(w)
+
+    def corr(x, y, w):
+        """Weighted Correlation"""
+        return cov(x, y, w) / np.sqrt(cov(x, x, w) * cov(y, y, w))
+    */
+
     val test = data
       .summarize(Summarizers.weightedCovariance("x", "y", "w1"))
       .collect()
       .head
       .getAs[Double]("x_y_w1_weightedCovariance")
-    assert(test === 0.0011515147360083783)
+
+    assert(test === 0.0020384576995828955)
   }
 
   it should "compute weighted covariance correctly" in {

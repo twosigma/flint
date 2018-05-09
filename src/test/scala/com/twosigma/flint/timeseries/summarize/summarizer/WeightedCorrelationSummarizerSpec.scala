@@ -29,7 +29,7 @@ class WeightedCorrelationSummarizerSpec extends SummarizerSuite {
 
   private[this] val cycles = 10000L
 
-  private[this] val frequency = 100L
+  private[this] val frequency = 1000L
 
   private[this] lazy val data = {
     val _data = new TimeSeriesGenerator(
@@ -96,11 +96,27 @@ class WeightedCorrelationSummarizerSpec extends SummarizerSuite {
         .getAs[Double]("x_y_w_weightedCorrelation") === -1.0
     )
 
+    /*
+    Verified using the following code
+
+    def m(x, w):
+        """Weighted Mean"""
+        return np.sum(x * w) / np.sum(w)
+
+    def cov(x, y, w):
+        """Weighted Covariance"""
+        return np.sum(w * (x - m(x, w)) * (y - m(y, w))) / np.sum(w)
+
+    def corr(x, y, w):
+        """Weighted Correlation"""
+        return cov(x, y, w) / np.sqrt(cov(x, x, w) * cov(y, y, w))
+    */
+
     assert(
       data
         .summarize(Summarizers.weightedCorrelation("x", "y", "w2"))
         .first()
-        .getAs[Double]("x_y_w2_weightedCorrelation") === 0.012915018154877035
+        .getAs[Double]("x_y_w2_weightedCorrelation") === 0.02017465386798503
     )
   }
 
