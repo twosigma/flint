@@ -111,8 +111,8 @@ class TimeSeriesGeneratorSpec extends TimeSeriesSuite {
         ).generate()
 
         assert(randomTSRdd.schema == schema)
-        assert(randomTSRdd.groupByCycle().count() > 1.5 * (end - begin) / frequency)
-        assert(randomTSRdd.groupByCycle().count() < 2.5 * (end - begin) / frequency)
+        assert(randomTSRdd.groupByCycle().count() > 1.25 * (end - begin) / frequency)
+        assert(randomTSRdd.groupByCycle().count() < 3.0 * (end - begin) / frequency)
     }
   }
 }
