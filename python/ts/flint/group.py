@@ -39,8 +39,12 @@ class TimeSeriesGroupedData(pyspark.sql.GroupedData):
     def __init__(self, gd):
         # This doesn't work with open source version of Spark
         # because grouping_cols is ts specific
-        # Fix this once we moved to Spark 2.2
-        super().__init__(gd._jgd, gd.sql_ctx, gd.grouping_cols)
+        # Fix this once we moved to Spark 2.3
+        if hasattr(gd, 'grouping_cols'):
+            super().__init__(gd._jgd, gd.sql_ctx, gd.grouping_cols)
+        else:
+            # 2.3
+            super().__init__(gd._jgd, gd._df)
 
     @wrap_gd_method
     def agg(self, *exprs):
