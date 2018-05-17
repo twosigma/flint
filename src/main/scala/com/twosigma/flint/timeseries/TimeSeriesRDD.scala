@@ -158,7 +158,7 @@ object TimeSeriesRDD {
   ): TimeSeriesRDD = {
     requireSchema(schema)
 
-    val timeType = TimeType.get()
+    val timeType = TimeType.get(SQLContext.getOrCreate(sc).sparkSession)
     val timeIndex = schema.fieldIndex(timeColumnName)
     val rdd = sc.parallelize(
       rows.map { row => (timeType.internalToNanos(row.getLong(timeIndex)), row) }, numSlices
@@ -1579,7 +1579,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     val pruned = TimeSeriesRDD.pruneColumns(this, summarizer.requiredColumns, key)
     val sum = summarizer(pruned.schema)
 
-    val timeType = TimeType.get()
+    val timeType = TimeType.get(sparkSession)
     val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)), timeType)
     val numColumns = newSchema.length
 
@@ -1611,7 +1611,7 @@ class TimeSeriesRDDImpl private[timeseries] (
       case (_, v) => v._2
     }
 
-    val timeType = TimeType.get()
+    val timeType = TimeType.get(sparkSession)
     val newSchema = Schema.prependTimeAndKey(sum.outputSchema, key.map(pruned.schema(_)), timeType)
     val numColumns = newSchema.length
     TimeSeriesRDD.fromInternalOrderedRDD(
@@ -1779,7 +1779,7 @@ class TimeSeriesRDDImpl private[timeseries] (
       case (keyValues, row) => InternalRowUtils.prepend(row, summarizer.outputSchema, 0L +: keyValues: _*)
     }
 
-    val timeType = TimeType.get()
+    val timeType = TimeType.get(sparkSession)
 
     val newSchema = Schema.prependTimeAndKey(summarizer.outputSchema, key.map(pruned.schema(_)), timeType)
     TimeSeriesRDD.fromSeq(pruned.orderedRdd.sc, rows.toSeq, newSchema, true, 1)
@@ -1857,7 +1857,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     // table.select("col1").distinct().show()
     // The first and second show has different results, "col1" seems to be corrupted
 
-    val timeType = TimeType.get()
+    val timeType = TimeType.get(sparkSession)
 
     val shiftFn: Long => Long = t => timeType.roundDownPrecision(window.shift(t))
 
@@ -1939,7 +1939,7 @@ class TimeSeriesRDDImpl private[timeseries] (
       )
     }
 
-    val timeType = TimeType.get()
+    val timeType = TimeType.get(sparkSession)
     val timeColumnIndex = schema.fieldIndex(timeColumnName)
 
     val schemas = schemaColumNames.map(schema(_).dataType.asInstanceOf[StructType])

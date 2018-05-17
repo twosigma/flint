@@ -76,7 +76,7 @@ private[flint] object PartitionStrategy {
   case object OneTimestampTightBound extends PartitionStrategy {
     override def repartition(rdd: TimeSeriesRDD): TimeSeriesRDD = {
 
-      val timeType = TimeType.get()
+      val timeType = TimeType.get(rdd.sparkSession)
 
       val expandEnd = timeType match {
         case TimeType.LongType => (t: Long) => t + 1
@@ -220,7 +220,7 @@ private[flint] object PartitionStrategy {
   case object MultiTimestampNormalized extends PartitionStrategy {
     override def repartition(rdd: TimeSeriesRDD): TimeSeriesRDD = {
 
-      val timeType = TimeType.get()
+      val timeType = TimeType.get(rdd.sparkSession)
       val expandEnd = timeType match {
         case TimeType.LongType => (t: Long) => t + 1
         case TimeType.TimestampType => (t: Long) => t + 1000

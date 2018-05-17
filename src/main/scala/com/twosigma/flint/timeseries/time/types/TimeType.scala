@@ -18,7 +18,7 @@ package com.twosigma.flint.timeseries.time.types
 
 import com.twosigma.flint.FlintConf
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.{ SparkSession, types }
+import org.apache.spark.sql.{ SQLContext, SparkSession, types }
 
 trait TimeType {
   /**
@@ -71,9 +71,7 @@ object TimeType {
     }
   }
 
-  def get(): TimeType = {
-    val sparkSession = SparkSession.getDefaultSession.getOrElse(throw new RuntimeException("No active spark session"))
-
+  def get(sparkSession: SparkSession): TimeType = {
     TimeType(sparkSession.conf.get(
       FlintConf.TIME_TYPE_CONF, FlintConf.TIME_TYPE_DEFAULT
     ))
