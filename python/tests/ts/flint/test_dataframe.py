@@ -69,7 +69,7 @@ def launcher_params():
                              # list<struct>, which is needed for a few
                              # tests
                              'spark.sql.execution.arrow.enable': 'false',
-                             'flint.timetype': 'timestamp'},
+                             'spark.flint.timetype': 'timestamp'},
               'executor_memory': (1*1024**3),
               'driver_memory': (4*1024**3)}
 

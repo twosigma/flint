@@ -18,12 +18,12 @@ package com.twosigma.flint
 
 private[flint] object FlintConf {
   // Max batch size in summarizeWindowsBatch
-  val WINDOW_BATCH_MAXSIZE_CONF = "flint.window.batch.maxSize"
+  val WINDOW_BATCH_MAXSIZE_CONF = "spark.flint.window.batch.maxSize"
   // TODO: Fine tune this.
   val WINDOW_BATCH_MAXSIZE_DEFAULT = "500000"
 
   // Whether to use nanos or timestamp for the time column
   // Supported value: long or timestamp
-  val TIME_TYPE_CONF = "flint.timetype"
+  val TIME_TYPE_CONF = "spark.flint.timetype"
   val TIME_TYPE_DEFAULT = "long"
 }

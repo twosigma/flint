@@ -52,7 +52,7 @@ def launcher_params():
     #       tests, but not often
     params = {'datacenter': 'local',
               'spark_conf': {'spark.ui.showConsoleProgress': 'false',
-                             'flint.timetype': 'timestamp'},
+                             'spark.flint.timetype': 'timestamp'},
               'executor_memory': (1*1024**3),
               'driver_memory': (4*1024**3)}
 
