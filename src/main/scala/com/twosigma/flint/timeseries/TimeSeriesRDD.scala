@@ -132,15 +132,9 @@ object TimeSeriesRDD {
           dataFrame.withColumn(timeColumnName, udfConverter(col(timeColumnName)))
         }
       case (LongType, TimeType.TimestampType) =>
-        // When casting a long to timestamp, the long is treated as seconds
-        val converter: Long => Long = TimeUnit.SECONDS.convert(_, timeUnit)
-        val udfConverter = udf(converter)
-        dataFrame.withColumn(timeColumnName, udfConverter(col(timeColumnName)).cast(TimestampType))
+        dataFrame.withColumn(timeColumnName, NanosToTimestamp(col(timeColumnName)))
       case (TimestampType, TimeType.LongType) =>
-        // When casting from timestamp to long type, Spark will return the value in seconds
-        val converter: Long => Long = TimeUnit.NANOSECONDS.convert(_, SECONDS)
-        val udfConverter = udf(converter)
-        dataFrame.withColumn(timeColumnName, udfConverter(col(timeColumnName).cast(LongType)))
+        dataFrame.withColumn(timeColumnName, TimestampToNanos(col(timeColumnName)))
       case (TimestampType, TimeType.TimestampType) =>
         dataFrame
       case _ => throw new IllegalArgumentException(

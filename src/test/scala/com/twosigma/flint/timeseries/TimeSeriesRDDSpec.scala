@@ -16,23 +16,26 @@
 
 package com.twosigma.flint.timeseries
 
+import java.lang.{ Long => JLong }
+import java.sql.Timestamp
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 
-import com.twosigma.flint.timeseries.row.Schema
-import org.scalatest.tagobjects.Slow
+import com.twosigma.flint.FlintConf
 import com.twosigma.flint.rdd.{ KeyPartitioningType, OrderedRDD }
 import com.twosigma.flint.timeseries.TimeSeriesRDD.timeColumnName
-import org.apache.spark.sql.functions.{ col, udf }
+import com.twosigma.flint.timeseries.row.Schema
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.catalyst.expressions.{ GenericRow, GenericRowWithSchema => ExternalRow }
+import org.apache.spark.sql.functions.{ col, udf }
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.catalyst.expressions.{ GenericInternalRow, GenericRow, GenericRowWithSchema => ExternalRow }
+import org.scalatest.tagobjects.Slow
 
 import scala.collection.mutable
 import scala.concurrent.duration._
 
 class TimeSeriesRDDSpec extends TimeSeriesSuite with TimeTypeSuite {
+  import testImplicits._
 
   val priceSchema = Schema("time" -> LongType, "id" -> IntegerType, "price" -> DoubleType)
   val forecastSchema = Schema("time" -> LongType, "id" -> IntegerType, "forecast" -> DoubleType)
@@ -474,6 +477,86 @@ class TimeSeriesRDDSpec extends TimeSeriesSuite with TimeTypeSuite {
     val expectedData = volData.filterNot { case (t: Long, r: Row) => r.getAs[Long]("volume") > 900 }
     val result = volTSRdd.deleteRows { row: Row => row.getAs[Long]("volume") > 900 }
     assert(result.collect().deep == expectedData.map(_._2).deep)
+  }
+
+  it should "`canonizeTime` convert Timestamp to ns with microsecond precision" in {
+    val expected = Seq[Long](
+      0L,
+      Long.MaxValue - (Long.MaxValue % 1000), // clip to microsecond precision
+      946684800000000000L, // 2001-01-01
+      1262304000000000000L, // 2010-01-01
+      1893456000000000000L // 2030-01-01
+    )
+
+    val inputDf = expected.map { timestampNanos =>
+      Tuple1(timestampNanos)
+    }.toDF("time")
+
+    val actualDf = TimeSeriesRDD.canonizeTime(inputDf, TimeUnit.NANOSECONDS)
+    val actual = actualDf.collect().map(_.getAs[Long]("time")).toSeq
+    assert(actual === expected)
+  }
+
+  it should "`canonizeTime` handle a null Timestamp value" in {
+    // Test with a null Timestamp
+    val actualDf = TimeSeriesRDD.canonizeTime(
+      spark.createDataFrame(
+        sc.parallelize(Seq(Row(null))),
+        StructType(Seq(StructField("time", LongType)))
+      ), TimeUnit.NANOSECONDS
+    )
+
+    val actual = actualDf.collect().map(_.getAs[JLong]("time")).toSeq
+    val expected = Seq[JLong](null)
+    assert(actual === expected)
+  }
+
+  it should "`canonizeTime` convert ns to Timestamp with microsecond precision" in {
+    // Create a new SparkSession that inherits the current SparkContext.
+    // TimeSeriesRDD accesses the current SparkSession by calling dataframe.sparkSession.
+    val newSpark = spark.newSession()
+    // Change the default time type column to timestamp
+    newSpark.conf.set(FlintConf.TIME_TYPE_CONF, "timestamp")
+    import newSpark.implicits._
+
+    val expectedNanos = Seq[Long](
+      0L,
+      Long.MaxValue - (Long.MaxValue % 1000), // clip to microsecond precision
+      946684800000000000L, // 2001-01-01
+      1262304000000000000L, // 2010-01-01
+      1893456000000000000L // 2030-01-01
+    )
+
+    // This dataframe to newSpark because it is constructed by the imported
+    // implicit toDF(...) method.
+    val inputDf = expectedNanos.map { timestampNanos =>
+      Tuple1(timestampNanos)
+    }.toDF("time")
+
+    val actualDf = TimeSeriesRDD.canonizeTime(inputDf, TimeUnit.NANOSECONDS)
+    val actual = actualDf.collect().map(_.getAs[Timestamp]("time")).toSeq
+    val expected = expectedNanos.map { nanos =>
+      Timestamp.from(Instant.ofEpochSecond(0, nanos))
+    }
+    assert(actual === expected)
+  }
+
+  it should "`canonizeTime` should handle a null Long value" in {
+    // Change the default time type column to timestamp
+    val newSpark = spark.newSession()
+    newSpark.conf.set(FlintConf.TIME_TYPE_CONF, "timestamp")
+
+    // Test with a null Timestamp
+    val actualDf = TimeSeriesRDD.canonizeTime(
+      spark.createDataFrame(
+        sc.parallelize(Seq(Row(null))),
+        StructType(Seq(StructField("time", LongType)))
+      ), TimeUnit.NANOSECONDS
+    )
+
+    val actual = actualDf.collect().map(_.getAs[Timestamp]("time")).toSeq
+    val expected = Seq(null)
+    assert(actual === expected)
   }
 
   it should "`keepColumns` correctly" in {

@@ -20,7 +20,7 @@ import java.util.Properties
 
 import org.apache.log4j.PropertyConfigurator
 import org.apache.spark.{ SparkConf, SparkContext }
-import org.apache.spark.sql.{ SQLContext, SparkSession }
+import org.apache.spark.sql.{ SQLContext, SQLImplicits, SparkSession }
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.Suite
 
@@ -92,6 +92,19 @@ trait SharedSparkContext extends BeforeAndAfterAll {
     pro.put("log4j.appender.console.layout", "org.apache.log4j.PatternLayout")
     pro.put("log4j.appender.console.layout.ConversionPattern", "%d{yy/MM/dd HH:mm:ss} %p %c{1}: %m%n")
     PropertyConfigurator.configure(pro)
+  }
+
+  /**
+   * A helper object for importing SQL implicits.
+   *
+   * Note that the alternative of importing `spark.implicits._` is not possible here.
+   * This is because we create the `SQLContext` immediately before the first test is run,
+   * but the implicits import is needed in the constructor.
+   *
+   * @see https://github.com/apache/spark/blob/master/sql/core/src/test/scala/org/apache/spark/sql/test/SQLTestUtils.scala#L165
+   */
+  protected object testImplicits extends SQLImplicits {
+    protected override def _sqlContext: SQLContext = self.spark.sqlContext
   }
 
 }
