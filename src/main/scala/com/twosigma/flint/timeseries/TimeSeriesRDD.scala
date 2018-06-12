@@ -132,7 +132,8 @@ object TimeSeriesRDD {
           dataFrame.withColumn(timeColumnName, udfConverter(col(timeColumnName)))
         }
       case (LongType, TimeType.TimestampType) =>
-        dataFrame.withColumn(timeColumnName, NanosToTimestamp(col(timeColumnName)))
+        val toNanos: Long = timeUnit.toNanos(1)
+        dataFrame.withColumn(timeColumnName, NanosToTimestamp(col(timeColumnName) * toNanos))
       case (TimestampType, TimeType.LongType) =>
         dataFrame.withColumn(timeColumnName, TimestampToNanos(col(timeColumnName)))
       case (TimestampType, TimeType.TimestampType) =>

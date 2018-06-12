@@ -27,6 +27,7 @@ case class TimestampToNanos(child: Expression) extends TimestampCast {
   override protected def nullSafeEval(input: Any): Any =
     input.asInstanceOf[Long] * 1000L
 }
+
 case class NanosToTimestamp(child: Expression) extends TimestampCast {
   val dataType: DataType = TimestampType
   protected def cast(childPrim: String): String =

@@ -19,6 +19,8 @@ package org.apache.spark.sql
 import java.sql.Timestamp
 import java.time.Instant
 
+import scala.reflect.runtime.universe.TypeTag
+
 import com.twosigma.flint.timeseries.TimeSeriesSuite
 import org.apache.spark.sql.functions._
 
@@ -28,28 +30,7 @@ class TimestampCastSpec extends TimeSeriesSuite {
 
   behavior of "TimestampToNanos"
 
-  it should "retain up to microsecond precision with eval" in {
-    testTimestampToNanos {
-      // Spark optimizes a local collection and projection into a local relation
-      // which uses eval instead of running code gen.
-      expectedNanos.map { nanos =>
-        Tuple1(Timestamp.from(Instant.ofEpochSecond(0, nanos)))
-      }.toDF("time")
-    }
-  }
-
-  it should "retain up to microsecond precision with codegen" in {
-    testTimestampToNanos {
-      // Avoid Spark's local relation optimization by adding a map before
-      // creating a dataframe with the test data.
-      // This will invoke code gen in the test case.
-      sc.range(0, expectedNanos.size).map { i =>
-        Tuple1(Timestamp.from(Instant.ofEpochSecond(0, expectedNanos(i.toInt))))
-      }.toDF("time")
-    }
-  }
-
-  def testTimestampToNanos(df: DataFrame): Unit = {
+  testEvalAndCodegen("retain up to microsecond precision", nanosToTimestamp(expectedNanos)){ df =>
     val actual = df.select(TimestampToNanos(col("time")).as("long"))
       .collect()
       .map(_.getAs[Long]("long"))
@@ -57,29 +38,50 @@ class TimestampCastSpec extends TimeSeriesSuite {
     assert(actual === expectedNanos)
   }
 
-  behavior of "NanosToTimestamp"
+  behavior of "LongToTimestamp"
 
-  it should "retain up to microsecond precision with eval" in
-    testNanosToTimestamp {
-      expectedNanos.map(Tuple1(_)).toDF("time")
-    }
-
-  it should "retain up to microsecond precision with codegen" in
-    testNanosToTimestamp {
-      sc.range(0, expectedNanos.size).map { i =>
-        Tuple1(expectedNanos(i.toInt))
-      }.toDF("time")
-    }
-
-  def testNanosToTimestamp(df: DataFrame): Unit = {
+  testEvalAndCodegen("retain up to microsecond precision", expectedNanos) { df =>
     val actual = df.select(NanosToTimestamp(col("time")).as("timestamp"))
       .collect()
       .map(_.getAs[Timestamp]("timestamp"))
 
-    val expected = expectedNanos.map { nanos =>
+    val expectedTimestamps = expectedNanos.map { nanos =>
       Timestamp.from(Instant.ofEpochSecond(0, nanos))
     }
-    assert(actual === expected)
+    assert(actual === expectedTimestamps)
+  }
+
+  /**
+   * @param text the description of the test case.
+   * @param data A sequence to use as the data for a local relation and an external RDD.
+   * @param f The test case function given a DataFrame.
+   */
+  private def testEvalAndCodegen[T: TypeTag](text: String, data: Seq[T])(f: DataFrame => Unit): Unit = {
+    it should s"$text (eval)" in {
+      f(asLocalRelation(data))
+    }
+    it should s"$text (codegen)" in {
+      f(asExternalRDD(data))
+    }
+  }
+
+  /**
+   * Spark optimizes a local collection and projection into a local relation
+   * which uses eval instead of running code gen.
+   */
+  private def asLocalRelation[T: TypeTag](input: Seq[T]): DataFrame = {
+    input.map(Tuple1(_)).toDF("time")
+  }
+
+  /**
+   * Avoid Spark's local relation optimization by adding a map before
+   * creating a dataframe with the test data. Used to invoke code gen in the
+   * test cases.
+   */
+  private def asExternalRDD[T: TypeTag](input: Seq[T]): DataFrame = {
+    sc.range(0, input.size.toLong).map { i =>
+      Tuple1(input(i.toInt))
+    }.toDF("time")
   }
 
 }
@@ -93,5 +95,9 @@ object TimestampCastSpec {
     1262304000000000000L, // 2010-01-01
     1893456000000000000L // 2030-01-01
   )
+
+  def nanosToTimestamp(input: Seq[Long]): Seq[Timestamp] = input.map { v =>
+    Timestamp.from(Instant.ofEpochSecond(0, v))
+  }
 
 }
