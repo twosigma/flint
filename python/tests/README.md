@@ -40,14 +40,6 @@ To run the tests issue the following command from the root Flint directory:
 scripts/run_python_tests.sh
 ```
 
-## Code
-The code for the tests is found in this `tests` directory. The content of the files here is as follows:
-
-* `base_test_case.py` Contains code for the `BaseTestCase` abstract class that is the grandfather of all the testcases.
-* `spark_test_case.py` Contains a concrete class, `SparkTestCase`, that inherits from `BaseTestCase` and sets up a local `SparkContext`. This is the default class to inherit test cases from.
-* `test_dataframe.py` Contains about 50 test cases for the `TimeSeriesDataFrame`.
-* `test_data.py` Contains constant data for the tests.
-* `utils.py` Contains specialized assert functions and Pandas DataFrame creation.
 
 ## Extending
 If the test setup done in the default class, `SparkTestCase`, does not fit the needs of a particular environment, a new class can be written. The name of the new class, say `MyTestCase` is then exported in the `BASE_CLASS` variable before the tests are run:

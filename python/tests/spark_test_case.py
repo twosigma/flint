@@ -13,6 +13,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+
 ''' The common code for all Flint unit tests '''
 import os
 import sys
@@ -58,6 +59,10 @@ class SparkTestCase(BaseTestCase):
         cls.sc.stop()
         cls.sc._gateway.shutdown()
         cls.sc._gateway = None
+
+        SparkContext._jvm = None
+        SparkContext._gateway = None
+
         delattr(cls, 'sqlContext')
         delattr(cls, 'sc')
         os.environ = cls._env

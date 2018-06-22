@@ -19,7 +19,7 @@
 import unittest
 from abc import ABCMeta, abstractclassmethod
 import tests.utils as test_utils
-from tests.ts.test_data import (FORECAST_DATA, PRICE_DATA, VOL_DATA, VOL2_DATA,
+from tests.test_data import (FORECAST_DATA, PRICE_DATA, PRICE2_DATA, VOL_DATA, VOL2_DATA,
                              VOL3_DATA, INTERVALS_DATA)
 from functools import lru_cache
 
@@ -63,10 +63,11 @@ class BaseTestCase(unittest.TestCase, metaclass=ABCMeta):
             test_utils.make_pdf(PRICE_DATA, ["time", "id", "price"]))
 
     @lru_cache(maxsize=None)
+    def price2(self):
+        return self.flintContext.read.pandas(
+            test_utils.make_pdf(PRICE2_DATA, ["time", "id", "price"]))
+
+    @lru_cache(maxsize=None)
     def intervals(self):
         return self.flintContext.read.pandas(
             test_utils.make_pdf(INTERVALS_DATA, ['time']))
-
-    def clocks(self):
-        from ts.flint import clocks
-        return clocks
