@@ -106,14 +106,16 @@ class PartitionPreservingOperationSpec extends FlintSuite with FlintTestData {
     assert(leafExecutedPlan(data).isInstanceOf[ExternalRDDScanExec[_]])
     data.cache()
     data.count()
-    assert(executedPlan(data).isInstanceOf[InMemoryTableScanExec])
+    // first node is WholeStageCodegen
+    assert(executedPlan(data).children.head.isInstanceOf[InMemoryTableScanExec])
     assert(leafExecutedPlan(data).isInstanceOf[InMemoryTableScanExec])
     data.unpersist()
 
     val orderedData = data.orderBy("time")
     orderedData.cache()
     orderedData.count()
-    assert(executedPlan(orderedData).isInstanceOf[InMemoryTableScanExec])
+    // first node is WholeStageCodegen
+    assert(executedPlan(orderedData).children.head.isInstanceOf[InMemoryTableScanExec])
     assert(leafExecutedPlan(orderedData).isInstanceOf[InMemoryTableScanExec])
     orderedData.unpersist()
   }

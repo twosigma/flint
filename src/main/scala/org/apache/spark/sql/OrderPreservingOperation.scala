@@ -69,13 +69,6 @@ object OrderPreservingOperation {
   }
 
   private def isOrderPreserving(plan1: LogicalPlan, plan2: LogicalPlan): Boolean = {
-    // This is not most efficient because subtree matching is done twice.
-    // However, since the complexity is just O(n) and it makes the code cleaner, we don't care too much.
-    require(
-      isSubtree(plan1, plan2),
-      s"df2 is not derived from df1. plan1: ${plan1} plan2: ${plan2}"
-    )
-
     if (treeEquals(plan1, plan2)) {
       true
     } else {
@@ -99,5 +92,6 @@ object OrderPreservingOperation {
    * @throws IllegalArgumentException if df2 is not derived from df1
    */
   @PythonApi
-  def isOrderPreserving(df1: DataFrame, df2: DataFrame): Boolean = isOrderPreserving(analyzedPlan(df1), analyzedPlan(df2))
+  def isOrderPreserving(df1: DataFrame, df2: DataFrame): Boolean =
+    isOrderPreserving(analyzedPlan(df1), analyzedPlan(df2))
 }

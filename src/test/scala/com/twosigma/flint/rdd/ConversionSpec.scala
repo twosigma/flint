@@ -156,14 +156,15 @@ class ConversionSpec extends FlatSpec with SharedSparkContext with Timeouts {
     val stageId = stageIds(0)
 
     // Make sure there are some active tasks.
-    while (sc.statusTracker.getStageInfo(stageId).get.numActiveTasks() < 1) {
-      Thread.sleep(100)
+    while (sc.statusTracker.getExecutorInfos.map(info => info.numRunningTasks()).sum < 1) {
+      Thread.sleep(500)
     }
 
     // Cancel the slow computation.
-    sc.cancelAllJobs()
-    failAfter(Span(2 * elapse, Seconds)) {
-      while (sc.statusTracker.getStageInfo(stageId).get.numActiveTasks() > 0) {
+    sc.cancelStage(stageId, "Manual cancellation")
+
+    failAfter(Span(10 * elapse, Seconds)) {
+      while (sc.statusTracker.getExecutorInfos.map(info => info.numRunningTasks()).sum > 0) {
         Thread.sleep(500)
       }
     }

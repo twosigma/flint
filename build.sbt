@@ -50,7 +50,7 @@ lazy val formattingPreferences = {
 }
 
 lazy val compilationSettings = scalariformSettings ++ Seq(
-  version := "0.4.0-SNAPSHOT",
+  version := "0.6.0-SNAPSHOT",
   organization := "com.twosigma",
   scalaVersion := "2.11.8",
   assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false),
@@ -83,7 +83,7 @@ lazy val versions = new {
   val commons_math = "3.5"
   val joda_time = "2.9.4"
   val httpclient = "4.3.2" // Note that newer versions need to be configured
-  val spark = sys.props.getOrElse("spark.version", default = "2.2.0")
+  val spark = sys.props.getOrElse("spark.version", default = "2.3.0")
   val scalatest = "2.2.4"
   val scalacheck = "1.12.6"
   val grizzled_slf4j = "1.3.0"
@@ -108,10 +108,8 @@ lazy val dependencySettings = libraryDependencies ++= Seq(
   lazyDependencies.sparkSQL,
   "org.scalatest" %% "scalatest" % versions.scalatest % "test",
   "org.scalacheck" %% "scalacheck" % versions.scalacheck % "test",
-  // Arrow 0.8 comes with netty 4.1.17, which doesn't work with Spark 2.2
-  "org.apache.arrow" % "arrow-vector" % versions.arrow excludeAll(ExclusionRule(organization = "io.netty")),
   // These jackson modules are not directly used by Flint. We need to put it
-  // there because Spark 2.0.2 uses Jackson 2.6 and Arrow uses Jackson
+  // there because Spark 2.3 uses Jackson 2.6 and Arrow uses Jackson
   // 2.7. We should be able to remove these once we moved to newer Spark
   // version.
   "com.fasterxml.jackson.module" % "jackson-module-parameter-names" % versions.jackson_module,

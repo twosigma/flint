@@ -72,8 +72,7 @@ class OrderPreservingOperationSpec extends FlintSuite with FlintTestData {
     assertOrderPreserving(orderByTime, false)
   }
 
-  it should "test withColumn window expression" ignore {
-    // TODO: This test needs HiveContext
+  it should "test withColumn window expression" in {
     assertOrderPreserving(addRankColumn, false)
   }
 
@@ -114,9 +113,10 @@ class OrderPreservingOperationSpec extends FlintSuite with FlintTestData {
     assert(OrderPreservingOperation.isOrderPreserving(data, result))
   }
 
-  it should "throw exception when not derived" in {
-    intercept[IllegalArgumentException] {
-      OrderPreservingOperation.isOrderPreserving(testData.select("time", "v"), testData2.select("time", "v"))
-    }
+  it should "test when not derived" in {
+    assert(!OrderPreservingOperation.isOrderPreserving(
+      testData.select("time", "v"), testData2.select("time", "v")
+    ))
   }
+
 }

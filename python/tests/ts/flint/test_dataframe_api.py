@@ -1057,7 +1057,7 @@ class TestDataframe(BASE):
 
     def test_groupedData(self):
         from pyspark.sql import DataFrame
-        from pyspark.sql.functions import sum, pandas_udf
+        from pyspark.sql.functions import sum, pandas_udf, PandasUDFType
         from ts.flint import TimeSeriesGroupedData
 
         price = self.price()
@@ -1073,7 +1073,7 @@ class TestDataframe(BASE):
         expected2 = DataFrame.groupBy(price, 'time').pivot('id').sum('price').toPandas()
         assert_same(result2, expected2)
 
-        @pandas_udf(price.schema)
+        @pandas_udf(price.schema, PandasUDFType.GROUPED_MAP)
         def foo(df):
             return df
         result3 = price.groupby('time').apply(foo).toPandas()
