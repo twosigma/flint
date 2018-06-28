@@ -39,7 +39,7 @@ public class Kahan implements Serializable {
      *
      * @param initialValue specifies the initial value.
      */
-    public Kahan(double initialValue){
+    public Kahan(double initialValue) {
         this();
         runningSum = initialValue;
     }
@@ -47,7 +47,7 @@ public class Kahan implements Serializable {
     /**
      * Construct an instance with 0.0 initial value
      */
-    public Kahan(){
+    public Kahan() {
         runningSum = 0.0;
         runningCompensation = 0.0;
     }
