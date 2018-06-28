@@ -17,11 +17,11 @@
 #
 set -e
 
-if test "${SPARK_HOME}" == ""; then
+if [ "${SPARK_HOME}" == "" ]; then
     echo "Must set SPARK_HOME environment variable before running this script"
     exit 1
 fi
-if ! test -d python/travis; then
+if ! [ -d python/travis ]; then
     echo "This script must be run from the root of the Flint distribution!"
     exit 1
 fi
@@ -30,6 +30,6 @@ source activate flint
 export PYTHONPATH=${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-0.10.4-src.zip:${PYTHONPATH}
 
 # Set base class for test cases
-export FLINT_BASE_TESTCASE=SparkTestCase 
+export FLINT_BASE_TESTCASE=SparkTestCase
 cd python
 python -W ignore -m unittest discover tests/ts

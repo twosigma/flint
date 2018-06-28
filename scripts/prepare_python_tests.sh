@@ -17,11 +17,11 @@
 #
 set -e
 
-if test "${SPARK_HOME}" == ""; then
+if [ "${SPARK_HOME}" == "" ]; then
     echo "Must set SPARK_HOME environment variable before running this script"
     exit 1
 fi
-if ! test -d python/travis; then
+if ! [ -d python/travis ]; then
     echo "This script must be run from the root of the Flint distribution!"
     exit 1
 fi
@@ -31,5 +31,5 @@ cp python/travis/spark_log4j.properties ${SPARK_HOME}/conf/log4j.properties
 # Add the flint assembly to spark test instance
 sed "s,_FLINT_ROOT_,$(pwd)," <python/travis/spark-defaults.conf >${SPARK_HOME}/conf/spark-defaults.conf
 
-# Create the Flint environment 
+# Create the Flint environment
 conda create -n flint python=3.5 --file python/requirements.txt

@@ -22,7 +22,7 @@ set -e
 # Otherwise Travis will fail with a timeout, trying to run one
 # long job.
 #
-if test "$#" -lt 1; then 
+if [ "$#" -lt 1 ]; then
   echo "Must provide number of files as parameter"; exit 1
 fi
 # Convert file path to class names
