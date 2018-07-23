@@ -51,6 +51,7 @@ trait SharedSparkContext extends BeforeAndAfterAll {
 
   override def beforeAll() {
     conf.set("spark.ui.enabled", "false")
+    conf.set("spark.sql.session.timeZone", "UTC")
 
     // Set the console progress if the system property is set
     sys.props.get("spark.ui.showConsoleProgress").foreach(

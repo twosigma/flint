@@ -80,9 +80,27 @@ class ClockSpec extends TimeSeriesSuite with TimeTypeSuite {
   }
 
   it should "generate timestamp correctly" in {
+    import org.apache.spark.sql.functions.{ year, month, dayofmonth, hour, minute, second, col }
+
     withTimeType("timestamp") {
       val clock1 = Clocks.uniform(sc, "1day", beginDateTime = "19900101")
-      assert(clock1.toDF.first().getTimestamp(0) == java.sql.Timestamp.valueOf("1990-01-01 00:00:00"))
+
+      val df = clock1.toDF
+        .withColumn("year", year(col("time")))
+        .withColumn("month", month(col("time")))
+        .withColumn("day", dayofmonth(col("time")))
+        .withColumn("hour", hour(col("time")))
+        .withColumn("minute", minute(col("time")))
+        .withColumn("second", second(col("time")))
+
+      val firstRow = df.take(1)(0)
+
+      assert(firstRow.getInt(1) == 1990)
+      assert(firstRow.getInt(2) == 1)
+      assert(firstRow.getInt(3) == 1)
+      assert(firstRow.getInt(4) == 0)
+      assert(firstRow.getInt(5) == 0)
+      assert(firstRow.getInt(6) == 0)
     }
   }
 
