@@ -5,6 +5,7 @@ sphinx_rtd_theme
 flake8
 numpy
 pandas
+pyarrow
 pytest
 pytest-cov
 py4j
