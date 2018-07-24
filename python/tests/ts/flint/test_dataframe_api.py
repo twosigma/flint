@@ -754,12 +754,8 @@ class TestDataframe(BASE):
         vol = self.vol()
         VolRow = Row('time', 'id', 'volume')
 
-        print(vol.collect())
-
         id = [VolRow(int(r['time'].strftime('%s')), r['id'], r['volume'])
               for r in vol.collect()]
-
-        print(id)
 
         expected_pdf = make_pdf([
             (1000, 7, 100, [id[0], id[1]]),
