@@ -26,8 +26,8 @@ if ! [ -d python/travis ]; then
     exit 1
 fi
 source activate flint
-# Note that py4j version depends on spark version. Spark 2.1.1 has version 0.10.4
-export PYTHONPATH=${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-0.10.4-src.zip:${PYTHONPATH}
+# Note that py4j version depends on spark version.
+export PYTHONPATH=${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-0.10.7-src.zip:${PYTHONPATH}
 
 # Set base class for test cases
 export FLINT_BASE_TESTCASE=SparkTestCase

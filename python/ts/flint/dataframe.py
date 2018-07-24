@@ -33,7 +33,6 @@ from pyspark.sql.types import StructType, StructField
 import pyspark.sql.functions as F
 
 from . import java
-from . import rankers
 from . import summarizers
 from . import functions
 from . import udf
@@ -331,14 +330,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
               strings, the return type must be two data types, and the python
               must return a tuple of two ``pandas.Series``.
 
-        2. column name to a built-in function. See :mod:`rankers` for the
-           built-in functions.
-
-        3. (deprecated) a legacy UDF defined as a pair of
-           :class:`pyspark.sql.types.DataType` and a function that takes a
-           ``list`` of rows and return a ``dict`` from row to
-           computed value;
-
         User-defined function examples:
 
             Use user-defined functions
@@ -367,13 +358,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             ...     ('rank', 'rank_pct'): ranks(df.v)
             ... })
 
-        Example usage with a built-in function:
-
-            >>> from ts.flint import rankers
-            >>> df.addColumnsForCycle({
-            ...     "rank": rankers.percentile("v"))
-            ... })
-
         :param columns: a column spec
         :type columns: collections.Mapping
         :param key: Optional. One or multiple column names to use as the grouping key
@@ -399,8 +383,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             # ts.flint.udf object
             elif hasattr(col_obj, 'func'):
                 udfs[col_name] = col_obj
-            elif isinstance(col_obj, rankers.RankFactory):
-                builtin_functions[col_name] = col_obj
             else:
                 raise ValueError("Invalid column spec. Key: {} Value: {}"
                                  .format(col_name, col_obj))
@@ -933,11 +915,11 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         tsrdd = self.timeSeriesRDD.summarizeCycles(composed_summarizer._jsummarizer(self._sc), scala_key)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
-    def _summarizeWindowsBatch(self, window, key=None):
+    def _summarizeWindowBatches(self, window, columns=None, key=None):
         jwindow = window._jwindow(self._sc)
         scala_columns = utils.list_to_seq(self._sc, columns, preserve_none=True)
         scala_key = utils.list_to_seq(self._sc, key)
-        tsrdd = self.timeSeriesRDD.summarizeWindowsBatch(jwindow, scala_columns, scala_key)
+        tsrdd = self.timeSeriesRDD.summarizeWindowBatches(jwindow, scala_columns, scala_key)
         return TimeSeriesDataFrame._from_tsrdd(tsrdd, self.sql_ctx)
 
     def _concatArrowAndExplode(self, base_rows_col, schema_cols, data_cols):
@@ -1090,7 +1072,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
             with traceback_utils.SCCallSiteSync(self._sc) as css:
                 return self._summarizeIntervals_builtin(clock, summarizer, key, inclusion, rounding)
 
-    @metrics.recorder.instrument(all_args=True)
     def _summarizeIntervals_udf(self, clock, columns,
                                 key=None, inclusion='begin', rounding='end'):
         def group_fn(df, summarizer):
@@ -1101,7 +1082,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         return self._summarizeGroup_udf(columns, group_fn)
 
-    @metrics.recorder.instrument(all_args=True)
     def _summarizeIntervals_builtin(self, clock, summarizer,
                                     key=None, inclusion='begin', rounding='end'):
         scala_key = utils.list_to_seq(self._sc, key)
@@ -1332,22 +1312,12 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         # required columns for column pruning
         required_columns = set()
-        other_required_columns = set()
 
         for col in columns.values():
             if len(col.column_indices) == 1:
-                if other is None:
-                    required_columns.update(udf._flat_column_indices(col.column_indices))
-                else:
-                    other_required_columns.update(udf._flat_column_indices(col.column_indices))
-            elif len(col.column_indices) == 2:
-                if other is None:
-                    raise ValueError("Cannot specify 2 args to the UDF if other is None")
-                required_columns.update(udf._flat_column_indices(col.column_indices[0:1]))
-                other_required_columns.update(udf._flat_column_indices(col.column_indices[1:2]))
+                required_columns.update(udf._flat_column_indices(col.column_indices))
             else:
-                raise ValueError("Received more than 2 args to the UDF. "
-                                 "Use either udf(df[[col]]) or udf(df[[col]], df2[[col2]]).")
+                raise ValueError("Received more than 1 args to the UDF. Use udf(df[[col]]).")
 
             for index in col.column_indices:
                 if index is None:
@@ -1355,7 +1325,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                         'Column passed to the udf function must be a column in the DataFrame, '
                         'i.e, df[col] or df[[col]]. Other types of Column are not supported.')
 
-        windowed = self._summarizeWindowsBatch(
+        windowed = self._summarizeWindowBatches(
             window,
             columns=list(required_columns),
             key=key)
@@ -1639,7 +1609,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
     def __str__(self):
         return "TimeSeriesDataFrame[%s]" % (", ".join("%s: %s" % c for c in self.dtypes))
 
-    @metrics.recorder.instrument(all_args=True)
     def toPandas(self):
         pdf = super().toPandas()
         if 'time' in pdf.columns:
@@ -1654,7 +1623,6 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
 
         return pdf
 
-    @metrics.recorder.instrument(all_args=True)
     def groupBy(self, *cols):
         gd = super().groupBy(*cols)
         return TimeSeriesGroupedData(gd)

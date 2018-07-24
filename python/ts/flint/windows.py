@@ -27,6 +27,7 @@ Example:
 '''
 
 from . import java
+from abc import abstractmethod, ABCMeta
 
 
 __all__ = [
