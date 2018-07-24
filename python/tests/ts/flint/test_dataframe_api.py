@@ -480,37 +480,6 @@ class TestDataframe(BASE):
         ], ["time", "id", "volume", "volume_sum"])
         assert_same(new_pdf2, expected_pdf2)
 
-        interval_with_id = self.flintContext.read.pandas(make_pdf([
-            (1000, 3),
-            (1000, 7),
-            (1050, 3),
-            (1050, 7),
-            (1100, 3),
-            (1150, 3),
-            (1150, 7),
-            (1200, 3),
-            (1200, 7),
-            (1250, 7),
-        ], ["time", "id"]))
-
-        new_pdf3 = (interval_with_id.summarizeWindows(w,
-                                                      summarizers.sum("volume"),
-                                                      key="id",
-                                                      other=vol).toPandas())
-        expected_pdf3 = make_pdf([
-            (1000, 3, 200.0),
-            (1000, 7, 100.0),
-            (1050, 3, 500.0),
-            (1050, 7, 500.0),
-            (1100, 3, 800.0),
-            (1150, 3, 1200.0),
-            (1150, 7, 1400.0),
-            (1200, 3, 1600.0),
-            (1200, 7, 1800.0),
-            (1250, 7, 2200.0),
-        ], ["time", "id", "volume_sum"])
-        assert_same(new_pdf3, expected_pdf3)
-
     def test_summarizeWindows_udf(self):
         from ts.flint import udf
         from ts.flint import windows
@@ -519,126 +488,6 @@ class TestDataframe(BASE):
 
         vol = self.vol()
         w = windows.past_absolute_time('99s')
-
-        df = self.flintContext.read.pandas(make_pdf([
-            (1000, 3, 10.0),
-            (1000, 7, 20.0),
-            (1050, 3, 30.0),
-            (1050, 7, 40.0),
-            (1100, 3, 50.0),
-            (1150, 3, 60.0),
-            (1150, 7, 70.0),
-            (1200, 3, 80.0),
-            (1200, 7, 90.0),
-            (1250, 7, 100.0),
-        ], ['time', 'id', 'v']))
-
-        result1 = df.summarizeWindows(
-            w,
-            OrderedDict([
-                ('mean', udf(lambda time, window: window.mean(), DoubleType())(df['time'], vol['volume']))
-            ]),
-            key="id",
-            other=vol).toPandas()
-        expected1 = make_pdf([
-            (1000, 3, 10.0, 200.0),
-            (1000, 7, 20.0, 100.0),
-            (1050, 3, 30.0, 250.0),
-            (1050, 7, 40.0, 250.0),
-            (1100, 3, 50.0, 400.0),
-            (1150, 3, 60.0, 600.0),
-            (1150, 7, 70.0, 700.0),
-            (1200, 3, 80.0, 800.0),
-            (1200, 7, 90.0, 900.0),
-            (1250, 7, 100.0, 1100.0),
-        ], ['time', 'id', 'v', 'mean'])
-        assert_same(result1, expected1)
-
-        result2 = df.summarizeWindows(
-            w,
-            OrderedDict([
-                ('mean', udf(lambda window: window.mean(), DoubleType())(vol['volume']))
-            ]),
-            key='id',
-            other=vol).toPandas()
-        expected2 = expected1
-        assert_same(result2, expected2)
-
-        result3 = df.summarizeWindows(
-            w,
-            OrderedDict([
-                ('mean', udf(lambda window: window.mean(), DoubleType())(vol['volume'])),
-                ('count', udf(lambda time, window: len(window), LongType())(df['time'], vol['volume']))
-            ]),
-            key='id',
-            other=vol).toPandas()
-        expected3 = make_pdf([
-            (1000, 3, 10.0, 200.0, 1),
-            (1000, 7, 20.0, 100.0, 1),
-            (1050, 3, 30.0, 250.0, 2),
-            (1050, 7, 40.0, 250.0, 2),
-            (1100, 3, 50.0, 400.0, 2),
-            (1150, 3, 60.0, 600.0, 2),
-            (1150, 7, 70.0, 700.0, 2),
-            (1200, 3, 80.0, 800.0, 2),
-            (1200, 7, 90.0, 900.0, 2),
-            (1250, 7, 100.0, 1100.0, 2),
-        ], ['time', 'id', 'v', 'mean', 'count'])
-        assert_same(result3, expected3)
-
-        @udf('double')
-        def window_udf(time, window):
-            return (time - window.time).mean().seconds + window.volume.mean()
-
-        result4 = df.summarizeWindows(
-            w,
-            OrderedDict([
-                ('mean', window_udf(df['time'], vol[['time', 'volume']])),
-            ]),
-            key='id',
-            other=vol).toPandas()
-
-        expected4 = make_pdf([
-            (1000, 3, 10.0, 200.0),
-            (1000, 7, 20.0, 100.0),
-            (1050, 3, 30.0, 275.0),
-            (1050, 7, 40.0, 275.0),
-            (1100, 3, 50.0, 425.0),
-            (1150, 3, 60.0, 625.0),
-            (1150, 7, 70.0, 725.0),
-            (1200, 3, 80.0, 825.0),
-            (1200, 7, 90.0, 925.0),
-            (1250, 7, 100.0, 1125.0),
-        ], ['time', 'id', 'v', 'mean'])
-        assert_same(result4, expected4)
-
-        @udf(DoubleType())
-        def foo5(row, window):
-            return (row[0] - window.time).mean().seconds + window.volume.mean()
-
-        result5 = df.summarizeWindows(
-            w,
-            OrderedDict([
-                ('mean', foo5(df[['time', 'v']], vol[['time', 'volume']])),
-            ]),
-            key='id',
-            other=vol).toPandas()
-        expected5 = expected4
-        assert_same(result5, expected5)
-
-        @udf((DoubleType(), LongType()))
-        def mean_and_count(v):
-            return v.mean(), len(v)
-
-        result6 = df.summarizeWindows(
-            w,
-            OrderedDict([
-                [('mean', 'count'), mean_and_count(vol['volume'])]
-            ]),
-            key='id',
-            other=vol).toPandas()
-        expected6 = expected3
-        assert_same(result6, expected6)
 
         @udf(DoubleType())
         def mean(v):
@@ -791,55 +640,6 @@ class TestDataframe(BASE):
         expected4 = expected1
         assert_same(result4, expected4)
 
-        result5 = df.summarizeWindows(
-            w,
-            {'mean': mean_np_2(df['v'], vol[['time', 'volume']])},
-            other = vol,
-            key ='id'
-        ).toPandas()
-        expected5 = make_pdf([
-            (1000, 3, 10.0, 210.0),
-            (1000, 7, 20.0, 120.0),
-            (1050, 3, 30.0, 280.0),
-            (1050, 7, 40.0, 290.0),
-            (1100, 3, 50.0, 450.0),
-            (1150, 3, 60.0, 660.0),
-            (1150, 7, 70.0, 770.0),
-            (1200, 3, 80.0, 880.0),
-            (1200, 7, 90.0, 990.0),
-            (1250, 7, 100.0, 1200.0),
-        ], ['time', 'id', 'v', 'mean'])
-        assert_same(result5, expected5)
-
-        result6 = df.summarizeWindows(
-            w,
-            {'mean': mean_np_df_2(df[['v']], vol[['time', 'volume']])},
-            other = vol,
-            key ='id'
-        ).toPandas()
-        expected6 = result6
-        assert_same(result6, expected6)
-
-        result7 = df.summarizeWindows(
-            w,
-            {'mean': mean_np_df(vol[['time', 'volume']])},
-            other = vol,
-            key ='id'
-        ).toPandas()
-        expected7 = make_pdf([
-            (1000, 3, 10.0, 200.0),
-            (1000, 7, 20.0, 100.0),
-            (1050, 3, 30.0, 250.0),
-            (1050, 7, 40.0, 250.0),
-            (1100, 3, 50.0, 400.0),
-            (1150, 3, 60.0, 600.0),
-            (1150, 7, 70.0, 700.0),
-            (1200, 3, 80.0, 800.0),
-            (1200, 7, 90.0, 900.0),
-            (1250, 7, 100.0, 1100.0),
-        ], ['time', 'id', 'v', 'mean'])
-        assert_same(result7, expected7)
-
         result8 = vol.summarizeWindows(
             w,
             {('mean', 'sum'): mean_and_sum_np(vol['volume'])},
@@ -954,8 +754,12 @@ class TestDataframe(BASE):
         vol = self.vol()
         VolRow = Row('time', 'id', 'volume')
 
+        print(vol.collect())
+
         id = [VolRow(int(r['time'].strftime('%s')), r['id'], r['volume'])
               for r in vol.collect()]
+
+        print(id)
 
         expected_pdf = make_pdf([
             (1000, 7, 100, [id[0], id[1]]),
@@ -1018,15 +822,6 @@ class TestDataframe(BASE):
         result1 = dates.shiftTime(windows.future_absolute_time('1day')).toPandas()
         assert_same(result1, expected1)
 
-        expected2= make_pdf([
-            (monday,),
-            (tuesday,),
-            (wednesday,),
-            (thrusday,),
-        ], ['time'])
-        result2 = dates.shiftTime(windows.future_trading_time('1day', 'US')).toPandas()
-        assert_same(result2, expected2)
-
     def test_uniform_clocks(self):
         from ts.flint import clocks
         df = clocks.uniform(self.sqlContext, '1d', '0s', '2016-11-07', '2016-11-17')
@@ -1037,7 +832,7 @@ class TestDataframe(BASE):
     def test_read_uniform_clock(self):
         expected_exclusive = pd.date_range('20171116 12:00:05am',
                                            tz='Asia/Tokyo', periods=2880,
-                                           freq='30s')
+                                           freq='30s').tz_convert("UTC").tz_localize(None)
         actual_exclusive = (self.flintContext.read
                             .range('2017-11-16', '2017-11-17 12:00:05am',
                                    'Asia/Tokyo')
@@ -1047,7 +842,7 @@ class TestDataframe(BASE):
         assert np.all(expected_exclusive == actual_exclusive)
 
         expected_inclusive = pd.date_range('20171116', periods=2881,
-                                           freq='30s')
+                                           freq='30s').tz_localize(None)
         actual_inclusive = (self.flintContext.read
                             .range('2017-11-16', '2017-11-17')
                             .clock('uniform', '30s')

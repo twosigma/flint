@@ -18,7 +18,7 @@
 import os
 import sys
 import collections
-from tests.ts.base_test_case import BaseTestCase
+from tests.base_test_case import BaseTestCase
 
 
 class SparkTestCase(BaseTestCase):
@@ -42,7 +42,9 @@ class SparkTestCase(BaseTestCase):
 
         default_options = (SparkConf()
                            .setAppName(cls.__name__)
-                           .setMaster("local"))
+                           .setMaster("local")
+                           .set("spark.sql.session.timeZone", "UTC")
+                           .set("spark.flint.timetype", "timestamp"))
         setattr(cls, '_env', dict(os.environ))
         setattr(cls, '_path', list(sys.path))
         options = collections.ChainMap(options, default_options)
@@ -55,6 +57,7 @@ class SparkTestCase(BaseTestCase):
 
     @classmethod
     def __teardown(cls):
+        from pyspark import SparkContext
         '''Shuts down spark and removes attributes sc, and sqlContext'''
         cls.sc.stop()
         cls.sc._gateway.shutdown()

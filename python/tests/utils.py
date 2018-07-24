@@ -40,8 +40,8 @@ def make_pdf(data, schema, dtypes=None):
 
     return df
 
-def make_timestamp(seconds):
-    return pd.to_datetime(seconds, unit='s')
+def make_timestamp(value, unit='s'):
+    return pd.to_datetime(value, unit=unit)
 
 def custom_isclose(a, b, rel_prec=1e-9):
     return abs(a - b) <= rel_prec * max(abs(a), abs(b))
@@ -68,5 +68,5 @@ def assert_false(a, cmd=""):
     assert not a, cmd
 
 def get_test_base():
-    from tests.pypusa_test_case import PypusaTestCase
-    return PypusaTestCase
+    from tests.spark_test_case import SparkTestCase
+    return SparkTestCase

@@ -170,13 +170,14 @@ class TestReader(BASE):
         # Data goes from time 1000 to 1250
         from tests.test_data import VOL_DATA
         pdf = make_pdf(VOL_DATA, ['time', 'id', 'volume'])
-        pdf['time'] = pdf.time.astype('long')
+
         df = self.sqlContext.createDataFrame(pdf)
-        begin_nanos, end_nanos = 1100, 1200
+        begin_nanos = 1100 * 1e9
+        end_nanos = 1200 * 1e9
 
         df = self.flintContext.read.range(begin_nanos, end_nanos).dataframe(df)
-        expected_df = df.filter(df.time >= make_timestamp(begin_nanos)) \
-            .filter(df.time < make_timestamp(end_nanos))
+        expected_df = df.filter(df.time >= make_timestamp(begin_nanos, 'ns')) \
+            .filter(df.time < make_timestamp(end_nanos, 'ns'))
         expected = expected_df.count()
         assert(df.count() == expected)
 

@@ -17,12 +17,9 @@
 import functools
 import pyspark
 
-from . import metrics
-
 __all__ = ["TimeSeriesGroupedData"]
 
 def wrap_gd_method(method):
-    @metrics.recorder.instrument(all_args=True)
     @functools.wraps(method)
     def _new_method(self, *args, **kwargs):
         name = method.__name__

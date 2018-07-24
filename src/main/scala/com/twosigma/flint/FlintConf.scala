@@ -25,5 +25,5 @@ private[flint] object FlintConf {
   // Whether to use nanos or timestamp for the time column
   // Supported value: long or timestamp
   val TIME_TYPE_CONF = "spark.flint.timetype"
-  val TIME_TYPE_DEFAULT = "long"
+  val TIME_TYPE_DEFAULT = "timestamp"
 }
