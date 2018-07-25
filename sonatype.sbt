@@ -26,5 +26,3 @@ developers := List(
 )
 
 publishArtifact in Test := false
-
-
