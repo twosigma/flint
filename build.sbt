@@ -47,7 +47,7 @@ lazy val compilationSettings = scalariformSettings ++ Seq(
     "-Ywarn-numeric-widen"
   ),
   resolvers ++= Seq(
-    "Local Maven Repository" at "file://"+Path.userHome.absolutePath+"/.m2/repository",
+    "Local Maven Repository" at "file://" + Path.userHome.absolutePath + "/.m2/repository",
     "Typesafe Repo" at "http://repo.typesafe.com/typesafe/releases/"
   ),
   ScalariformKeys.preferences := formattingPreferences
@@ -120,3 +120,6 @@ addCommandAlias(
   "assemblyNoTest",
   "; set test in Test := {}; assembly"
 )
+
+publishTo := sonatypePublishTo.value
+crossPaths := false
