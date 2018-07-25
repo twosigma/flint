@@ -69,7 +69,7 @@ Then, from the flint project dir, start pyspark with the following options:
 
     export PYSPARK_DRIVER_PYTHON=jupyter
     export PYSPARK_DRIVER_PYTHON_OPTS="notebook --NotebookApp.open_browser=False --NotebookApp.ip='$(hostname)' --NotebookApp.port=8888"
-    pyspark --master=local --jars /path/to/flint-assembly-{VERSION}-SNAPSHOT.jar --py-files /path/to/flint-{VERSION}-0.2.0-SNAPSHOT.jar
+    pyspark --master=local --jars /path/to/flint-assembly-{VERSION}-SNAPSHOT.jar --py-files /path/to/flint-assembly-{VERSION}-SNAPSHOT.jar
 
 Documentation
 -------------
