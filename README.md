@@ -14,15 +14,38 @@ It differs from other time series efforts in Spark in its ability to efficiently
 
 | Dependency     | Version           |
 | -------------- | ----------------- |
-| Spark Version  |  2.2              |
+| Spark Version  |  2.3              |
 | Scala Version  |  2.11.7 and above |
 | Python Version |  3.5 and above    |
 
+
+## How to install
+Scala artifact is published in maven central:
+
+https://mvnrepository.com/artifact/com.twosigma/flint
+
+Python artifact is published in PyPi:
+
+https://pypi.org/project/ts-flint
+
+Note you will need both Scala and Python artifact to use Flint with PySpark.
+
 ## How to build
-To build this sbt project, one could simply do
+To build from source:
+
+Scala (in top-level dir):
 
 ```bash
-sbt assembly
+sbt assemblyNoTest
+```
+
+Python (in python subdir):
+```bash
+python setup.py install
+```
+or
+```bash
+pip install .
 ```
 
 ## Python bindings
@@ -32,8 +55,8 @@ API documentation is available at http://ts-flint.readthedocs.io/en/latest/.
 
 ## Getting Started
 
-### Starting Point: `TimeSeriesRDD`
-The entry point into all functionalities for time series analysis in Flint is the `TimeSeriesRDD` class or object. In high level, a `TimeSeriesRDD` contains an `OrderedRDD` which could be used to represent a sequence of ordering key-value pairs. A `TimeSeriesRDD` uses `Long` to represent timestamps in nanoseconds since epoch as keys and `InternalRow`s as values for `OrderedRDD` to represent a time series data set.
+### Starting Point: `TimeSeriesRDD` and `TimeSeriesDataFrame`
+The entry point into all functionalities for time series analysis in Flint is `TimeSeriesRDD` (for Scala) and `TimeSeriesDataFrame` (for Python). In high level, a `TimeSeriesRDD` contains an `OrderedRDD` which could be used to represent a sequence of ordering key-value pairs. A `TimeSeriesRDD` uses `Long` to represent timestamps in nanoseconds since epoch as keys and `InternalRow`s as values for `OrderedRDD` to represent a time series data set.
 
 ### Create `TimeSeriesRDD`
 
@@ -90,95 +113,6 @@ val tsRdd = TimeSeriesRDD.fromParquet(
   begin = "20100101",                    // By default, null for no boundary at begin
   end = "20150101"                       // By default, null for no boundary at end
 )
-```
-
-### Basic Operations
-
-Similar to `DataFrame`, one could get the `schema` of a `TimeSeriesRDD`, and perform operations like `first()`, `cache()`, `collect()`, `repartition()`, `persist()`, etc. Other than those basic operations supported by `DataFrame` or `RDD`, one could manipulate rows and columns with the following functions.
-
-- `cast` A function to cast numeric columns to a different numeric type (e.g. DoubleType to IntegerType).
-```scala
-val priceTSRdd = ... // A TimeSeriesRDD with schema Schema("time" -> LongType, "id", "price" -> DoubleType)
-val result = priceTSRdd.cast("price" -> IntegerType)
-```
-
-- `keepRows` (or `deleteRows`) A function to filter rows based on given criteria.
-
-```scala
-val priceTSRdd = ... // A TimeSeriesRDD with columns "time", "id", and "price"
-val result = priceTSRdd.keepRows { row: Row => row.getAs[Double]("price") > 100.0 }
-```
-
-- `deleteColumns` (or `keepColumns`) A function to filter columns by names.
-
-```scala
-val priceTSRdd = ... // A TimeSeriesRDD with columns "time", "id", and "price"
-val result1 = priceTSRdd.keepColumns("time") // A TimeSeriesRDD with only "time" column
-val result2 = priceTSRdd.deleteColumns("id") // A TimeSeriesRDD with only "time" and "price" columns
-```
-
-- `renameColumns` A function to modify column names without changing corresponding data types, e.g.
-
-```scala
-val priceTSRdd = ... // A TimeSeriesRDD with columns "time", "id", and "price"
-val result = priceTSRdd.renameColumns("id" -> "ticker", "price" -> "highPrice")
-```
-
-- `setTime` A function to modify the time column, e.g.
-
-```scala
-val priceTSRdd = ... // A TimeSeriesRDD with columns "time", "id", and "price"
-val result = priceTSRdd.setTime {
-  row: Row =>
-    // Set the new time to the closest trading time to the current time.
-    nextClosestTradingTime(row.get("id"), row.getAs[Long]("time"))
-}
-```
-
-### Add Columns
-
-- `addColumns` A function to add to a row with one or more new columns whose values are calculated by using only values from a row. For example, we have a `TimeSeriesRDD` with three columns  "time", "highPrice", and "lowPrice", and we want to add a new column named "diff" to calculte the difference of the "highPrice" and "lowPrice".
-
-```scala
-val priceTSRdd = ... // A TimeSeriesRDD with columns "time", "highPrice", and "lowPrice"
-val results = priceTSRdd.addColumns(
-  "diff" -> DoubleType -> {
-    r: Row => r.getAs[Double]("highPrice") - r.getAs[Double]("lowPrice")
-  }
-)
-// A TimeSeriesRDD with a new column "diff" = "highPrice" - "lowPrice"
-```
-
-- `addColumnsForCycle` A cycle is defined as a list of rows that share exactly the same timestamps. For a column to be added and a list of rows in a cycle, one could use this function to add the same or different values for each row in that cycle.
-
-
-```scala
-val priceTSRdd = ...
-// A TimeSeriesRDD with columns "time", "id", and "sellingPrice"
-// time  id  sellingPrice
-// ----------------------
-// 1000L 0   1.0
-// 1000L 1   2.0
-// 1000L 1   3.0
-// 2000L 0   3.0
-// 2000L 0   4.0
-// 2000L 1   5.0
-// 2000L 2   6.0
-
-val results = priceTSRdd.addColumnsForCycle(
-  "adjustedSellingPrice" -> DoubleType -> { rows: Seq[Row] =>
-    rows.map { row => (row, row.getAs[Double]("sellingPrice") * rows.size) }.toMap
-  }
-)
-// time  id  sellingPrice adjustedSellingPrice
-// -------------------------------------------
-// 1000L 0   1.0          3.0
-// 1000L 1   2.0          6.0
-// 1000L 1   3.0          9.0
-// 2000L 0   3.0          12.0
-// 2000L 0   4.0          16.0
-// 2000L 1   5.0          20.0
-// 2000L 2   6.0          24.0
 ```
 
 ### Group functions
@@ -301,56 +235,6 @@ Similarly, we could summarize over intervals, windows, or the whole time series 
 - `addSummaryColumns`
 
 One could check `timeseries.summarize.summarizer` for different kinds of summarizer(s), like `ZScoreSummarizer`, `CorrelationSummarizer`, `NthCentralMomentSummarizer` etc.
-
-## stat.regression
-
-`flint.math.stat.regression` aims to provide a library similar to [apache statistics package](https://commons.apache.org/proper/commons-math/userguide/stat.html) and [python statsmodels package](http://statsmodels.sourceforge.net/stable/).
-
-### Quick start
-
-```scala
-import breeze.linalg.DenseVector
-import com.twosigma.flint.math.stat.regression._
-
-// Generate a random data set from a linear model with beta = [1.0, 2.0] and intercept = 3.0
-val data = WeightedLabeledPoint.generateSampleData(sc, DenseVector(1.0, 2.0), 3.0)
-
-// Fit the data using the OLS linear regression.
-val model = OLSMultipleLinearRegression.regression(data)
-
-// Retrieve the estimate beta and intercept.
-model.estimateRegressionParameters
-```
-
-### Compare to org.apache.common.math3 and statsmodels in Python
-
-The following table list different implementations cross different packages or libraries.
-- flint.math.stat - `flint.math.stat.regression.LinearRegressionModel`
-- apache.commons.math3 - `apache.commons.math3.stat.regression.OLSMultipleLinearRegression`
-- statsmodels - `statsmodels.api` in Python
-
-| flint.stat | apache.commons.math3 | statsmodels |
-| ------ | ----- | ----- |
-| calculateCenteredTSS | n/a | centered_tss |
-| calculateHC0 | n/a | cov_HC0 |
-| calculateHC1 | n/a | cov_HC1 |
-| calculateEigenvaluesOfGramianMatrix | n/a | eigenvals |
-| calculateRegressionParametersPValue | n/a | pvalues |
-| calculateRegressionParametersTStat | n/a  | tvalues |
-| calculateRSquared | n/a | rsquared |
-| calculateSumOfSquaredResidue | n/a | ssr|
-| calculateStandardErrorsOfHC0 | n/a | HC0_se |
-| calculateStandardErrorsOfHC1 | n/a | HC1_se |
-| calculateUncenteredTSS | n/a  | uncentered_tss |
-| estimateBayesianInformationCriterion | n/a | bic |
-| estimateAkaikeInformationCriterion | n/a | aic |
-| estimateLogLikelihood | n/a | loglike |
-| estimateErrorVariance | estimateErrorVariance | mse_resid |
-| estimateRegressionParameters | estimateRegressionParameters | params |
-| estimateRegressionParametersVariance | estimateRegressionParametersVariance | normalized_cov_params |
-| estimateRegressionParametersStandardErrors | estimateRegressionParametersStandardErrors | bse |
-| estimateErrorVariance | estimateErrorVariance | scale |
-| getN | getN | nobs |
 
 ## Contributing
 
