@@ -139,7 +139,7 @@ val results = priceTSRdd.groupByCycle()
 // 2000L [[2000L, 3.0], [2000L, 4.0], [2000L, 5.0]]
 ```
 
-- `groupByInterval` A funcion to group rows whose timestamps falling into an interval. Intervals could be defined by another `TimeSeriesRDD`. Its timestamps will be used to defined intervals, i.e. two sequential timestamps define an interval. For example,
+- `groupByInterval` A function to group rows whose timestamps fall into an interval. Intervals could be defined by another `TimeSeriesRDD`. Its timestamps will be used to defined intervals, i.e. two sequential timestamps define an interval. For example,
 
 ```scala
 val priceTSRdd = ...
