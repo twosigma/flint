@@ -16,7 +16,8 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.codegen.{ CodegenContext, ExprCode }
+import org.apache.spark.sql.catalyst.expressions.codegen._
+import org.apache.spark.sql.catalyst.expressions.codegen.Block._
 import org.apache.spark.sql.catalyst.expressions.{ Expression, NullIntolerant, UnaryExpression }
 import org.apache.spark.sql.types.{ DataType, LongType, TimestampType }
 
@@ -61,10 +62,10 @@ trait TimestampCast extends UnaryExpression with NullIntolerant {
 
   /** Copied and modified from org/apache/spark/sql/catalyst/expressions/Cast.scala */
   private[this] def castCode(ctx: CodegenContext, childPrim: String, childNull: String,
-    resultPrim: String, resultNull: String, resultType: DataType): String = {
-    s"""
+    resultPrim: String, resultNull: String, resultType: DataType): Block = {
+    code"""
       boolean $resultNull = $childNull;
-      ${ctx.javaType(resultType)} $resultPrim = ${ctx.defaultValue(resultType)};
+      ${JavaCode.javaType(resultType)} $resultPrim = ${CodeGenerator.defaultValue(resultType)};
       if (!${childNull}) {
         $resultPrim = (long) ${cast(childPrim)};
       }
