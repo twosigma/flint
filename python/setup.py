@@ -18,13 +18,12 @@ from setuptools import setup
 
 import versioneer
 
-
 setup(
     name='ts-flint',
     description='Distributed time-series analysis on Spark',
     author='Li Jin, Leif Walsh',
     author_email='ljin@twosigma.com, leif@twosigma.com',
-    packages=['ts.flint'],
+    packages=['ts', 'ts.flint'],
     setup_requires=[
     ],
     install_requires=[
