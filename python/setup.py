@@ -18,6 +18,11 @@ from setuptools import setup
 
 import versioneer
 
+with open('requirements.txt') as f:
+    requirements = f.read().splitlines()
+
+with open('requirements-dev.txt') as f:
+    requirements_dev = f.read().splitlines()
 
 setup(
     name='ts-flint',
@@ -27,14 +32,8 @@ setup(
     packages=['ts.flint'],
     setup_requires=[
     ],
-    install_requires=[
-    ],
-    tests_require=[
-        'coverage',
-        'numpy',
-        'pandas',
-        'pyarrow',
-    ],
+    install_requires=requirements,
+    tests_require=requirements_dev,
     test_suite='tests',
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),

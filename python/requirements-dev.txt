@@ -1,0 +1,6 @@
+coverage
+Sphinx
+sphinx_rtd_theme
+flake8
+pytest
+pytest-cov
