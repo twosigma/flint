@@ -26,7 +26,7 @@ import org.apache.arrow.vector.types.{ DateUnit, FloatingPointPrecision, TimeUni
 import org.apache.arrow.vector.types.pojo.{ ArrowType, Schema }
 
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow
-import org.apache.spark.sql.catalyst.expressions.codegen.{ BufferHolder, UnsafeRowWriter }
+import org.apache.spark.sql.catalyst.expressions.codegen.{ UnsafeRowWriter }
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -254,9 +254,7 @@ class ArrowBackendUnsafeRowIterator(
 ) extends ClosableIterator[UnsafeRow] {
   private[this] var rowIndex = 0
   private[this] val columnCount = schema.getFields.size()
-  private[this] val unsafeRow = new UnsafeRow(columnCount)
-  private[this] val unsafeRowBufferHolder = new BufferHolder(unsafeRow, 0)
-  private[this] val unsafeRowWriter = new UnsafeRowWriter(unsafeRowBufferHolder, columnCount)
+  private[this] val unsafeRowWriter = new UnsafeRowWriter(columnCount)
   private[this] val valueVectors = root.getFieldVectors.asScala.toArray
   private[this] val rowFieldWriters = for (i <- 0 until columnCount)
     yield RowFieldWriter(i, unsafeRowWriter, valueVectors(i), schema.getFields.get(i).getType)
@@ -264,7 +262,7 @@ class ArrowBackendUnsafeRowIterator(
   override def hasNext: Boolean = rowIndex < rowCount
 
   override def next(): UnsafeRow = {
-    unsafeRowBufferHolder.reset()
+    unsafeRowWriter.resetRowWriter()
     unsafeRowWriter.zeroOutNullBytes()
     var i = 0
     while (i < columnCount) {
@@ -272,8 +270,7 @@ class ArrowBackendUnsafeRowIterator(
       i += 1
     }
     rowIndex += 1
-    unsafeRow.setTotalSize(unsafeRowBufferHolder.totalSize)
-    unsafeRow
+    unsafeRowWriter.getRow()
   }
 
   override def close(): Unit = root.close()
