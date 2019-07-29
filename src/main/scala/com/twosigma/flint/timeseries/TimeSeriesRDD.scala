@@ -1946,7 +1946,7 @@ class TimeSeriesRDDImpl private[timeseries] (
     val newOrdd = orderedRdd.mapPartitionsWithIndexOrdered {
       case (_, rows) =>
         val allocator = new RootAllocator(Long.MaxValue)
-        TaskContext.get().addTaskCompletionListener[Unit] { _ =>
+        TaskContext.get().addTaskCompletionListener { _ =>
           allocator.close()
         }
 
