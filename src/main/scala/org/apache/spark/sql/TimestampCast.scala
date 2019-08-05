@@ -16,8 +16,9 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.codegen.{ CodegenContext, ExprCode }
+import org.apache.spark.sql.catalyst.expressions.codegen.{ CodegenContext, ExprCode, CodeGenerator, JavaCode, Block }
 import org.apache.spark.sql.catalyst.expressions.{ Expression, NullIntolerant, UnaryExpression }
+import org.apache.spark.sql.catalyst.expressions.codegen.Block._
 import org.apache.spark.sql.types.{ DataType, LongType, TimestampType }
 
 case class TimestampToNanos(child: Expression) extends TimestampCast {
@@ -59,12 +60,16 @@ trait TimestampCast extends UnaryExpression with NullIntolerant {
 
   protected def cast(childPrim: String): String
 
-  /** Copied and modified from org/apache/spark/sql/catalyst/expressions/Cast.scala */
+  /**
+   * Copied and modified from org/apache/spark/sql/catalyst/expressions/Cast.scala
+   * Updated for changes in SPARK-24505:
+   * https://github.com/apache/spark/commit/19c45db47725a8087bd50d14d1005c53ac52e87d
+   */
   private[this] def castCode(ctx: CodegenContext, childPrim: String, childNull: String,
-    resultPrim: String, resultNull: String, resultType: DataType): String = {
-    s"""
+    resultPrim: String, resultNull: String, resultType: DataType): Block = {
+    code"""
       boolean $resultNull = $childNull;
-      ${ctx.javaType(resultType)} $resultPrim = ${ctx.defaultValue(resultType)};
+      ${CodeGenerator.javaType(resultType)} $resultPrim = ${CodeGenerator.defaultValue(resultType)};
       if (!${childNull}) {
         $resultPrim = (long) ${cast(childPrim)};
       }

@@ -58,11 +58,11 @@ lazy val versions = new {
   val commons_math = "3.5"
   val joda_time = "2.9.4"
   val httpclient = "4.3.2" // Note that newer versions need to be configured
-  val spark = sys.props.getOrElse("spark.version", default = "2.3.0")
+  val spark = sys.props.getOrElse("spark.version", default = "2.4.3")
   val scalatest = "2.2.4"
   val scalacheck = "1.12.6"
   val grizzled_slf4j = "1.3.0"
-  val arrow = "0.8.0"
+  val arrow = "0.10.0"
   val jackson_module = "2.7.2"
 }
 
