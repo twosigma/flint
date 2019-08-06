@@ -105,7 +105,7 @@ object ArrowConverters {
 
     var closed = false
 
-    context.addTaskCompletionListener { _ =>
+    context.addTaskCompletionListener[Unit] { _ =>
       if (!closed) {
         root.close()
         allocator.close()

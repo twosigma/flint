@@ -20,4 +20,4 @@ dist: clean-pyc
 	sbt "set test in assembly := {}" clean assembly
 	cd python; \
 		find . -mindepth 2 -name '*.py' -print | \
-	    zip ../target/scala-2.11/flint-assembly-$(VERSION)-SNAPSHOT.jar -@
+	    zip ../target/flint-assembly-$(VERSION)-SNAPSHOT.jar -@

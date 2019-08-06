@@ -31,7 +31,7 @@ lazy val formattingPreferences = {
 lazy val compilationSettings = scalariformSettings ++ Seq(
   version := "0.6.0-SNAPSHOT",
   organization := "com.twosigma",
-  scalaVersion := "2.11.8",
+  scalaVersion := "2.12.8",
   assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false),
   javacOptions ++= Seq("-source", "1.7", "-target", "1.7"),
   compileOrder in Compile := CompileOrder.JavaThenScala,
@@ -54,16 +54,16 @@ lazy val compilationSettings = scalariformSettings ++ Seq(
 )
 
 lazy val versions = new {
-  val play_json = "2.5.0"
+  val play_json = "2.7.4"
   val commons_math = "3.5"
   val joda_time = "2.9.4"
   val httpclient = "4.3.2" // Note that newer versions need to be configured
   val spark = sys.props.getOrElse("spark.version", default = "2.4.3")
-  val scalatest = "2.2.4"
+  val scalatest = "3.0.8"
   val scalacheck = "1.12.6"
   val grizzled_slf4j = "1.3.0"
-  val arrow = "0.10.0"
-  val jackson_module = "2.7.2"
+  val arrow = "0.12.0"
+  val jackson_module = "2.7.9"
 }
 
 lazy val lazyDependencies = new {
