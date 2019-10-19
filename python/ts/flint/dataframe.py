@@ -1616,7 +1616,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
                 series = pd.to_datetime(pdf['time'])
             except:
                 series = pdf['time']
-            pdf = pdf.assign(time=series)
+            pdf['time'] = series
 
             if not self._is_sorted:
                 pdf = pdf.sort_values(by='time').reset_index(drop=True)
@@ -1642,6 +1642,7 @@ class TimeSeriesDataFrame(pyspark.sql.DataFrame):
         :param n: number of rows to return. Default is 10.
         """
         df = pd.DataFrame(self.head(n), columns=self.columns)
-        return df.assign(**{self._time_column: pd.to_datetime(df[self._time_column])})
+        df[self._time_column] = pd.to_datetime(df[self._time_column])
+        return df
 
 TimeSeriesDataFrame._override_df_methods()
