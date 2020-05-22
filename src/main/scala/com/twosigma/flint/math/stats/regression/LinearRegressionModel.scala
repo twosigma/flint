@@ -173,7 +173,7 @@ trait LinearRegression {
   def calculateRegressionParametersTStat(): DenseVector[Double] = {
     val standardErrors = estimateRegressionParametersStandardErrors()
     val parameters = estimateRegressionParameters()
-    parameters :/ standardErrors
+    parameters /:/ standardErrors
   }
 
   /**
@@ -234,7 +234,7 @@ case class LinearRegressionModel(input: RDD[WeightedLabeledPoint], intercept: Bo
   def getK: Int = beta.length
   def calculateMeanOfY(): Double = srwsl / n
   def calculateWeightedMeanOfY(): Double = srwsl / ssrw
-  def calculateMeanOfX(): DenseVector[Double] = swx :/ n.toDouble
+  def calculateMeanOfX(): DenseVector[Double] = swx /:/ n.toDouble
   def calculateGramianMatrix(): DenseMatrix[Double] = xx
   def calculateEigenvaluesOfGramianMatrix(): DenseVector[Double] = eigenvalues
   def calculateCenteredTSS(): Double = centeredTSS
@@ -267,7 +267,7 @@ case class LinearRegressionModel(input: RDD[WeightedLabeledPoint], intercept: Bo
    *
    * @return the MacKinnon and White's (1985) heteroskedasticity robust estimator.
    */
-  def calculateHC1(): DenseMatrix[Double] = hc0 :* (1.0 * getN / (getN - getK))
+  def calculateHC1(): DenseMatrix[Double] = hc0 *:* (1.0 * getN / (getN - getK))
 
   /**
    * Calculate the White's (1980) heteroskedasticity robust standard errors which is defined as
@@ -423,7 +423,7 @@ case class LinearRegressionModel(input: RDD[WeightedLabeledPoint], intercept: Bo
       } else {
         v.features * (v.features.t * beta - v.label)
       }
-      xe = xe :* v.weight
+      xe = xe *:* v.weight
       U += xe.asDenseMatrix.t * xe.asDenseMatrix
     }, combOp = (U1, U2) => { U1 += U2 }
     )
