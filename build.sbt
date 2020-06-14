@@ -20,6 +20,8 @@ import scalariform.formatter.preferences._
 import com.typesafe.sbt.SbtScalariform
 import BuildUtil._
 
+licenses += ("Apache-2.0", url("http://apache.org/licenses/LICENSE-2.0"))
+
 lazy val formattingPreferences = {
   import scalariform.formatter.preferences._
   FormattingPreferences().
@@ -28,10 +30,14 @@ lazy val formattingPreferences = {
     setPreference(SpacesAroundMultiImports, true)
 }
 
+val _scalaVersion: String = sys.props.getOrElse("scala.version", default = "2.12.8")
+val _sparkVersion: String = sys.props.getOrElse("spark.version", default = "2.4.3")
+
 lazy val compilationSettings = scalariformSettings ++ Seq(
+  name := "sparklyr-flint_" + _scalaVersion.substring(0, _scalaVersion.lastIndexOf(".")),
   version := sys.props.getOrElse("version", default = "0.6.0-SNAPSHOT"),
   organization := "com.twosigma",
-  scalaVersion := sys.props.getOrElse("scala.version", default = "2.12.8"),
+  scalaVersion := _scalaVersion,
   assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false),
   javacOptions ++= Seq("-source", "1.7", "-target", "1.7"),
   compileOrder in Compile := CompileOrder.JavaThenScala,
@@ -58,7 +64,7 @@ lazy val versions = new {
   val commons_math = "3.5"
   val joda_time = "2.9.4"
   val httpclient = "4.3.2" // Note that newer versions need to be configured
-  val spark = sys.props.getOrElse("spark.version", default = "2.4.3")
+  val spark = _sparkVersion
   val scalatest = "3.0.8"
   val scalacheck = "1.12.6"
   val grizzled_slf4j = "1.3.0"
@@ -121,5 +127,4 @@ addCommandAlias(
   "; set test in Test := {}; assembly"
 )
 
-publishTo := sonatypePublishTo.value
 crossPaths := false
