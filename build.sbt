@@ -34,7 +34,9 @@ val _scalaVersion: String = sys.props.getOrElse("scala.version", default = "2.12
 val _sparkVersion: String = sys.props.getOrElse("spark.version", default = "2.4.3")
 
 lazy val compilationSettings = scalariformSettings ++ Seq(
-  name := "sparklyr-flint_" + _scalaVersion.substring(0, _scalaVersion.lastIndexOf(".")),
+  name := "sparklyr-flint_" +
+    _sparkVersion.substring(0, _sparkVersion.lastIndexOf(".")) + "_" +
+    _scalaVersion.substring(0, _scalaVersion.lastIndexOf(".")),
   version := sys.props.getOrElse("version", default = "0.6.0-SNAPSHOT"),
   organization := "org.sparklyr",
   scalaVersion := _scalaVersion,
