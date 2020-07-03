@@ -36,7 +36,7 @@ val _sparkVersion: String = sys.props.getOrElse("spark.version", default = "2.4.
 lazy val compilationSettings = scalariformSettings ++ Seq(
   name := "sparklyr-flint_" + _scalaVersion.substring(0, _scalaVersion.lastIndexOf(".")),
   version := sys.props.getOrElse("version", default = "0.6.0-SNAPSHOT"),
-  organization := "com.twosigma",
+  organization := "org.sparklyr",
   scalaVersion := _scalaVersion,
   assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false),
   javacOptions ++= Seq("-source", "1.7", "-target", "1.7"),
