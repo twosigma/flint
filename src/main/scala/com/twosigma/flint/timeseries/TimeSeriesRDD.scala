@@ -153,7 +153,7 @@ object TimeSeriesRDD {
   ): TimeSeriesRDD = {
     requireSchema(schema)
 
-    val timeType = TimeType.get(SQLContext.getOrCreate(sc).sparkSession)
+    val timeType = TimeType.get(SparkSession.builder.config(sc.getConf).getOrCreate)
     val timeIndex = schema.fieldIndex(timeColumnName)
     val rdd = sc.parallelize(
       rows.map { row => (timeType.internalToNanos(row.getLong(timeIndex)), row) }, numSlices
@@ -446,7 +446,7 @@ object TimeSeriesRDD {
     timeUnit: TimeUnit,
     timeColumn: String
   ): TimeSeriesRDD = {
-    val sqlContext = SQLContext.getOrCreate(sc)
+    val sqlContext = SparkSession.builder.config(sc.getConf).getOrCreate
     val df = sqlContext.read.parquet(paths: _*)
 
     val prunedDf = columns.map { columnNames =>

@@ -80,6 +80,6 @@ object OLSMultipleLinearRegression {
       U1._9 + U2._9
     )
     )
-    LinearRegressionModel(input, intercept, n, (xx + xx.t) :/ 2.0, xy, swx, srwsl, ssrw, wsl, sw, lw)
+    LinearRegressionModel(input, intercept, n, (xx + xx.t) /:/ 2.0, xy, swx, srwsl, ssrw, wsl, sw, lw)
   }
 }

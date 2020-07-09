@@ -195,7 +195,7 @@ class OLSRegressionSummarizer(
       Math.sqrt(errorVariance * betaVar)
     }
     val stdErrs = vectorOfStdErrs.toArray
-    val vectorOfTStat = vectorOfBeta :/ vectorOfStdErrs
+    val vectorOfTStat = vectorOfBeta /:/ vectorOfStdErrs
     val tStat = vectorOfTStat.toArray
 
     val (intercept,
